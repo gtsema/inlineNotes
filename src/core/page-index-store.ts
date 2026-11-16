@@ -161,6 +161,35 @@ export async function writeSlotThenIndex(
   return writePageIndex(port, commit.index);
 }
 
+/** A slot removal plus the index that may be published after it lands. */
+export interface SlotRemovalCommit {
+  /** Full storage key of the page slot that must disappear. */
+  storageKey: string;
+  /** Index to publish only after the removal succeeded. */
+  index: PageIndex;
+}
+
+/**
+ * The removal half of the same policy, used when the last entry of a page is gone:
+ * the slot key is dropped **before** `pages:v1` stops listing the page, so the
+ * index never keeps a pointer that was already rewritten into nothing. A failed
+ * removal leaves the index untouched. If only the index publication fails, the
+ * store holds an orphan index entry, which is exactly the state the read path
+ * repairs (`index_repaired`), so no entry is lost either way.
+ */
+export async function removeSlotThenIndex(
+  port: StoragePort,
+  commit: SlotRemovalCommit,
+): Promise<StorageWriteResult> {
+  const removal = await attemptWrite(async () => {
+    await port.remove([commit.storageKey]);
+  });
+  if (!removal.ok) {
+    return removal;
+  }
+  return writePageIndex(port, commit.index);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -83,7 +83,9 @@ describe('core storage keys', () => {
   it('stays inside the slot-key budget for realistic and hostile page keys (AC3)', () => {
     for (const pageKey of [REALISTIC_PAGE_KEY, HOSTILE_PAGE_KEY]) {
       const storageKey = entryStorageKey(pageKey);
-      expect(storageKey).toMatch(/^notes:v1:[A-Za-z0-9_%-]{1,208}$/);
+      // The universal bound of the spec is 246 escaped characters, not the 208 of
+      // the truncated branch alone (review remark `R6`).
+      expect(storageKey).toMatch(/^notes:v1:[A-Za-z0-9_%-]{1,246}$/);
       expect(storageKey.length).toBeLessThanOrEqual(ENTRY_KEY_PREFIX.length + SLOT_KEY_ESCAPE_BUDGET);
       expect(storageKey.length).toBeLessThan(256);
       for (const forbidden of FORBIDDEN_KEY_CHARACTERS) {

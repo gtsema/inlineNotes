@@ -138,7 +138,12 @@ describe('failure codes (AC1)', () => {
 });
 
 describe('purity of the task t1-05 core modules (AC1)', () => {
-  const MODULES: readonly string[] = ['storage-port.ts', 'page-index-store.ts', 'entry-store-read.ts'];
+  const MODULES: readonly string[] = [
+    'storage-port.ts',
+    'page-index-store.ts',
+    'entry-store-read.ts',
+    'entry-store-write.ts',
+  ];
 
   it('uses no DOM, no chrome.*, no clock, no randomness, no network', () => {
     for (const name of MODULES) {

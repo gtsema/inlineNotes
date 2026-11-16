@@ -120,6 +120,16 @@ describe('layer boundaries', () => {
     }
   });
 
+  it('reaches chrome.storage through exactly one shipped adapter (review remark R3)', () => {
+    // The spec pins the seam: `src/core/` owns the contract and only one content
+    // adapter may touch `chrome.storage`, so popup and options must go through the
+    // core API instead of ad hoc storage keys.
+    const users = sourceFiles('src')
+      .filter((file) => codeOnly(file.text).includes('chrome.storage'))
+      .map((file) => file.path);
+    expect(users).toEqual(['src/content/store/chrome-storage-port.ts']);
+  });
+
   it('every UI layer keeps its strings in one constants module', () => {
     for (const constants of ['src/content/text.ts', 'src/popup/text.ts', 'src/options/text.ts']) {
       expect(sourceFiles('src').map((file) => file.path)).toContain(constants);

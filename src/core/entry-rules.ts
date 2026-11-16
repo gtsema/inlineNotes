@@ -174,6 +174,31 @@ export function removeById(entries: readonly Entry[], id: string): Entry[] {
 }
 
 /**
+ * The popup checkbox (PM ruling `A1`): flips `visible` and nothing else. Visibility
+ * controls painting only, so it is not an edit (`canEdit` does not apply to it), it
+ * does not move the entry in the popup order, and it never changes `updatedAt`. The
+ * input entry is never mutated.
+ */
+export function setEntryVisibility(entry: Entry, visible: boolean): Entry {
+  return {
+    id: entry.id,
+    pageKey: entry.pageKey,
+    authorName: entry.authorName,
+    text: entry.text,
+    comment: entry.comment,
+    anchor: {
+      text: entry.anchor.text,
+      prefix: entry.anchor.prefix,
+      suffix: entry.anchor.suffix,
+      fragmentCount: entry.anchor.fragmentCount,
+    },
+    visible,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+/**
  * Clears a page: the result holds no entry of `pageKey`, while entries of other
  * pages are kept, so clearing one page can never touch another. For a single-page
  * list (the stored shape) the result is empty. The input array is never mutated.
