@@ -53,6 +53,26 @@ is confirmed on a real browser.
   runtime rejects a read-only reviewer for not producing a structured acceptance report, although its verdict is the
   review artifact. `docs/specs/code-review-flow.md` records the rule; `node scripts/check-agent-config.mjs` → 0 errors.
 
+## Runtime rulings taken during Stage 1
+
+- `A9` timestamps are UTC ISO-8601 `Z` from an injected clock; `A10` decode defaults live in the core read path;
+  `A11` one code `name_required` for v1 (the options page refuses a longer name at input); `A12` `setVisible` is a
+  pure core helper, not Angular logic.
+- `A13` `timeoutMs` stayed 1800000 after the first two timeouts, with "commit early" added to cross-layer briefs.
+- `A14` index repair is per-page on read; `A15` `settings:v1` decode belongs to `t4-02`; `A16` unreadable stored
+  records survive every write and die only with `clear page`; `A17` only an absent or valid-empty slot is repaired;
+  `A18` no `QuotaError` type — the vocabulary is `StorageFailureError` + `code`.
+- `A19` after the third timeout the ceiling became **3600000** (profile first, then the three roles, then the checker
+  which now reads the number from the profile).
+
+## Stage 2 pre-issued rulings
+
+- `A20` a block-level boundary contributes exactly one space to the page text stream (`t2-02`).
+- `A21` `script`, `style`, `noscript`, `template`, `head` never enter the stream; hidden-but-rendered text does.
+- `A22` a hidden entry still blocks overlap (`visible` is painting only).
+- `A23` two entries are duplicates when the resolved range and the normalized comment are equal.
+- `A24` a stale entry has no range and cannot cause an overlap.
+
 ## Open questions asked of the user (least-risky defaults applied if unanswered)
 
 - `A1` `visible` flag: overlay spec persists it in the entry record, model spec entry shape omits it. PM default: `Entry.visible: boolean` (default `true`), `inline-comment-model.md` edited in the same commit as `t1-04`.
