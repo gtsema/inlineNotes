@@ -54,3 +54,23 @@
 - What went right and is worth keeping: the completion-brief pattern (the hand-over is already in the tree, so the
   second attempt runs the test gate first) turned two of the three timeouts into accepted tasks on attempt 2, and
   `t1-06` attempt 2 fixed a real bug the attempt-1 tests had already described.
+
+## Stage 2 (anchors and overlap) — 2026-11-16
+
+- What failed: `t2-02` and `t2-03` both hit the **raised** 60-minute ceiling. Why: `t2-02` was a two-layer slice with a
+  brand-new jsdom harness, and `t2-03` carried 5 AC **plus** 4 review fixes — nine work items in one run. Fix encoded:
+  the carried-fix budget rule in `.pi/skills/delivery-planning/SKILL.md` and ruling `A48` (more than two carried
+  findings ⇒ their own slice: `t2-04`, `t3-04`).
+- What failed: a **PM-authored contract was wrong** — the `t2-01` review told `t2-02` to map stream offsets with
+  `utf16IndexAt(stream, start)`, which is incorrect for nodes with internal whitespace runs. The engineer deviated and
+  was right. Fix encoded: hand-over paragraphs are labeled as contracts to be challenged, and the reviewer records the
+  accepted drift (`t2-02` remark `N6`) instead of treating it as a violation.
+- What failed: a test fixture asserted the opposite of the rule in its name (`A24` case expected `null` for a range that
+  really overlapped `[10,20)`) — the shipped code was correct. Fix encoded: the reviewer must check that a rule-named
+  test **cannot pass vacuously** and that a red test is diagnosed as code-or-fixture before it is "fixed".
+- What failed: two code rules shipped with no spec clause (`A27`, `A28`) and the engineer report did not list that
+  deviation. Fix encoded: `t2-04` AC3 lands the missing clauses, and review briefs now ask explicitly for
+  "code rule without a grep anchor in the spec".
+- What went right: the completion-brief pattern converted both timeouts on attempt 2 without losing code, and review
+  artifacts copied into `docs/state/` became the actual hand-off contract (`t2-02` → the selection-to-stream contract in
+  `t3-01`, `t2-03` → the `ResolvedSpans` shape), which is what the process was supposed to produce.
