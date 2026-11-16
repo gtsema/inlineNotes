@@ -57,3 +57,22 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 1 (engineer).
 
 - `A7` PM decision (not a user decision — a platform constraint): escaped slot key + `pages:v1` index.
 - `A8` PM default (user may veto): `/a` and `/a/` are the same page.
+
+## PM correction during attempt 1 (brief defect, not an engineer deviation)
+
+The engineer stopped and asked instead of guessing — correct behavior per `code-review-flow.md`. My AC1/AC3
+contradicted each other: `%` is not inside `[A-Za-z0-9_-]`, and every `pageKey` contains `.` and `/`.
+Ruling **Option A**:
+
+- `AC1'` — escape every character outside `[A-Za-z0-9_-]` as uppercase `%XX`; output alphabet is exactly
+  `[A-Za-z0-9_%-]`; `decodeURIComponent(slotKeyFor(k)) === k` for every pageKey, including one that already
+  contains a literal `%2F`.
+- `AC3'` — `entryStorageKey(pageKey)` matches `^notes:v1:[A-Za-z0-9_%-]{1,208}$`; the test also asserts the key
+  contains none of `.` `/` `\` `"`.
+- The long-key separator `~` is legal because it is outside `[A-Za-z0-9_-]` and is never produced by the
+  escape; a pageKey containing `~` escapes it to `%7E` (must be covered by a test).
+- Spec wording is defensive ("characters legal for `chrome.storage` keys"), not a quotation: the engineer
+  checked the current developer.chrome.com page and two Wayback copies and found no charset or key-length
+  statement, and the Chromium `value_store` path shows no key validator. The charset/256 rule stays as a
+  **defensive project constraint**; `not confirmed empirically` goes to the report's open questions and to
+  `docs/retro.md` at the end of Stage 1.
