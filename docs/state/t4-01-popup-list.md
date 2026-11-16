@@ -11,7 +11,7 @@ storage key by hand.
 - `A25` (already issued): core does not gate `deleteEntry`/`clearPage` by authorship; the **popup** is where the user
   can remove any entry of the page (personal store, not a permission system). The row exposes `Удалить` for every
   entry, but a foreign row gets no edit affordance.
-- `A49` **How the popup learns which page is current — open question, default applied.** `chrome.tabs.query` returns
+- `A49` **How the popup learns which page is current — decided by the user (2026-11-16: "берём табс").** `chrome.tabs.query` returns
   `tab.url` only with the `tabs` permission, which the manifest does not have. Two options:
   1. **Default:** add `"tabs"` to `src/manifest.json` (one line + one spec line). The popup reads the active tab's URL,
      normalizes it through core and lists the entries — and works even on pages where the content script cannot inject
@@ -21,7 +21,9 @@ storage key by hand.
      `sender.tab.id → pageKey` in `chrome.storage.session`, the popup reads that mapping by `tab.id` (ids need no
      permission). Cost: a new service worker, a new storage surface, and the popup stops working on restricted pages —
      three moving parts for one scary string in the install dialog.
-  Applied default: **1**. Awaiting the user's answer.
+  **Chosen option 1**: `"tabs"` joins `src/manifest.json` permissions, the overlay spec gains the permission line, and
+  the popup keeps working on pages where the content script cannot inject. The install-time warning is accepted; it is
+  the only permission this extension asks for beyond `storage`, and the README must state in Russian what it is for.
 - `A50` **Checkbox writes through core, not through a page message.** Unchecking calls `setVisible(port, id, false)`
   and the page repaints because the content script listens to `storage.onChanged` (`t4-03` owns that listener); the
   popup does not message the page. Until `t4-03` lands, the checkbox still persists correctly — the repaint simply
@@ -30,7 +32,8 @@ storage key by hand.
 ## AC (5 substantive + gates)
 
 1. The popup lists the current page's entries **through core** (`loadEntries` / `loadPageContext` + `pageKeyFromUrl` +
-   `findPageKey`), sorted by `createdAt` ascending (`sortByCreatedAtAsc`), one row per entry: author name + checkbox +
+   `findPageKey`), the URL coming from `chrome.tabs.query` with the new `tabs` permission (`A49`); one test pins that
+   `src/manifest.json` permissions are exactly `storage` + `tabs` so a future task cannot widen them silently; sorted by `createdAt` ascending (`sortByCreatedAtAsc`), one row per entry: author name + checkbox +
    `Удалить`. A scan test asserts no `chrome.storage` access in `src/popup/` outside the core port adapter.
 2. Unchecking a row calls `setVisible(… false)` and checking calls it with `true`; the entry stays in the list either
    way and the order does not change (`A1`, `A12`, overlay AC7).
@@ -76,5 +79,5 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Open questions
 
-- `A49` is the one to ask the user (install-visible permission).
+- none open: `A49` is decided (the `tabs` permission); the README line explaining it in Russian belongs to `t4-03`.
 - `A50` is a PM default; if the user wants an instant repaint without reload, it belongs in `t4-03`, not here.

@@ -144,7 +144,7 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   and `t3-04-content-anchor-hardening`, which makes Stage 2 4 tasks and Stage 3 5 tasks. Awaiting the user's confirmation.
 - `A50` (t4-01): the popup changes visibility through core `setVisible`; the page repaints via `storage.onChanged`
   (`t4-03`), not via a popup→content message. PM default so the two tasks do not both invent a channel.
-- `A49` **open question for the user** (t4-01): the popup needs to know which page is current. Default: add the
+- `A49` **confirmed by the user (2026-11-16: "берём табс")** (t4-01): the popup needs to know which page is current. Chosen: add the
   `tabs` permission to the manifest (the popup then works on any page, including pages where the content script cannot
   run). Alternative: zero new permissions via a service worker + `chrome.storage.session` page-key map, at the cost of
   a new moving part and a popup that is blind on restricted pages. Install-time warning is the trade-off to decide.
