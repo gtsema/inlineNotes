@@ -148,3 +148,8 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   `tabs` permission to the manifest (the popup then works on any page, including pages where the content script cannot
   run). Alternative: zero new permissions via a service worker + `chrome.storage.session` page-key map, at the cost of
   a new moving part and a popup that is blind on restricted pages. Install-time warning is the trade-off to decide.
+- `A54` (t4-02): first run **generates** the author name (`generateAuthorName(rng)` + `saveSettings`) instead of asking
+  the user to invent one; only the options page may generate a name, the content layer only refuses to open the card.
+- `A55` (t4-02): the options counter and its refusal measure **code points** via the core helpers, never `String.length`.
+- `A56` (t4-02): saving an unchanged name still calls the core save (it is how a damaged record gets repaired) and shows
+  a saved state rather than a fake write.

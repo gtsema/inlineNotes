@@ -23,7 +23,7 @@ task, because a core-only slice of this size has never hit the ceiling (`t1-02`,
    empty or whitespace-only name refuses with `name_required` and writes nothing; a quota/serialization failure
    returns that `StorageFailureError` code and leaves the stored value byte-identical.
 3. `docs/specs/inline-comment-model.md` gains the `settings:v1` record shape and these two rules in the same commit,
-   and `t4-02-options-name-field` is named as the UI half only (no second storage reader).
+   and `t4-02-options-name` is named as the UI half only (no second storage reader).
 
 Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
 
@@ -53,7 +53,7 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer ×2 a
 
 - engineer report: attempt 2, commit `e654892` (4 files, +547/−1); copied to `docs/state/t3-01-settings-read-core-engineer.md`.
   PM gates on the commit: `npm test` **429 passed / 22 files**, `npm run build` self-contained `dist/`, `npm run typecheck`
-  clean, checker `0 / 0 / 20 INFO` (the new INFO is a planned-path token for `t4-02-options-name-field`).
+  clean, checker `0 / 0 / 20 INFO` (the new INFO is a planned-path token for `t4-02-options-name`).
 - reviewer verdict: running (`36734c60`), range `c16966a..e654892`.
 - note for future briefs: this task's `output` was bound to the state-file name, so the engineer report and the PM state
   file share a name in the managed artifact dir. Bind engineer output to `docs/state/<task-id>-engineer.md` instead.
