@@ -34,7 +34,19 @@ Previous: `t1-02` (accepted). Next: `t1-04-core-entry-store`.
 
 ## Attempts log
 
-- attempt 1: brief issued, status: delegated.
+- attempt 1: **failed — runtime timeout after 1800000 ms** (run `51d1790d`, 877k tokens, step aborted before
+  the gates). Left uncommitted work in the working tree: `src/core/slot-key.ts`, `src/core/page-index.ts`,
+  modified `src/core/storage-keys.ts` and `src/core/page-key.ts`, `tests/core-slot-key.spec.ts`,
+  `tests/core-page-index.spec.ts`. Not done: stale test references to the removed `pageKeyFromStorageKey`
+  (`tests/core-storage-keys.spec.ts:7,36,40-42`, `tests/page-key.spec.ts:15,149`), the spec lines in
+  `docs/specs/inline-comment-model.md`, the gates, the commit, the report.
+- attempt 2: brief changed to a **completion-only** slice (verify + fix stale tests + spec lines + gates +
+  commit); no new design freedom — Option A encoding is frozen. Status: delegated.
+
+## Process note for the retro
+
+30 minutes was not enough for a 7-AC core slice on this model class. Fix after this task: core slices carry
+at most 5 ACs, and the brief states the order of work (gates first, then spec lines, then commit).
 
 Brief (attempt 1):
 - Task: legal, deterministic page→slot key mapping + page index + trailing-slash identity.
@@ -46,7 +58,7 @@ Brief (attempt 1):
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 1 (engineer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer attempt 1 failed by timeout, engineer attempt 2, reviewer pending).
 
 ## Verdicts
 
