@@ -47,7 +47,7 @@ shipped caller here; wiring it is `t4-02`.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (attempt 1 timeout + attempt 2 in flight).
 
 ## Verdicts
 
