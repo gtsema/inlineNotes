@@ -1,10 +1,10 @@
 # Stage plan — extension implementation (request: "начинаем реализовывать")
 
-Owner: interactive PM (main session). Renegotiated budget: **4 stages / 14 tasks** (default limit is 3/3;
-Stage 1 grew to 5 tasks — the storage-key constraint appeared in review, and the entry slice was split after the
-`t1-03` runtime timeout proved that 7 ACs do not fit one attempt on this model).
+Owner: interactive PM (main session). Renegotiated budget: **4 stages / 15 tasks** (default limit is 3/3;
+Stage 1 grew to 6 tasks — the storage-key constraint appeared in review, and two runtime timeouts on 7-AC slices
+proved that one attempt cannot carry that much).
 Renegotiation reason: the user asked for smaller tasks; one slice = one verifiable behavior.
-Child count: ~14 engineer + 14 reviewer (parallelism 1, one writer per worktree).
+Child count: ~15 engineer + 15 reviewer (parallelism 1, one writer per worktree).
 Slice-size rule adopted after `t1-03`: a `src/core/` slice carries at most 5 substantive ACs (`docs/specs/code-review-flow.md`).
 Gates per task: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs` — quoted by the engineer.
 
@@ -20,7 +20,8 @@ is confirmed on a real browser.
 | `t1-02-core-pagekey` | `pageKey` normalization + path-only fallback lookup | model AC4 |
 | `t1-03-storage-slot-keys` | legal slot-key encoding + `pages:v1` index + trailing-slash identity | model spec Rules/Storage (spec line edited with the code) |
 | `t1-04-entry-model-rules` | entry type with `visible`, 256 code points, 20 entries, author identity and edit rights, ordering | model AC2, AC3, AC7, AC8 |
-| `t1-05-entry-store` | `chrome.storage.local` store: CRUD, `pages:v1` write and compaction policy, quota path | model AC1, AC10, residual risks from the `t1-03` review |
+| `t1-05-storage-port-read-index` | `StoragePort` seam + chrome adapter + index write/repair policy + entry decoding | model Rules/Storage, review findings N1–N5 |
+| `t1-06-entry-write-path` | create / update / delete / clear / `setVisible` over the port, quota path | model AC1, AC3, AC7, AC10 |
 
 ## Stage 2 — anchors and overlap. Done-criterion: a stored anchor resolves to DOM ranges on a real page; overlap rule is testable.
 
