@@ -17,16 +17,24 @@
  */
 
 /**
- * Text-based locator of the selected span (spec: Rules / Semantics -> "Anchoring").
- * Declared here because it is part of the stored shape; the codec that builds and
- * resolves it is Stage 2, so nothing in this task reads `prefix`/`suffix`.
+ * Text-based locator of the selected span (spec: Rules / Semantics -> "Anchoring",
+ * "Anchor window"). Declared here because it is part of the stored shape; the codec
+ * that builds it lives in `anchor-build.ts` and the one that resolves it in
+ * `anchor-resolve.ts`.
  */
 export interface EntryAnchor {
-  /** Normalized selection text (whitespace collapsed): the anchoring authority. */
+  /** Normalized selection text (spec: "the normalized selection text"): the anchoring authority. */
   text: string;
-  /** Up to 40 normalized characters taken from before `text`; empty at page start. */
+  /**
+   * The characters before `text`, taken from the same normalized stream: at most
+   * `contextWindow` of them, whose default is 40 and which the caller may set to
+   * another size. Empty at the start of the stream, and never padded.
+   */
   prefix: string;
-  /** Up to 40 normalized characters taken from after `text`; empty at page end. */
+  /**
+   * The characters after `text`, taken from the same normalized stream, with the
+   * same window size as `prefix`. Empty at the end of the stream, never padded.
+   */
   suffix: string;
   /** How many DOM fragments the original selection spanned (1 for a single node). */
   fragmentCount: number;

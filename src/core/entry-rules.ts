@@ -9,8 +9,8 @@
  * edit rights; Flow 3 -> creation order).
  *
  * This layer returns English machine codes (`name_required`, `comment_empty`,
- * `comment_too_long`, `page_limit`). Russian user-visible strings are mapped in the
- * UI layer, never here.
+ * `comment_too_long`, `page_limit`, `overlap`, `duplicate`). Russian user-visible
+ * strings are mapped in the UI layer, never here.
  *
  * Timestamp invariant: `createdAt` / `updatedAt` are UTC ISO-8601 strings
  * (`new Date().toISOString()` at the call site), so a plain string comparison is
@@ -18,6 +18,8 @@
  */
 
 import type { Entry } from './entry';
+import type { CandidateSpan, ResolvedSpans } from './entry-overlap';
+import { findDuplicateEntry, findOverlappingEntry } from './entry-overlap';
 
 /** Hard cap of `comment`, counted in Unicode code points. */
 export const MAX_COMMENT_CODE_POINTS = 256;
@@ -53,8 +55,17 @@ export interface LengthValidation {
   normalized: string;
 }
 
-/** Machine code explaining why a creation attempt is refused (`null` = allowed). */
-export type CreateBlockCode = 'name_required' | 'comment_empty' | 'comment_too_long' | 'page_limit';
+/**
+ * Machine code explaining why a creation attempt is refused (`null` = allowed).
+ * The six codes are the six steps of Flow 3, in that order.
+ */
+export type CreateBlockCode =
+  | 'name_required'
+  | 'comment_empty'
+  | 'comment_too_long'
+  | 'page_limit'
+  | 'overlap'
+  | 'duplicate';
 
 /** Everything the creation rules need; `entries` is the list of one page. */
 export interface CreateAttempt {
@@ -64,6 +75,13 @@ export interface CreateAttempt {
   comment: string;
   /** Author name currently set in options. */
   currentName: string;
+  /**
+   * Ranges for the overlap and duplicate steps, from one re-resolve pass (`A37`):
+   * the candidate plus every existing entry of this page. Absent means the caller
+   * gave core no stream to resolve against, and steps 5 and 6 cannot run; the
+   * content layer always supplies them (`A22`, `A24`).
+   */
+  spans?: ResolvedSpans;
 }
 
 /** Counts Unicode code points, so a surrogate pair counts as one character. */
@@ -129,10 +147,18 @@ export function randomId(rng: RandomSource): string {
 }
 
 /**
- * Creation gate, checked in the spec's order (Flow 3): name set -> comment not
- * empty -> comment inside the cap -> page below the entry cap. Overlap and
- * duplicate selection are later checks and belong to the anchor stage. `null`
- * means the entry may be created.
+ * Creation gate, checked in the spec's order (Flow 3): name set -> selection not
+ * empty -> comment length <= 256 -> entry count < 20 -> no overlap -> no identical
+ * existing entry. `null` means the entry may be created.
+ *
+ * Step 2 has no code here because core never sees a selection: a whitespace-only
+ * or empty span is refused earlier by `buildAnchor` in `anchor-build.ts`, which
+ * returns `null`, and an empty comment is refused by `comment_empty`.
+ *
+ * Steps 5 and 6 work on the resolved code-point ranges of the current stream, not
+ * on stored anchor text (`A37`). Hidden entries block (`A22`), stale entries do
+ * not (`A24`). When both match, the more specific code is reported: an identical
+ * entry also overlaps, so `duplicate` wins over `overlap` (ruling `A23`).
  */
 export function assertCreatable(attempt: CreateAttempt): CreateBlockCode | null {
   if (!validateAuthorName(attempt.currentName).ok) {
@@ -151,7 +177,18 @@ export function assertCreatable(attempt: CreateAttempt): CreateBlockCode | null 
     return 'page_limit';
   }
 
-  return null;
+  const spans = attempt.spans;
+  if (spans === undefined) {
+    return null;
+  }
+
+  const candidate: CandidateSpan = { range: spans.candidate, comment: comment.normalized };
+  if (findOverlappingEntry(candidate, attempt.entries, spans.byEntryId) === null) {
+    return null;
+  }
+  return findDuplicateEntry(candidate, attempt.entries, spans.byEntryId) === null
+    ? 'overlap'
+    : 'duplicate';
 }
 
 /**

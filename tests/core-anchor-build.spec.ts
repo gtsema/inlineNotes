@@ -20,6 +20,13 @@ import { storedEntry } from './support/memory-storage-port';
 /** A short stream, so the expected window can be written out literally. */
 const SMALL = 'abc def GHI jkl mno';
 
+/**
+ * A stream with the same sentence twice, so a window that is still a substring of
+ * the stream resolves to the **second** copy while a window that lost its edge
+ * whitespace falls back to bare-text search and lands on the first one (`A27`).
+ */
+const REPEATED = 'one: alpha beta gap. two: alpha beta gap.';
+
 /** A realistic article stream: normalized, with one repeated sentence. */
 const PAGE = [
   'Введение к статье.',
@@ -143,10 +150,6 @@ describe('buildAnchor emits the anchor contract (AC2)', () => {
       [1, 1],
       [3, 3],
       [0, 0],
-      [-4, 0],
-      [2.7, 2],
-      [Number.NaN, 0],
-      [Number.POSITIVE_INFINITY, 0],
     ];
 
     for (const [fragments, expected] of cases) {
@@ -157,6 +160,24 @@ describe('buildAnchor emits the anchor contract (AC2)', () => {
         fragmentCount: expected,
       });
     }
+  });
+
+  it('refuses an out-of-domain contextWindow or fragments instead of coercing it (A28)', () => {
+    const rejected: number[] = [-1, -0.5, 2.7, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+
+    for (const value of rejected) {
+      expect(buildAnchor(SMALL, 8, 11, { fragments: 1, contextWindow: value })).toBeNull();
+      expect(buildAnchor(SMALL, 8, 11, { fragments: value })).toBeNull();
+    }
+
+    // The domain boundary itself stays usable: `0` is a stated choice, not a repair.
+    expect(buildAnchor(SMALL, 8, 11, { fragments: 1, contextWindow: 0 })).toEqual({
+      text: 'GHI',
+      prefix: '',
+      suffix: '',
+      fragmentCount: 1,
+    });
+    expect(buildAnchor(SMALL, 8, 11, { fragments: 1, contextWindow: 0 })).not.toBeNull();
   });
 
   it('emits an anchor the stored decode guard accepts exactly', () => {
@@ -212,6 +233,46 @@ describe('buildAnchor emits the anchor contract (AC2)', () => {
       ok: true,
       start: offsetOf(PAGE, 'lazy dog'),
       end: offsetOf(PAGE, 'lazy dog') + codePointLength('lazy dog'),
+    });
+  });
+
+  it('takes the window at the trimmed span when the selection starts with whitespace (A27)', () => {
+    const selection = ' alpha beta';
+    const start = offsetOf(REPEATED, selection, 1);
+    const anchor = buildAnchor(REPEATED, start, start + codePointLength(selection), DEFAULT_OPTIONS);
+    if (anchor === null) {
+      throw new Error(`buildAnchor refused a range the stream does contain: "${selection}"`);
+    }
+
+    expect(anchor.text).toBe('alpha beta');
+    expect(anchor.prefix).toBe('one: alpha beta gap. two: ');
+    expect(anchor.suffix).toBe(' gap.');
+    // The window is still an exact substring of the stream, so the contextual step
+    // of the search wins and picks the second copy instead of the first.
+    expect(REPEATED).toContain(anchor.prefix + anchor.text + anchor.suffix);
+    expect(resolveAnchor(REPEATED, anchor)).toEqual({
+      ok: true,
+      start: offsetOf(REPEATED, 'alpha beta', 1),
+      end: offsetOf(REPEATED, 'alpha beta', 1) + codePointLength('alpha beta'),
+    });
+  });
+
+  it('takes the window at the trimmed span when the selection ends with whitespace (A27)', () => {
+    const selection = 'alpha beta ';
+    const start = offsetOf(REPEATED, selection, 1);
+    const anchor = buildAnchor(REPEATED, start, start + codePointLength(selection), DEFAULT_OPTIONS);
+    if (anchor === null) {
+      throw new Error(`buildAnchor refused a range the stream does contain: "${selection}"`);
+    }
+
+    expect(anchor.text).toBe('alpha beta');
+    expect(anchor.prefix).toBe('one: alpha beta gap. two: ');
+    expect(anchor.suffix).toBe(' gap.');
+    expect(REPEATED).toContain(anchor.prefix + anchor.text + anchor.suffix);
+    expect(resolveAnchor(REPEATED, anchor)).toEqual({
+      ok: true,
+      start: offsetOf(REPEATED, 'alpha beta', 1),
+      end: offsetOf(REPEATED, 'alpha beta', 1) + codePointLength('alpha beta'),
     });
   });
 

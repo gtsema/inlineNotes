@@ -6,9 +6,15 @@
  * "Anchoring", "Normalized text".
  *
  * Contract (PM ruling `A26`):
- * - every run of whitespace collapses into one U+0020: space, tab, newline,
- *   carriage return, form feed, vertical tab, no-break space, every other Unicode
- *   space separator, the line and paragraph separators and the byte-order mark;
+ * - every run of whitespace collapses into one U+0020. The set is closed and is
+ *   exactly the set `WHITESPACE_RUN` matches: U+0009 tab, U+000A line feed, U+000D
+ *   carriage return, U+000B vertical tab, U+000C form feed, U+0020 space, U+00A0
+ *   no-break space, U+1680 Ogham space mark, U+2000 through U+200A the run of
+ *   Unicode space separators, U+2028 line separator, U+2029 paragraph separator,
+ *   U+202F narrow no-break space, U+205F medium mathematical space, U+3000
+ *   ideographic space and U+FEFF byte-order mark. Nothing else counts as
+ *   whitespace: U+0085 (NEL) and U+200B (zero width space) survive normalization
+ *   untouched, which is what makes this enumeration testable rather than open;
  * - leading and trailing whitespace of the whole value is dropped;
  * - nothing else changes: no reordering, no case change, no punctuation change.
  *   The non-whitespace code points of the input are exactly the code points of the
@@ -34,8 +40,11 @@ import { codePointLength } from './entry-rules';
 
 /**
  * One run of whitespace, as one regular expression, so the collapse rule has a
- * single definition. The `g` flag makes `String.replace` rewrite every run, and it
- * is kept private because a global expression carries a mutable `lastIndex`.
+ * single definition and the closed enumeration above is the set it matches — the
+ * WhiteSpace and LineTerminator code points of the language, which include U+2028
+ * and U+2029 and exclude U+0085. The `g` flag makes `String.replace` rewrite every
+ * run, and it is kept private because a global expression carries a mutable
+ * `lastIndex`.
  */
 const WHITESPACE_RUN = /\s+/g;
 

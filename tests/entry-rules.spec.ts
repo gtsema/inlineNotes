@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import type { Entry } from '../src/core/entry';
+import type { CodePointRange, ResolvedSpans } from '../src/core/entry-overlap';
 import {
   BASE36_ALPHABET,
   ENTRY_ID_LENGTH,
@@ -22,6 +23,8 @@ import {
   sortByCreatedAtAsc,
   validateAuthorName,
   validateComment,
+  type CreateAttempt,
+  type CreateBlockCode,
   type RandomSource,
 } from '../src/core/entry-rules';
 
@@ -61,6 +64,20 @@ function entriesForPage(count: number): Entry[] {
     entries.push(entryWith({ id: `id-${index}` }));
   }
   return entries;
+}
+
+/** Resolved range `span` for every entry: what one re-resolve pass produces (`A37`). */
+function rangesOf(entries: readonly Entry[], span: CodePointRange): Map<string, CodePointRange> {
+  const byEntryId = new Map<string, CodePointRange>();
+  for (const entry of entries) {
+    byEntryId.set(entry.id, span);
+  }
+  return byEntryId;
+}
+
+/** Spans in which the candidate is identical to every existing entry (`A23`). */
+function identicalSpans(entries: readonly Entry[], span: CodePointRange): ResolvedSpans {
+  return { candidate: span, byEntryId: rangesOf(entries, span) };
 }
 
 /** Deterministic rng: replays `values`, then keeps returning the last one. */
@@ -261,16 +278,109 @@ describe('edit rights and creation gate (AC4)', () => {
     );
   });
 
-  it('checks the rules in the spec order (name, comment, cap)', () => {
-    const attempts = [
-      { entries: entriesForPage(20), comment: '   ', currentName: '' },
-      { entries: entriesForPage(20), comment: '   ', currentName: 'Анна' },
-      { entries: entriesForPage(20), comment: 'a'.repeat(257), currentName: 'Анна' },
+  it('checks the six creation rules in the spec order of Flow 3', () => {
+    // Every row violates its own step and every later step it can, so the reported
+    // code is the earliest violated step. `id-0` always resolves onto the span the
+    // candidate resolves to, so steps 5 and 6 are violated in every row.
+    const atCap = entriesForPage(MAX_ENTRIES_PER_PAGE);
+    const belowCap = entriesForPage(MAX_ENTRIES_PER_PAGE - 1);
+    const name = 'Анна';
+    const identical = identicalSpans(atCap, { start: 10, end: 20 });
+    const partial: ResolvedSpans = { candidate: { start: 12, end: 24 }, byEntryId: rangesOf(atCap, { start: 10, end: 20 }) };
+
+    const rows: { step: string; attempt: CreateAttempt; code: CreateBlockCode }[] = [
+      { step: '1 name', attempt: { entries: atCap, comment: 'заметка', currentName: '', spans: identical }, code: 'name_required' },
+      { step: '2 selection and empty comment', attempt: { entries: atCap, comment: '   ', currentName: name, spans: identical }, code: 'comment_empty' },
+      { step: '3 comment cap', attempt: { entries: atCap, comment: 'a'.repeat(MAX_COMMENT_CODE_POINTS + 1), currentName: name, spans: identical }, code: 'comment_too_long' },
+      { step: '4 entry cap', attempt: { entries: atCap, comment: 'заметка', currentName: name, spans: identical }, code: 'page_limit' },
+      { step: '5 overlap', attempt: { entries: belowCap, comment: 'заметка', currentName: name, spans: partial }, code: 'overlap' },
+      { step: '6 duplicate', attempt: { entries: belowCap, comment: 'заметка', currentName: name, spans: identical }, code: 'duplicate' },
     ];
 
-    expect(assertCreatable(attempts[0])).toBe('name_required');
-    expect(assertCreatable(attempts[1])).toBe('comment_empty');
-    expect(assertCreatable(attempts[2])).toBe('comment_too_long');
+    expect(rows.map((row) => row.step)).toEqual([
+      '1 name',
+      '2 selection and empty comment',
+      '3 comment cap',
+      '4 entry cap',
+      '5 overlap',
+      '6 duplicate',
+    ]);
+    expect(rows.map((row) => assertCreatable(row.attempt))).toEqual([
+      'name_required',
+      'comment_empty',
+      'comment_too_long',
+      'page_limit',
+      'overlap',
+      'duplicate',
+    ]);
+  });
+
+  it('refuses a candidate whose resolved range intersects an existing entry (AC3, A22, A24)', () => {
+    const entries = [entryWith({ id: 'live' }), entryWith({ id: 'hidden', visible: false })];
+    const resolved = rangesOf(entries, { start: 10, end: 20 });
+    const spans = (start: number, end: number): ResolvedSpans => ({
+      candidate: { start, end },
+      byEntryId: resolved,
+    });
+
+    // A shared boundary point is accepted (spec: "Overlap", AC6).
+    expect(assertCreatable({ entries, comment: 'заметка', currentName: 'Анна', spans: spans(20, 24) }))
+      .toBeNull();
+    // A hidden entry still blocks, because `visible` controls painting only.
+    expect(assertCreatable({ entries: [entries[1]], comment: 'заметка', currentName: 'Анна', spans: spans(15, 16) }))
+      .toBe('overlap');
+    // A stale entry has no range, so nothing blocks a new note over its text.
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'заметка',
+        currentName: 'Анна',
+        spans: { candidate: { start: 12, end: 13 }, byEntryId: new Map<string, CodePointRange>() },
+      }),
+    ).toBeNull();
+  });
+
+  it('reports duplicate as the more specific code when both matches hold (ruling A23)', () => {
+    const entries = [entryWith({ id: 'same', comment: 'заметка' })];
+    const resolved = rangesOf(entries, { start: 10, end: 20 });
+
+    // Equal range and equal comment: `duplicate`, although the same candidate also
+    // intersects the range.
+    expect(
+      assertCreatable({
+        entries,
+        comment: ' заметка ',
+        currentName: 'Анна',
+        spans: { candidate: { start: 10, end: 20 }, byEntryId: resolved },
+      }),
+    ).toBe('duplicate');
+
+    // Equal range, different comment: still refused, as `overlap`.
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'другая заметка',
+        currentName: 'Анна',
+        spans: { candidate: { start: 10, end: 20 }, byEntryId: resolved },
+      }),
+    ).toBe('overlap');
+  });
+
+  it('enforces only steps 1-4 when the caller supplies no resolved ranges (A37)', () => {
+    const entries = [entryWith({ id: 'live' })];
+
+    // Core has no page to resolve against: a caller that hands over no spans gets
+    // no overlap answer in either direction, which is why the content layer must
+    // always pass them.
+    expect(assertCreatable({ entries, comment: 'заметка', currentName: 'Анна' })).toBeNull();
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'заметка',
+        currentName: 'Анна',
+        spans: { candidate: { start: 10, end: 20 }, byEntryId: new Map<string, CodePointRange>() },
+      }),
+    ).toBeNull();
   });
 
   it('accepts a well-formed creation attempt below the cap', () => {

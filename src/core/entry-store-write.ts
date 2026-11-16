@@ -36,7 +36,7 @@
 
 import type { Entry, EntryAnchor, EntryDraft } from './entry';
 import { createEntry } from './entry';
-import type { CreateBlockCode, RandomSource } from './entry-rules';
+import type { CreateAttempt, CreateBlockCode, RandomSource } from './entry-rules';
 import {
   MAX_COMMENT_CODE_POINTS,
   assertCreatable,
@@ -46,6 +46,7 @@ import {
   validateAuthorName,
   validateComment,
 } from './entry-rules';
+import type { ResolvedSpans } from './entry-overlap';
 import { decodeEntry, entryListFromStorageValue } from './entry-store-read';
 import type { PageIndex } from './page-index';
 import { addToIndex, removeFromIndex, resolvePageKey } from './page-index';
@@ -98,6 +99,15 @@ export interface CreateEntryOnPageInput {
   anchor: EntryAnchor;
   /** Author name from options; the stored value is the trimmed one. */
   currentName: string;
+  /**
+   * Flow-3 steps 5 and 6 (`A37`): the resolved code-point range of the candidate
+   * selection plus the resolved range of every existing entry of this page, all
+   * produced by one re-resolve pass. Absent means the caller resolved nothing, so
+   * the overlap and duplicate checks do not run; the page-side create card always
+   * supplies them, and it excludes nothing, because a create has no entry of its
+   * own yet.
+   */
+  spans?: ResolvedSpans;
   /** Injected clock: one UTC ISO-8601 `Z` stamp used for both fields (`A9`). */
   now: string;
   /** Injected random source for the entry id. */
@@ -179,11 +189,7 @@ export async function createEntryOnPage(
   }
   const context = loaded.context;
 
-  const block = assertCreatable({
-    entries: decodableEntries(context),
-    comment: input.comment,
-    currentName: input.currentName,
-  });
+  const block = assertCreatable(creationAttemptOf(context, input));
   if (block !== null) {
     return { ok: false, code: block };
   }
@@ -524,6 +530,24 @@ function isStoredTextConsistent(text: string, anchor: EntryAnchor | null): boole
     return false;
   }
   return text === anchor.text && isNormalizedText(text);
+}
+
+/**
+ * The `CreateAttempt` of one create: the current page's decodable records, the raw
+ * comment, the current name, and the resolved spans when the caller supplied them.
+ * `spans` is copied only when present, because a half-supplied pair would let a
+ * candidate past the overlap check against an empty range map.
+ */
+function creationAttemptOf(context: PageWriteContext, input: CreateEntryOnPageInput): CreateAttempt {
+  const attempt: CreateAttempt = {
+    entries: decodableEntries(context),
+    comment: input.comment,
+    currentName: input.currentName,
+  };
+  if (input.spans !== undefined) {
+    attempt.spans = input.spans;
+  }
+  return attempt;
 }
 
 /** Entries the guard could decode, in stored order: what the caps count. */

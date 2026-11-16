@@ -74,6 +74,25 @@ describe('normalizeText collapses whitespace (AC1)', () => {
     expect(normalizeText('a \u2028 \u2029 b')).toBe('a b');
   });
 
+  it('leaves a code point outside the closed enumeration untouched, so the set is closed (R1)', () => {
+    // U+0085 (NEL) is `White_Space` in Unicode data and is a line break in some
+    // legacy encodings, but it is not one of the forms `WHITESPACE_RUN` matches, so
+    // it survives normalization character for character and stays trim-safe.
+    expect(normalizeText('a\u0085b')).toBe('a\u0085b');
+    expect(normalizeText('a  \u0085  b')).toBe('a \u0085 b');
+    expect(normalizeText('\u0085a\u0085')).toBe('\u0085a\u0085');
+    expect(isNormalizedText('a\u0085b')).toBe(true);
+
+    // U+200B (zero width space) is the other near-miss: not collapsed, not trimmed.
+    expect(normalizeText('a\u200bb')).toBe('a\u200bb');
+    expect(isNormalizedText('a\u200bb')).toBe(true);
+
+    // The line and paragraph separators are collapsed, and they are line breaks,
+    // not space separators: one code point of the stream, never a kept character.
+    expect(normalizeText('a\u2028b')).toBe('a b');
+    expect(normalizeText('a\u2029b')).toBe('a b');
+  });
+
   it('trims the ends and gives an empty string for a whitespace-only value', () => {
     expect(normalizeText('  \t x \u00a0 \n')).toBe('x');
     expect(normalizeText('\u00a0\u2028   ')).toBe('');
