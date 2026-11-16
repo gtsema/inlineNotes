@@ -16,11 +16,28 @@ first task where `jsdom` enters — as a **dev-only** test environment (ruling `
   `display`/`visibility` inspection happens in v1.
 - `A2` `jsdom` may appear only in `package.json` devDependencies, the vitest environment for this test file, and the
   test itself. A scan test must fail if `jsdom` is imported by anything under `src/`.
+- `A29` **The stream is owned by the content layer and is rebuilt, never cached.** Every re-resolve rebuilds it; a
+  cached position would break the stability property `tests/core-anchor-resolve.spec.ts:114` pins.
+
+## Contract handed over by `t2-01` (from `docs/state/t2-01-review.md` → `t2-02` readiness)
+
+- Feed `resolveAnchor`/`buildAnchor` **one and the same string**: `normalizeText(pageText)` produced by walking the
+  same subtree order the layer maps back to, with block separators inserted **before** normalization.
+- Map back the half-open **code-point** range `[start, end)`: convert with `utf16IndexAt(stream, start)` /
+  `utf16IndexAt(stream, end)`, then to `(node, offset)` pairs. Never mix `String.indexOf` or `nodeValue` offsets into
+  anchor ranges without `codePointOffsetAt`.
+- At capture time the offsets handed to `buildAnchor` are offsets **of the trimmed span**, and the real fragment count
+  goes into `options.fragments` (a stored hint only).
+- `anchor_not_found` → paint nothing, keep the entry listed and deletable; a hit paints the **resolved** range, which
+  may be shorter than the remembered selection.
+- Re-resolve on load, bfcache and SPA URL change by rebuilding the stream; core caches no position, and any cache here
+  would break the stability property pinned by `tests/core-anchor-resolve.spec.ts:114`.
 
 ## AC (5 substantive + gates)
 
 1. `buildTextStream(root)` in `src/content/anchor/text-stream.ts` → `{ text, fragments }`: `text` is the normalized
-   stream per AC1 of `t2-01` plus the `A20` boundary spaces; `fragments` is an ordered list of
+   stream per AC1 of `t2-01` plus the `A20` boundary spaces, and it is normalized **by construction** — a test asserts
+   `isNormalizedText(result.text)` (review remark `R5`); `fragments` is an ordered list of
    `{ node, start, end, streamStart, streamEnd }` for every text node that contributed. Invariant tested both ways:
    slicing `text` at a fragment boundary reproduces the node's own text, and every stream offset belongs to exactly
    one fragment.
@@ -42,9 +59,13 @@ Work order: module + tests → `npm test` early → spec lines → gates → com
 
 ## Inputs the engineer reads
 
-`docs/specs/inline-comment-model.md` (Anchoring, Staleness), `docs/specs/content-overlay-ui.md` (Highlight painting,
-Terms), `docs/state/t2-02-content-anchor-dom.md`, `docs/state/t1-02-core-pagekey.md` (the jsdom approval `A2`),
-`src/core/anchor-resolve.ts` (or whatever `t2-01` named the resolver), `.pi/skills/chrome-mv3-extension-ts/SKILL.md`.
+Start with `docs/state/t2-01-review.md` (**`t2-02` readiness** paragraph, residual risks 1–5), then:
+
+`docs/specs/inline-comment-model.md` (Anchoring, Staleness, the text-stream rules `t2-01` added),
+`docs/specs/content-overlay-ui.md` (Highlight painting, Terms), `docs/state/t2-02-content-anchor-dom.md`,
+`docs/state/t1-02-core-pagekey.md` (the jsdom approval `A2`), `src/core/text-normalize.ts` (`normalizeText`,
+`isNormalizedText`, `utf16IndexAt`, `codePointOffsetAt`, `sliceCodePoints`), `src/core/anchor-resolve.ts`,
+`src/core/anchor-build.ts`, `.pi/skills/chrome-mv3-extension-ts/SKILL.md`.
 
 ## Explicitly out of scope
 
@@ -69,3 +90,6 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 - Whether the stream is built per frame: v1 builds it per document of the top frame only; iframes are out of scope
   for the anchor stage (recorded, revisit if the user reports iframe articles).
 - Shadow DOM inside the host page is not traversed in v1.
+- The 40-code-point window is shortest at the top of a long page, and a repeated sentence anchors to the first copy
+  with no UI signal (review residual risk 3) — an accepted v1 limitation, recorded in
+  `docs/state/t2-01-core-anchor-text.md`.

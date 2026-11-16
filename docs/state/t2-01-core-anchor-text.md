@@ -68,8 +68,31 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: attempt 1 complete; commit `10e10d7` (11 files, +1245/-16); PM re-ran the gates: `npm test` 310/310
+  over 17 files, `npm run build` self-contained `dist/` (10 files), checker `0 errors / 0 warnings / 10 INFO`.
+  Artifact: `…/subagent-artifacts/outputs/7b24fff9-d04d-4b32-bcf7-6bf6519c5936/docs/state/t2-01-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, remarks `R1`–`R7`; `t2-02` readiness paragraph present.
+  Artifact copied to `docs/state/t2-01-review.md`.
+- PM decision: task closed at attempt 1/1. Reviewer note `R7b` accepted: the `A26` work is recorded here against
+  state-file AC5 (the spec edit), and the INFO baseline is 10, not 9 (this commit's own backticked `tests/` token).
+
+## PM rulings on the review remarks
+
+- `A27` (remark `R3`, edge-whitespace selection kills the contextual step): the window is taken at the boundaries of
+  the **trimmed** span. A caller that hands raw selection offsets whose slice starts or ends with whitespace must still
+  get a needle that is a substring of the stream. Fix lands in `t2-03` (one function, two tests, one spec clause).
+- `A28` (remark `R4`): an out-of-domain `contextWindow` or `fragments` value is **refused** (`buildAnchor` returns
+  `null`), not coerced to 0 — the same stance as `A26`. Fix lands in `t2-03` with a spec clause.
+- `R1` accepted: the spec names a categorical whitespace set; the code is the closed 17-form enumeration of `\s`.
+  The bullet must point at the constant, U+2028/U+2029 must be called line/paragraph separators, and one negative test
+  must pin that a non-listed control (U+0085 NEL) survives. Carried into `t2-03`.
+- `R2` accepted: `src/core/entry.ts` comments cite a spec phrase this commit deleted. Docs-only, carried into `t2-03`.
+- `R5` accepted and becomes an obligation of `t2-02`: the stream builder returns normalized text **by construction**,
+  and a test asserts `isNormalizedText(stream.text)`; core cannot detect a forgotten normalization on its own.
+- `R6` accepted and deferred to `t3-01`, where shipped code first calls `createEntryOnPage`: a boundary test must pin
+  that no shipped layer uses the exported record producers or `writeSlotThenIndex` directly.
+- Carried into `t2-03`: residual risk 3 (a 40-code-point window is shortest at the top of a long page, and a repeated
+  sentence anchors to the first copy with no UI signal) is recorded as a known v1 limitation, not fixed.
 
 ## Open questions
 

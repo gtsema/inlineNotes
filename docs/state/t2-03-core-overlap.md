@@ -61,7 +61,22 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 - engineer report: not started
 - reviewer verdict: not started
 
+Carried fixes from the `t2-01` review (they belong to this module's neighborhood; they must not add ACs):
+
+- `A27` — `buildAnchor` takes the `prefix`/`suffix` window at the boundaries of the **trimmed** span, so a selection
+  whose raw slice starts or ends with whitespace still produces a needle that is a substring of the stream today it
+  silently falls back to the bare-text step). Two tests, one spec clause.
+- `A28` — an out-of-domain `contextWindow` or `fragments` value is refused (`buildAnchor` returns `null`) instead of
+  being coerced to 0; the stance matches `A26`. One spec clause, one table of rejected values.
+- `R1` — the spec's whitespace bullet must point at the closed enumeration the code implements, must call U+2028 and
+  U+2029 line/paragraph separators rather than "space separators", and one negative test must pin that U+0085 (NEL)
+  survives normalization.
+- `R2` — the comments in `src/core/entry.ts` cite a spec phrase that no longer exists ("whitespace collapsed") and say
+  "Up to 40" where the spec now says "default 40, caller may ask for another size". English grep anchors are a repo rule.
+
 ## Open questions
 
+- Stale existing entries are settled by ruling `A24`: they have no range and cannot cause an overlap; the spec line
+  belongs to AC4 of this task.
 - Re-editing one's own entry must not collide with itself: `t3-03` passes the entry's own id to be excluded before
   the overlap check. Recorded here so the API shape leaves room for an `exceptId` argument; implemented in `t3-03`.
