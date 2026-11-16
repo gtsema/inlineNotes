@@ -53,8 +53,17 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Verdicts
 
-- engineer report: pending
-- reviewer verdict: pending
+- engineer report: complete, attempt 1/2; commit `b550fc4`; gates quoted — `npm test` 122/122, `npm run build` self-contained `dist/`, checker 0 errors / 0 warnings (4 INFO are the standing planned-path rule). Artifact: `…/subagent-artifacts/outputs/d3b3c66b-fbe9-4dfb-a214-4decf42a14b3/docs/state/t1-04-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, 6 non-blocking remarks (R1–R6). Artifact: `…/subagent-artifacts/outputs/078bd08b-9506-4605-9d4d-5c5b42f161d5/docs/state/t1-04-review.md`.
+- PM decision: task closed at attempt 1/2. Slice size held at 5 substantive ACs and the attempt fit the time budget — the `t1-03` re-cut works.
+
+## PM rulings on the review remarks
+
+- `R1`, `R2` accepted: the spec will say **40 code points** for the author name, and the `assertCreatable` doc comment gains the Flow-3 step-2 mapping. Both land in `t1-05`, which edits the same spec.
+- `R3`, `R4` accepted as-is; no change.
+- `R5` confirmed by ruling `A11`: one code `name_required` for v1; the options page refuses an over-long name at input (`t4-02`).
+- `R6` confirmed by ruling `A9`: the store writes `new Date().toISOString()`; the spec pins the format in `t1-05`.
+- Residual risk 4 (author name must be persisted trimmed) is assigned to `t1-06`: the creation facade persists `validateAuthorName(...).normalized`, never the raw input.
 
 ## Open questions
 

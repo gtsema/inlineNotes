@@ -19,15 +19,23 @@ key fixes from `t1-03`. The write path (create/update/delete) is `t1-06`, not he
    index (`resolvePageKey(url, index) ?? pageKeyFromUrl(url)`), read the slot, decode each entry — unknown
    fields ignored, `visible` absent → `true` (ruling `A1`), a malformed entry is skipped and counted, never
    silently deleted. A slot that holds no valid entry while the index still lists its page key is repaired by
-   `removeFromIndex` on read, without reordering the rest.
+   `removeFromIndex` on read, without reordering the rest. The shape guard (`isEntry`) lives in `src/core/`, not
+   in the chrome adapter; a corrupt or foreign-shaped record must never reach `canEdit` or the list helpers
+   (review residual risk 5). `pageIndexFromStorageValue` / `entryListFromStorageValue` style decode guards belong
+   to this task.
 4. `addToIndex` rejects a non-normalized page key instead of inserting it (review finding `N5`); no shipped
    code may call `decodeURIComponent` on a slot key (invariant `N4`); `SLOT_KEY_ESCAPE_BUDGET` becomes **246**
    so `notes:v1:` + slot stays strictly under 256 (review finding `N2`).
 5. `docs/specs/inline-comment-model.md` is edited in the same commit: the accepted FNV-1a collision trade-off
-   (`N1`), the index write policy and repair-on-read, the decode defaults, and the timestamp contract
+   (`N1`), the index write policy and repair-on-read, the decode defaults, the timestamp contract
    (`createdAt`/`updatedAt` are UTC ISO-8601 with `Z`, produced by the caller's clock port, so lexical ordering
-   is chronological).
+   is chronological — ruling `A9`), and the author cap stated in **code points** (review remark `R2`).
 6. Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
+
+Carried to `t1-06` (do not implement here): the write path persists `validateAuthorName(...).normalized` and
+`validateComment(...).normalized` rather than raw input (review residual risk 4); `assertCreatable` receives only
+the current page's list, since the cap is per `pageKey` (residual risk 2); `setVisible` is a pure core helper
+(ruling `A12`, residual risk 6).
 
 Work order (mandatory): gates early → spec lines → commit. If time runs out, commit the green state and name
 the gap.
@@ -39,7 +47,7 @@ review in flight). Next: `t1-06-entry-write-path` closes Stage 1.
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegation waits for the `t1-04` verdict (sequential acceptance).
+- attempt 1: brief prepared; delegated after the `t1-04` acceptance.
 
 Brief (attempt 1):
 - Task: storage seam + page-index policy + entry decoding (read path only).
