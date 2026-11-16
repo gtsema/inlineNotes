@@ -47,7 +47,22 @@ review in flight). Next: `t1-06-entry-write-path` closes Stage 1.
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegated after the `t1-04` acceptance.
+- attempt 1: **timeout at 1800000 ms.** The run wrote the whole read path but never ran the gates, never committed,
+  never reported. Uncommitted tree at the stop: `src/core/storage-port.ts`, `src/core/page-index-store.ts`,
+  `src/core/entry-store-read.ts`, `src/content/store/`, `tests/support/` (fake port), five new spec files, modified
+  `slot-key.ts`, `page-index.ts`, two core test files, `tsconfig.spec.json`, `docs/specs/inline-comment-model.md`.
+- attempt 2: **completion-only brief** (`3d022378`): fix the tests → verify AC coverage → finish the spec edit → run the
+  gates → commit → short report. Explicit rule added to the brief: "a committed green state with a short report is
+  accepted, an uncommitted perfect one is not".
+
+## Runtime observation (systemic)
+
+Two of five tasks hit the 30-minute ceiling (`t1-03`, `t1-05`); three finished inside it (`t1-01`, `t1-02`, `t1-04`).
+The pattern: slices that create **new files in two layers** (core + content adapter + test harness) do not fit;
+slices that stay in one layer do. Options for the PM, pending the user's answer:
+1. raise `timeoutMs` to 3600000 in the three role files, the `agentOverrides` block and `docs/project-profile.md`;
+2. keep 30 minutes and split cross-layer slices into two (adapter-only, then core-only);
+3. keep 30 minutes and start every cross-layer slice with a "commit early, commit often" instruction.
 
 Brief (attempt 1):
 - Task: storage seam + page-index policy + entry decoding (read path only).
