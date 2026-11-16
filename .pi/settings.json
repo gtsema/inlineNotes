@@ -1,0 +1,29 @@
+{
+  "defaultThinkingLevel": "off",
+  "enableSkillCommands": true,
+  "skills": [".pi/skills"],
+  "parallel": {
+    "maxTasks": 6,
+    "concurrency": 1
+  },
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 8000
+  },
+  "subagents": {
+    "disableThinking": true,
+    "defaultThinking": "off",
+    "maxThinking": "off",
+    "agentOverrides": {
+      "project-manager": {
+        "thinking": "off"
+      },
+      "extension-engineer": {
+        "thinking": "off"
+      },
+      "code-reviewer": {
+        "thinking": "off"
+      }
+    }
+  }
+}
