@@ -35,7 +35,8 @@ is confirmed on a real browser.
 
 | Task | Slice | Owning spec AC |
 |---|---|---|
-| `t3-01-content-create-card` | shadow host, selection capture, create card, counter, keyboard | overlay AC1, AC9, AC11, model AC9 |
+| `t3-01-settings-read-core` | `loadSettings(port)` + decode guard + tests + spec line (core only) | model AC9/AC10 storage half |
+| `t3-01-content-create-card` | shadow host, selection capture, create card, counter, keyboard (content only) | overlay AC1, AC9, AC11, model AC9 |
 | `t3-02-content-highlight-tooltip` | CSS Highlight painting, frame, hover tooltip, mine vs foreign header | overlay AC2, AC3 |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
@@ -85,6 +86,14 @@ cross-tab refresh (→ `t4-03`). Known v1 limitation, accepted: a read-modify-wr
 - `A22` a hidden entry still blocks overlap (`visible` is painting only).
 - `A23` two entries are duplicates when the resolved range and the normalized comment are equal.
 - `A24` a stale entry has no range and cannot cause an overlap.
+
+## Stage 3 pre-split (ruling `A34`, awaiting the user)
+
+`t2-02` — a two-layer slice (core-adjacent DOM code + a new jsdom harness) — overran even the 60-minute ceiling.
+`t3-01` as originally briefed is strictly bigger: shadow host + selection capture + card UI + a new core settings read
++ a message map, i.e. three layers. `A34` splits it into `t3-01-settings-read-core` (pure core, 3 AC) and
+`t3-01-content-create-card` (content only, 5 AC). Consequence: Stage 3 becomes 4 tasks, which exceeds the
+≤3-tasks-per-stage budget, so this is a renegotiation item, not a silent change. Default applied if unanswered.
 
 ## Open questions asked of the user (least-risky defaults applied if unanswered)
 

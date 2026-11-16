@@ -12,10 +12,10 @@ disabled Save button, the save call into core, and the refusal messages. No pain
 - `A30` **Card placement.** The card is positioned in viewport coordinates next to the bounding rect of the **first
   resolved fragment** of the selection, below it when there is room, above otherwise, clamped to the viewport with an
   8 px gutter. It never scrolls with the page while open: it is closed on scroll (ruling `A32`).
-- `A31` **Settings read moves here.** Ruling `A15` assigned the `settings:v1` decode guard to `t4-02`, but the content
-  script cannot create an entry without the current author name. Corrected: `t3-01` owns the core read
-  `loadSettings(port)` plus its decode guard (`name: string`, empty means "not set"); `t4-02` keeps only the options
-  UI and the write. This closes the gap instead of faking a name.
+- `A31` **Settings read lives in `t3-01-settings-read-core`.** Ruling `A15` assigned the `settings:v1` decode guard to
+  `t4-02`, but the content script cannot create an entry without the current author name. Corrected: the core read
+  `loadSettings(port)` plus its decode guard is its own task; `t4-02` keeps only the options UI and the write. This
+  task consumes that API; it must not read `settings:v1` itself.
 - `A32` **A card that is open is closed, not repositioned, on page scroll or on a selection change elsewhere.** A
   half-kept card over moved text is worse than a closed one; the note is not lost because nothing was typed yet.
 - `A33` **One message map per UI layer.** Refusal codes from core map to Russian strings in exactly one constants
@@ -40,7 +40,6 @@ disabled Save button, the save call into core, and the refusal messages. No pain
    `loadSettings` reports no name, **no card opens at all**; `comment_too_long` → the limit message; `page_limit` →
    the 20-entry message; `overlap` → `Выделение пересекается с существующей записью` (the code exists from `t2-03`).
    A create that returns `entry_invalid` is reported as a bug-level message, not silently swallowed.
-
 Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
 
 Work order (mandatory): host + card module + tests → `npm test` early → spec lines (`docs/specs/content-overlay-ui.md`:
@@ -49,7 +48,7 @@ Commit as soon as green; a committed green state with a short report is accepted
 
 ## Inputs the engineer reads
 
-`docs/state/t2-02-review.md` (its `t3-01` readiness paragraph and residual risks — this brief will quote them when the
+`docs/state/t3-01-settings-read-core.md` (the API you consume), `docs/state/t2-02-review.md` (its `t3-01` readiness paragraph and residual risks — this brief will quote them when the
 review lands), `docs/specs/content-overlay-ui.md` (Flow, Rules, Edge Cases, AC1/AC6/AC9/AC10/AC11),
 `docs/specs/inline-comment-model.md` (Flow 3, caps, authorship), `docs/state/t3-01-content-create-card.md`,
 `src/content/anchor/`, `src/core/anchor-build.ts`, `src/core/entry-store-write.ts`,
