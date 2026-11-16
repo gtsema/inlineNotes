@@ -16,6 +16,10 @@ exists in one pure function, which is what the content card and the popup will c
   `duplicate` is the more specific code reported when both match.
 - `A24` **Stale entries cannot overlap.** An entry whose anchor does not resolve has no range; it is excluded from
   the overlap set, so a new note may be created over text where an old note went stale.
+- `A37` (from `docs/state/t2-02-review.md` → residual risks for `t2-03`): overlap is computed on the **resolved
+  half-open code-point range of the current stream**, never on the stored anchor text; a shared block-boundary
+  separator code point counts as a touching boundary, not as shared content; every existing entry's range must come
+  from the same re-resolve pass, so a create costs one resolve per existing entry of that page (accepted cost).
 
 ## AC (5 substantive + gates)
 
@@ -40,9 +44,10 @@ Work order: module + tests → `npm test` early → spec lines → gates → com
 
 ## Inputs the engineer reads
 
-`docs/specs/inline-comment-model.md` (Flow 3, Overlap, Edge Cases, AC6), `docs/state/t2-03-core-overlap.md`,
-`docs/state/t1-04-review.md` (the four-code set and its precedence test), `src/core/entry-rules.ts`,
-`src/core/anchor-resolve.ts` (range output from `t2-01`).
+`docs/state/t2-02-review.md` (**residual risks for `t2-03-core-overlap`**, all four), `docs/specs/inline-comment-model.md`
+(Flow 3, Overlap, Edge Cases, AC6), `docs/state/t2-03-core-overlap.md`, `docs/state/t1-04-review.md` (the four-code set
+and its precedence test), `src/core/anchor-resolve.ts` (range output), `src/core/entry-rules.ts`,
+`src/core/entry-store-write.ts`.
 
 ## Explicitly out of scope
 

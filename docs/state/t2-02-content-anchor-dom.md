@@ -91,8 +91,37 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×2 a
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: attempt 2, commit `1efeda4`; artifact
+  `…/subagent-artifacts/outputs/0123b136-59ea-41e7-a4b0-919779b6e14b/docs/state/t2-02-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, remarks `N1`–`N9`; the `t3-01` readiness paragraph is the
+  selection → stream contract and is quoted into that brief. Artifact copied to `docs/state/t2-02-review.md`.
+- PM decision: task closed at attempt 2/2. Stage 2 is 2/3 done (`t2-03` remains).
+
+## PM rulings on the review remarks
+
+- `A36` (remark `N1`, partial liveness): **all-or-nothing.** If any mapped node of a resolved range is no longer
+  inside the subtree, `locateAnchorInStream` returns `anchor_stale`. Painting half a remembered selection is worse
+  than painting nothing, because the user cannot tell which half is real. Fix lands in `t3-01` (the same directory,
+  one predicate + one test + the doc comment already says this).
+- `A35` (remark `N8`, table cells): `td` and `th` join the `A20` block-boundary list, so `<td>a</td><td>b</td>`
+  streams as `"a b"` instead of `"ab"`. Cost is zero today (no stored anchors exist in the wild), benefit is that a
+  selection crossing cells stops being one glued word. Lands in `t3-01` with the spec line.
+- `N2` accepted: the spec and the module header state an equality (`stream == normalizeText(root.textContent)`) that
+  is false as written. The normative core is fine. The clause is replaced by the precise statement (normalized by
+  construction; one U+0020 per `A20` boundary; trimmed) in the next spec-touching commit, which is `t3-01`.
+- `N3` accepted: the `dist/` half of the jsdom scan passes vacuously when `dist/` is absent; it must assert the
+  directory exists. One line, `t3-01`.
+- `N4` accepted: the module-scoped `whitespaceDecision` map grows with distinct code points for the lifetime of the
+  content script; it must be bounded to the whitespace set. `t3-01`.
+- `N5` accepted: `docs/specs/INDEX.md` covered-paths column must list `src/content/anchor/`. `t3-01`.
+- `N6` recorded as **accepted contract drift**: the `t2-01` readiness formula was wrong for nodes with internal
+  whitespace runs; the implementation's per-node code-point map is correct, and the spec was extended in the same
+  commit. The readiness paragraph in `docs/state/t2-01-review.md` is superseded on this point by `docs/state/t2-02-review.md`.
+- `N7` becomes an obligation of `t3-02`: prefer `locateAnchor` (it rebuilds the stream); `locateAnchorInStream` may
+  only be used with a stream built in the same pass from the same root.
+- `N8` second half recorded: no depth cap in the stream walk — accepted v1 risk, revisit if a real page hits it.
+- `N9` fixed here (this section).
+- Cross-tab race (carried residual 5) stays open by design until `t4-03`.
 
 ## Open questions
 
