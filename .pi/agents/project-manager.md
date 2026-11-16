@@ -14,7 +14,7 @@ defaultContext: fresh
 allowedAgents: extension-engineer, code-reviewer
 acceptance: checked
 acceptanceRole: read-only
-timeoutMs: 1800000
+timeoutMs: 3600000
 advertise: true
 maxSubagentDepth: 2
 ---

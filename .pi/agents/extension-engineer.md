@@ -14,7 +14,7 @@ defaultContext: fresh
 allowedAgents:
 acceptance: checked
 acceptanceRole: writer
-timeoutMs: 1800000
+timeoutMs: 3600000
 advertise: true
 maxSubagentDepth: 1
 ---

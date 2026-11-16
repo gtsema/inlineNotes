@@ -161,6 +161,11 @@ const settingsPath = join(projectDir, '.pi', 'settings.json');
 const constitutionPath = join(projectDir, 'AGENTS.md');
 const profilePath = join(projectDir, 'docs', 'project-profile.md');
 
+// The profile is the single source of truth for timeoutMs; the checker reads the recorded value
+// instead of hard-coding it, so raising the ceiling means editing the profile plus the role files.
+const profileText = readFile(profilePath) ?? '';
+const PROFILE_TIMEOUT_MS = Number(profileText.match(/timeoutMs`?:\s*\*\*(\d+)\*\*/)?.[1] ?? 0);
+
 const THINKING_RANK = { off: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6 };
 
 /* -------------------------------- settings -------------------------------- */
@@ -228,7 +233,8 @@ for (const file of agentFiles) {
     && THINKING_RANK[data.thinking] > THINKING_RANK[maxThinking]) {
     err(r, `thinking "${data.thinking}" exceeds subagents.maxThinking "${maxThinking}"`);
   }
-  if (data.timeoutMs !== 1800000) warn(r, `timeoutMs ${data.timeoutMs} differs from the profile value 1800000`);
+  if (!PROFILE_TIMEOUT_MS) warn(r, 'cannot read the adapted timeoutMs value from docs/project-profile.md');
+  else if (data.timeoutMs !== PROFILE_TIMEOUT_MS) warn(r, `timeoutMs ${data.timeoutMs} differs from the profile value ${PROFILE_TIMEOUT_MS}`);
 
   const tools = splitList(data.tools);
   const skills = splitList(data.skills);
@@ -403,7 +409,7 @@ if (readFile(profilePath) == null) {
   for (const s of ['## Project', '## Stack', '## Documentation', '## Testing', '## Process rules', '## Team roles', '## Constraints', '## Language & Runtime Model']) {
     if (!profile.includes(s)) err(p, `missing profile section "${s}"`);
   }
-  if (!profile.includes('1800000')) err(p, 'profile must record the adapted timeoutMs value 1800000');
+  if (!PROFILE_TIMEOUT_MS) err(p, 'profile must record the adapted timeoutMs value as **<ms>**');
   for (const role of roles) {
     if (role.data.timeoutMs != null && !profile.includes(String(role.data.timeoutMs))) {
       err(p, `role "${role.name}" timeoutMs ${role.data.timeoutMs} is not the value recorded in the profile`);

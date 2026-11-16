@@ -16,7 +16,7 @@ acceptance:
   level: none
   reason: "read-only reviewer: the verdict is the review artifact, and the PM records it in the task state file"
 acceptanceRole: read-only
-timeoutMs: 1800000
+timeoutMs: 3600000
 advertise: true
 maxSubagentDepth: 1
 ---

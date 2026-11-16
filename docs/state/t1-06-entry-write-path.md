@@ -49,7 +49,25 @@ or overlap rule (Stage 2), no `chrome://extensions` smoke (nothing is observable
 
 ## Attempts log
 
-- attempt 1: brief issued.
+- attempt 1 (`cd1932d2`): **timeout at 1800000 ms.** Survived uncommitted in the tree: `src/core/entry-store-write.ts`,
+  `tests/core-entry-store-write.spec.ts` (new), `src/core/entry-rules.ts`, `src/core/page-index-store.ts` (modified).
+  No gates run, no commit, no report.
+- attempt 2: completion brief — fix/verify the write module, run the gates, edit the spec lines, commit, short report.
+
+## Runtime ruling `A19` — the ceiling is raised
+
+Three of six tasks (`t1-03`, `t1-05`, `t1-06`) died at 1800000 ms while writing two layers at once; the other three
+finished inside it. The user was asked twice about the ceiling and did not answer, so the PM applied the least-risky
+change and records it as a decision, not a silent one:
+
+- `docs/project-profile.md` → Runtime Model: `timeoutMs` **3600000** (60 min), with the history line;
+- the three role frontmatters now carry `timeoutMs: 3600000`;
+- `scripts/check-agent-config.mjs` no longer hard-codes the number: it parses the value out of the profile, so the
+  profile stays the single place where the ceiling is changed;
+- `node scripts/check-agent-config.mjs` → 0 errors / 0 warnings / 9 INFO (the standing planned-path rule).
+
+Revert in one edit if the user prefers 30 minutes: change the profile number back and the roles follow; the checker
+will enforce the match.
 
 Brief (attempt 1):
 - Task: entry write path over the port, with the failure-honesty matrix.
@@ -76,6 +94,7 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 - `A16` applied (no answer from the user): unreadable records survive every write and die only with `clear page`.
   If the user prefers self-healing drops on an explicit edit, this becomes a one-function change plus a spec line.
+- `A19` (above) is a runtime decision taken without an answer from the user; say "back to 30 min" to revert.
 - Race between two tabs (residual risk 2 of `t1-05`) is **not** solved here: no cross-tab lock exists, the content
   script is per-tab, and `writeSlotThenIndex` fixes ordering, not atomicity. Recorded as a known v1 limitation;
   the Stage-4 popup work may add a re-read before write.

@@ -103,7 +103,8 @@ Skills (4, no overlap): `chrome-mv3-extension-ts` (technical), `requirements-spe
 - Model class: `qwen3.8-flash-next-iq3_s` on provider `dacan` — quantized (~3 bit, `iq3_s`) ⇒ **slow runtime class per §1.4**.
 - Consequence for language (§1.1): role and spec bodies in **English**, short sentences, one bullet = one thought. UI strings and README in **Russian**.
 - Context window: **131k tokens** → `compaction.enabled: true`, `reserveTokens: 8000`.
-- Adapted `timeoutMs`: **1800000** (30 min) — settled once here, all role frontmatters copy this value. Any change → profile first, then roles in the same change, then rerun the checker.
+- Adapted `timeoutMs`: **3600000** (60 min) — settled once here, all role frontmatters copy this value. Any change → profile first, then roles in the same change, then rerun the checker (the checker reads this number, it does not hard-code it).
+  History: 1800000 was enough for single-layer slices (`t1-01`, `t1-02`, `t1-04`) but three of six tasks (`t1-03`, `t1-05`, `t1-06`) died at the 30-minute mark while writing two layers at once; the ceiling was raised by PM ruling `A19` on 2026-11-16, and every cross-layer brief keeps the "commit early, commit often" instruction.
 - Thinking: **off everywhere** (`thinking: off` in every role, `defaultThinkingLevel: "off"`, `subagents.disableThinking/defaultThinking/maxThinking: "off"`, matching `agentOverrides`).
 - Parallelism: **1** (`parallel.concurrency: 1`, single-threaded per user).
 - Model pinning: none. Every role `model: inherit`.
