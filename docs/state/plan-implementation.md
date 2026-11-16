@@ -122,3 +122,6 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   `::highlight()` rules, fall back to exactly one `<style id="inlinenotes-paint">` element — which then forces an edit
   of overlay AC2 ("no page element other than the overlay host"). Rejected for v1: `chrome.scripting.insertCSS`
   (needs a `scripting` permission the manifest does not have).
+- `A42`–`A45` (t3-03 brief, defaults applied without an answer): click outside the editor = cancel, not save; `Esc` =
+  cancel; `Удалить` deletes immediately with no confirmation and no undo in v1; a re-selection made inside the editor
+  may move the entry's range and is overlap-checked excluding the entry itself (`A45`, on top of `A37`).

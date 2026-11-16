@@ -64,6 +64,10 @@ No DOM range math (that is `t2-02`'s output), no content-script UI, no popup, no
 - attempt 2 (`cb93b848`): completion slice — fix the broken `A24` fixture (`tests/core-entry-overlap.spec.ts:197-198`,
   the fixture asserts `null` for a range that really does overlap `[10,20)` — the code is right, the test is wrong),
   finish `R1`, write the AC5 spec lines, gates, commit, report.
+  Result: commit `5a029c5` (11 files, +947/−73), working tree clean. PM re-ran the gates on the commit: `npm test`
+  **396 passed**, `npm run build` self-contained `dist/`, checker `0 errors / 0 warnings / 19 INFO`.
+- reviewer: running (`adbd5d3b`), range `02a4c73..5a029c5`. Attempt budget **2/2 used**: a `changes requested` verdict
+  stops the line and goes to the user, it does not buy a third attempt.
 
 ## Delegation count
 
