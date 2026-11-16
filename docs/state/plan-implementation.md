@@ -109,3 +109,16 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A6` PM ruling on t1-01 open question 2: the overlay shadow root mode stays `open` for v1 (dev-tool inspectability during the manual verification loop); `t3-01` owns the widget.
 - `A7` PM decision (platform constraint found in the `t1-02` review): `chrome.storage.local` forbids `.` `/` `\` `"` in a key and caps it at 256 characters, so `notes:v1:<url>` was never legal. Layout becomes `notes:v1:<escaped slot key>` plus a `pages:v1` index key; the spec line is edited together with the code.
 - `A8` **Confirmed by the user (2026-11-16)**: a trailing slash is not part of page identity — `/a` and `/a/` are the same page.
+- `A35` (t2-02 remark `N8`): `td`/`th` join the `A20` block-boundary list, so `<td>a</td><td>b</td>` streams as `"a b"`.
+- `A36` (t2-02 remark `N1`): anchor location is all-or-nothing — any mapped node detached ⇒ `anchor_stale`, never a
+  half-live fragment set.
+- `A37` (t2-03 brief): overlap is computed on resolved half-open code-point ranges from one re-resolve pass; a shared
+  block-boundary separator counts as touching, not sharing.
+- `A38`–`A40` (t3-02 brief): CSS Highlight API with one named highlight per entry; teardown deletes every
+  `inlinenotes-…` name; hidden and stale entries are simply absent from the paint (no dimmed state).
+- `A41` **open question for the user** (t3-02): the CSS Highlight API cannot be styled from the shadow tree, so the
+  paint style must be registered at document level. PM default, in order of preference: append a constructed stylesheet
+  to `document.adoptedStyleSheets` (no page element added), and only if the Stage 3 smoke shows that does not apply
+  `::highlight()` rules, fall back to exactly one `<style id="inlinenotes-paint">` element — which then forces an edit
+  of overlay AC2 ("no page element other than the overlay host"). Rejected for v1: `chrome.scripting.insertCSS`
+  (needs a `scripting` permission the manifest does not have).
