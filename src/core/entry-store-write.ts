@@ -102,12 +102,13 @@ export interface CreateEntryOnPageInput {
   /**
    * Flow-3 steps 5 and 6 (`A37`): the resolved code-point range of the candidate
    * selection plus the resolved range of every existing entry of this page, all
-   * produced by one re-resolve pass. Absent means the caller resolved nothing, so
-   * the overlap and duplicate checks do not run; the page-side create card always
-   * supplies them, and it excludes nothing, because a create has no entry of its
-   * own yet.
+   * produced by one re-resolve pass. Required by ruling `A46`: without resolved
+   * numbers those two checks cannot answer, so a caller that forgets them fails to
+   * compile instead of creating over an existing span with no refusal. The page-side
+   * create supplies the spans built from the same page read the write performs, and
+   * it excludes nothing, because a create has no entry of its own yet.
    */
-  spans?: ResolvedSpans;
+  spans: ResolvedSpans;
   /** Injected clock: one UTC ISO-8601 `Z` stamp used for both fields (`A9`). */
   now: string;
   /** Injected random source for the entry id. */
@@ -534,20 +535,18 @@ function isStoredTextConsistent(text: string, anchor: EntryAnchor | null): boole
 
 /**
  * The `CreateAttempt` of one create: the current page's decodable records, the raw
- * comment, the current name, and the resolved spans when the caller supplied them.
- * `spans` is copied only when present, because a half-supplied pair would let a
- * candidate past the overlap check against an empty range map.
+ * comment, the current name, and the spans the input had to carry (`A46`), so the
+ * write path never hands the gate an attempt whose steps 5 and 6 are silently
+ * skipped. `CreateAttempt.spans` itself stays optional, because the pure gate is
+ * unit-testable without a resolved map; the write path always fills it.
  */
 function creationAttemptOf(context: PageWriteContext, input: CreateEntryOnPageInput): CreateAttempt {
-  const attempt: CreateAttempt = {
+  return {
     entries: decodableEntries(context),
     comment: input.comment,
     currentName: input.currentName,
+    spans: input.spans,
   };
-  if (input.spans !== undefined) {
-    attempt.spans = input.spans;
-  }
-  return attempt;
 }
 
 /** Entries the guard could decode, in stored order: what the caps count. */

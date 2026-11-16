@@ -143,6 +143,7 @@ describe('purity of the core modules (AC1, review remark R6)', () => {
     'page-index-store.ts',
     'entry-store-read.ts',
     'entry-store-write.ts',
+    'entry-overlap.ts',
     'text-normalize.ts',
     'anchor-build.ts',
     'anchor-resolve.ts',

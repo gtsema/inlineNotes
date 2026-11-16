@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Entry, EntryAnchor } from '../src/core/entry';
+import type { CodePointRange, ResolvedSpans } from '../src/core/entry-overlap';
 import type { RandomSource } from '../src/core/entry-rules';
 import { MAX_ENTRIES_PER_PAGE, setEntryVisibility } from '../src/core/entry-rules';
 import { ISO_UTC_TIMESTAMP_PATTERN, loadEntries } from '../src/core/entry-store-read';
@@ -58,9 +59,27 @@ interface CreateOverrides {
   comment?: string;
   anchor?: EntryAnchor;
   currentName?: string;
+  spans?: ResolvedSpans;
   now?: string;
   rng?: RandomSource;
 }
+
+/**
+ * The one way a test builds `ResolvedSpans` (`A46` makes it a required argument of
+ * the write API): the candidate range plus the resolved range of the listed entry
+ * ids. An id that is absent from the map is read as stale (`A24`), and that is what
+ * the default of `createInput` does — it resolves no existing entry — because the
+ * pre-existing cases of this file are about the storage contract, and an unresolved
+ * page blocks nothing in either direction.
+ */
+function spansOf(
+  candidate: CodePointRange,
+  ranges: readonly (readonly [string, CodePointRange])[] = [],
+): ResolvedSpans {
+  return { candidate, byEntryId: new Map<string, CodePointRange>(ranges) };
+}
+
+const CANDIDATE_SPAN: CodePointRange = { start: 0, end: 13 };
 
 function createInput(overrides: CreateOverrides = {}): CreateEntryOnPageInput {
   return {
@@ -69,6 +88,7 @@ function createInput(overrides: CreateOverrides = {}): CreateEntryOnPageInput {
     comment: overrides.comment ?? 'my note',
     anchor: overrides.anchor ?? ANCHOR,
     currentName: overrides.currentName ?? NAME,
+    spans: overrides.spans ?? spansOf(CANDIDATE_SPAN),
     now: overrides.now ?? NOW,
     rng: overrides.rng ?? ZERO_RNG,
   };
@@ -930,5 +950,56 @@ describe('pure slot producers of the write path (AC5, residual risk 6 of t1-05)'
     expect(() => replacedRecord([], 0, entryRecord({ id: ID }))).toThrow('no stored record at position 0');
     expect(() => removedRecord([1], 1)).toThrow('no stored record at position 1');
     expect(() => removedRecord([1], -1)).toThrow('no stored record at position -1');
+  });
+});
+
+/**
+ * Flow-3 steps 5 and 6 observed through the write API rather than through the pure
+ * gate (`t2-03` review remark 4, ruling `A46`): the spans are a required argument,
+ * so the end-to-end refusal is reachable from `createEntryOnPage` and cannot be
+ * skipped by a caller that hands over nothing.
+ */
+describe('the resolved-span steps of a create through the write API (t2-04, A46)', () => {
+  it('refuses a candidate over the range of a hidden entry with overlap (A22)', async () => {
+    const hidden = storedEntry({ id: ID, pageKey: PAGE_A, visible: false, comment: 'hidden note' });
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [hidden]);
+
+    expect(
+      await create(port, {
+        comment: 'another note',
+        spans: spansOf({ start: 12, end: 13 }, [[ID, { start: 10, end: 20 }]]),
+      }),
+    ).toEqual({ ok: false, code: 'overlap' });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(1);
+    expect(storedRecords(port, SLOT_A)).toEqual([hidden]);
+    expect(writesOf(port)).toEqual([]);
+
+    // Control pair: the same candidate against the same stored entry, but resolved
+    // onto a disjoint range, is accepted. Only the resolved range decides.
+    const disjoint = await create(port, {
+      comment: 'another note',
+      spans: spansOf({ start: 20, end: 21 }, [[ID, { start: 10, end: 20 }]]),
+    });
+    expect(disjoint).toMatchObject({ ok: true, entry: { comment: 'another note' } });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(2);
+  });
+
+  it('reports page_limit at the cap even when the spans would also refuse (A46)', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, many(PAGE_A, MAX_ENTRIES_PER_PAGE));
+
+    // `many` gives id `000000000000` the comment `note 0`, so a candidate on that
+    // id's own range with that comment violates steps 5 AND 6. Step 4 is reported:
+    // the six-step order name -> selection -> 256 -> 20 -> overlap -> duplicate holds
+    // through the write API, not only through the pure gate.
+    expect(
+      await create(port, {
+        comment: 'note 0',
+        spans: spansOf({ start: 0, end: 5 }, [['000000000000', { start: 0, end: 5 }]]),
+      }),
+    ).toEqual({ ok: false, code: 'page_limit' });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(MAX_ENTRIES_PER_PAGE);
+    expect(writesOf(port)).toEqual([]);
   });
 });
