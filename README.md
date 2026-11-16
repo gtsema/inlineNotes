@@ -43,7 +43,13 @@ node scripts/check-agent-config.mjs --json       # машиночитаемый 
 ```
 
 Ворота приёмки для задач реализации (включатся после появления `package.json`): `npm test`, `npm run build`,
-`node scripts/check-agent-config.mjs`. Известно-падающей базы нет — всё должно быть зелёным.
+`node scripts/check-agent-config.mjs`. Известно-падающей базы нет — всё должно быть зелёным. Команды ворот выполняет
+`extension-engineer` и приводит вывод в отчёте; PM (без bash) проверяет наличие вывода, а при сомнениях просит
+`code-reviewer` перегнать `node scripts/check-agent-config.mjs`.
+
+Смоук-проверка ролей пройдена (все три): `docs/state/smoke-project-manager.md`, `docs/state/smoke-extension-engineer.md`,
+`docs/state/smoke-code-reviewer.md` — роль получает ровно свой список инструментов, свои скиллы, чистый контекст,
+модель сессии, thinking выключен.
 
 Проверки харнесса внутри pi: `/subagents` (у всех ролей thinking выключен), `/subagents-models` (у всех роль тот же модель, что у сессии).
 

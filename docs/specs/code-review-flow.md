@@ -24,7 +24,7 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 
 1. The PM writes the brief: Task / Input paths / Output path / Acceptance criterion / Constraints, and the task state file `docs/state/<task-id>.md` with the expected delegation count and the task's AC copied from the spec.
 2. `extension-engineer` implements, runs the gates, and writes a report file with the changed paths, the commands run, and the AC self-check.
-3. The PM runs the green gates itself: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
+3. The engineer runs the green gates (`npm test`, `npm run build`, `node scripts/check-agent-config.mjs`) and quotes their output in the report. The PM has no shell tool, so it verifies that the quote is present and complete; when a quote is missing or doubtful, the PM asks `code-reviewer` to re-run the read-only checker `node scripts/check-agent-config.mjs`.
 4. The PM delegates to `code-reviewer` with the diff range (`git diff <base>..HEAD` or the commit list), the spec path, and the report path.
 5. `code-reviewer` inspects only the artifacts, the code, the spec AC and the git diff, and writes its review to the path given in the brief (default `.pi/reviews/<task-id>-review.md` under the managed output routing).
 6. Verdict is recorded in the task state file: `accepted`, `changes requested` with numbered blocking findings, or `blocked` with the reason.
@@ -34,6 +34,7 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 ## Rules / Semantics
 
 - Green gates are blocking: a task with a failing `npm test`, a failing `npm run build`, or a failing `node scripts/check-agent-config.mjs` cannot be reviewed or accepted. Known failing baseline: none, 100% green is required.
+- Every brief to a role that owns the change must require a `Commands run` section in the report. The harness acceptance gate rejects a report without command evidence. A task that deliberately forbids commands (smoke checks, read-only probes) is launched with an explicit acceptance reason instead of the default gate.
 - The reviewer is read-only: `read, grep, find, ls, bash`; bash is limited to read-only git (`git log`, `git show`, `git diff`, `git status`, `git ls-files`). No edits, no `git add/commit/checkout/push`.
 - The review artifact must quote the AC line it checks for every AC, and must state for each: `pass`, `fail`, or `not covered by tests`.
 - A finding must name the file and the line or the spec section; "improve the code" is not a finding.
@@ -50,7 +51,7 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 - Task touches only docs/specs: the reviewer still reviews, but the `npm test` and `npm run build` gates are replaced by "no source file changed" and the checker gate stays mandatory.
 - Task changes `.pi/agents/`, `.pi/skills/`, `docs/specs/` or `.pi/settings.json`: `node scripts/check-agent-config.mjs` must be re-run in the same task and its output quoted.
 - The change to `timeoutMs` must first land in `docs/project-profile.md` → Runtime Model, then in role frontmatters in the same commit; otherwise it is a blocking finding.
-- Reviewer cannot run the build (read-only): the PM quotes the gate output in the review brief; the reviewer verifies the quote is present, not that it is truthful.
+- Reviewer cannot run the build (read-only): the engineer's report quotes the gate output, and the reviewer may re-run only the read-only checker `node scripts/check-agent-config.mjs`. The reviewer verifies the quote is present, not that it is truthful.
 - Empty diff or a report file that names paths that do not exist: verdict `blocked`.
 
 ## Acceptance Criteria

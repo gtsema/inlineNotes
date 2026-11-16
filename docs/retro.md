@@ -16,3 +16,12 @@
   literal entry `"[]"`, and both specialist roles were reported as invalid definitions (not launchable).
   Fix: write `allowedAgents:` with no value; the checker now rejects the flow-style empty list form. The
   "specialists do not delegate" guarantee is carried by the missing `subagent` tool plus `maxSubagentDepth: 1`.
+- Smoke finding: the first `project-manager` run was rejected by the automatic acceptance gate ("commands-run evidence
+  missing") because the brief forbade commands while `acceptance: checked` demands command evidence, and that role has
+  no bash tool at all. Fix encoded in `docs/specs/code-review-flow.md` and the PM role body: the engineer owns and
+  quotes the gates, the PM verifies the quote, `code-reviewer` may re-run the read-only checker; smoke and read-only
+  probes are launched with `acceptance: { level: "none", reason: ... }`. The second attempt passed.
+- Smoke finding: a read-only role refuses to create its own log file and returns the artifact inline. Correct behavior;
+  the PM writes such logs as bookkeeping.
+- Smoke result: all three roles started, got exactly their allowlisted tools, their own skills, fresh context ("nothing
+  was discussed before me"), and the session model with thinking off. Evidence: `docs/state/smoke-*.md`.
