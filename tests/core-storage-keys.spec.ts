@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -42,6 +42,24 @@ function coreSource(relativePath: string): string {
   return codeOnly(readFileSync(join(projectRoot, 'src', 'core', relativePath), 'utf8'));
 }
 
+/** Every shipped source file under `src/`, for the invariant checks. */
+function shippedSources(dir: string = 'src'): string[] {
+  const absoluteDir = join(projectRoot, dir);
+  const found: string[] = [];
+  for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+    const nested = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      found.push(...shippedSources(nested));
+      continue;
+    }
+    if (!/\.(ts|tsx)$/.test(entry.name)) {
+      continue;
+    }
+    found.push(codeOnly(readFileSync(join(projectRoot, nested), 'utf8')));
+  }
+  return found;
+}
+
 describe('core storage keys', () => {
   it('uses the documented key layout', () => {
     expect(ENTRY_KEY_PREFIX).toBe('notes:v1:');
@@ -67,10 +85,30 @@ describe('core storage keys', () => {
       const storageKey = entryStorageKey(pageKey);
       expect(storageKey).toMatch(/^notes:v1:[A-Za-z0-9_%-]{1,208}$/);
       expect(storageKey.length).toBeLessThanOrEqual(ENTRY_KEY_PREFIX.length + SLOT_KEY_ESCAPE_BUDGET);
+      expect(storageKey.length).toBeLessThan(256);
       for (const forbidden of FORBIDDEN_KEY_CHARACTERS) {
         expect(storageKey.includes(forbidden)).toBe(false);
       }
       expect(isEntryStorageKey(storageKey)).toBe(true);
+    }
+  });
+
+  it('keeps the composed key strictly below 256 for every branch (finding N2)', () => {
+    // The escape budget is the binding branch: 9 + 246 = 255, one character of
+    // headroom below the defensive 256-character key limit.
+    expect(ENTRY_KEY_PREFIX.length).toBe(9);
+    expect(SLOT_KEY_ESCAPE_BUDGET).toBe(246);
+    expect(ENTRY_KEY_PREFIX.length + SLOT_KEY_ESCAPE_BUDGET).toBeLessThan(256);
+    expect(ENTRY_KEY_PREFIX.length + SLOT_KEY_MAX_LENGTH).toBeLessThan(256);
+
+    const base = 'https://example.com/x';
+    const atBudget = `${base}${'a'.repeat(SLOT_KEY_ESCAPE_BUDGET - slotKeyFor(base).length)}`;
+    const overBudget = `https://example.com/${'a'.repeat(2000)}`;
+
+    expect(entryStorageKey(atBudget)).toHaveLength(ENTRY_KEY_PREFIX.length + SLOT_KEY_ESCAPE_BUDGET);
+    expect(entryStorageKey(overBudget)).toHaveLength(ENTRY_KEY_PREFIX.length + SLOT_KEY_MAX_LENGTH);
+    for (const pageKey of [atBudget, overBudget]) {
+      expect(entryStorageKey(pageKey).length).toBeLessThan(256);
     }
   });
 
@@ -119,6 +157,18 @@ describe('core storage keys', () => {
     expect(slotKeyFromStorageKey(PAGE_INDEX_KEY)).toBeNull();
     expect(slotKeyFromStorageKey(ENTRY_KEY_PREFIX)).toBeNull();
     expect(slotKeyFromStorageKey('notes:v2:https://example.com/a')).toBeNull();
+  });
+});
+
+describe('slot key decode invariant (finding N4)', () => {
+  it('shipped code never decodes a slot key back to a page key', () => {
+    const offenders = shippedSources().filter((code) => code.includes('decodeURIComponent'));
+    expect(offenders).toEqual([]);
+  });
+
+  it('reversing a slot key is a test-only tool, and it works for the whole branch', () => {
+    const slot = slotKeyFor('https://example.com/a?b=2');
+    expect(decodeURIComponent(slot)).toBe('https://example.com/a?b=2');
   });
 });
 

@@ -7,6 +7,7 @@ import {
   resolvePageKey,
 } from '../src/core/page-index';
 import type { PageIndex } from '../src/core/page-index';
+import { pageKeyFromUrl } from '../src/core/page-key';
 import { PAGE_INDEX_KEY, entryStorageKey } from '../src/core/storage-keys';
 
 /**
@@ -60,6 +61,32 @@ describe('addToIndex (AC4)', () => {
     ]);
     expect(() => addToIndex(emptyPageIndex(), '')).toThrow('pageKey must not be empty');
     expect(() => addToIndex(emptyPageIndex(), '   ')).toThrow('pageKey must not be empty');
+  });
+
+  it('refuses a page key that pageKeyFromUrl did not normalize (finding N5)', () => {
+    const message = 'pageKey must be normalized by pageKeyFromUrl';
+
+    // A raw URL would fork one page into a second, invisible entry list.
+    expect(() => addToIndex(emptyPageIndex(), 'https://example.com/a/')).toThrow(message);
+    expect(() => addToIndex(emptyPageIndex(), 'https://example.com/a//')).toThrow(message);
+    expect(() => addToIndex(emptyPageIndex(), 'https://example.com/a?utm_source=x')).toThrow(message);
+    expect(() => addToIndex(emptyPageIndex(), 'https://example.com/a#sec')).toThrow(message);
+    expect(() => addToIndex(emptyPageIndex(), 'https://example.com/A')).toThrow(message);
+    expect(() => addToIndex(emptyPageIndex(), 'not a url')).toThrow(message);
+  });
+
+  it('leaves the index untouched when it refuses a raw URL', () => {
+    const current = index('https://example.com/a');
+    expect(() => addToIndex(current, 'https://example.com/a/')).toThrow(
+      'pageKey must be normalized by pageKeyFromUrl',
+    );
+    expect(current.pageKeys).toEqual(['https://example.com/a']);
+  });
+
+  it('accepts an unnormalized key that is already indexed, so its slot stays reachable', () => {
+    const legacy = 'https://example.com/a/';
+    const current = index(legacy);
+    expect(addToIndex(current, legacy).pageKeys).toEqual([legacy]);
   });
 });
 
@@ -116,7 +143,8 @@ describe('resolvePageKey (AC4, ruling A4)', () => {
 
   it('keeps an existing slot when the page is opened again', () => {
     let stored = emptyPageIndex();
-    const savedPageKey = 'https://example.com/Article?Lang=ru';
+    const savedPageKey = pageKeyFromUrl('https://example.com/Article?lang=ru') ?? '';
+    expect(savedPageKey).toBe('https://example.com/article?lang=ru');
     stored = addToIndex(stored, savedPageKey);
 
     const found = resolvePageKey('https://example.com/article?utm_source=x', stored);

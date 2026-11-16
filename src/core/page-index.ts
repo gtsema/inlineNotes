@@ -34,13 +34,23 @@ export function emptyPageIndex(): PageIndex {
  * Appends a page key when absent and keeps the existing order. An already present
  * key leaves the order untouched, so a re-read of a page never makes a newer
  * variant win the path-only fallback.
+ *
+ * A page key that is not the output of `pageKeyFromUrl` is refused (review
+ * finding `N5`): indexing a raw URL would fork one page into two entry lists, and
+ * the fork would be invisible. The write path resolves first —
+ * `resolvePageKey(url, index) ?? pageKeyFromUrl(url)` — and only then indexes.
+ * A key that is already in the index is accepted untouched, even if a value from
+ * an older layout is not normalized, because dropping or rewriting an indexed key
+ * would make its slot unreachable.
  */
 export function addToIndex(index: PageIndex, pageKey: string): PageIndex {
-  const normalized = requirePageKey(pageKey, 'addToIndex');
+  const normalized = pageKey.trim();
   if (index.pageKeys.includes(normalized)) {
     return { version: index.version, pageKeys: [...index.pageKeys] };
   }
-  return { version: index.version, pageKeys: [...index.pageKeys, normalized] };
+
+  const indexed = requirePageKey(normalized, 'addToIndex');
+  return { version: index.version, pageKeys: [...index.pageKeys, indexed] };
 }
 
 /** Drops a page key; every other key keeps its position. */
@@ -87,6 +97,9 @@ function requirePageKey(pageKey: string, caller: string): string {
   const normalized = pageKey.trim();
   if (normalized.length === 0) {
     throw new Error(`${caller}: pageKey must not be empty`);
+  }
+  if (pageKeyFromUrl(normalized) !== normalized) {
+    throw new Error(`${caller}: pageKey must be normalized by pageKeyFromUrl`);
   }
   return normalized;
 }

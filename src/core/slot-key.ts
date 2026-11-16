@@ -15,8 +15,9 @@
  * `SLOT_KEY_HASH_SEPARATOR`, then `slotKeyHash(pageKey)` — `fnv1a32` of the whole
  * page key in base36 padded to `SLOT_KEY_HASH_LENGTH` characters. The truncation
  * branch produces at most `SLOT_KEY_MAX_LENGTH` characters and no slot key exceeds
- * `SLOT_KEY_ESCAPE_BUDGET`, so `notes:v1:` + slot key stays inside the
- * 256-character key budget. A truncated slot key is not reversible: the page key
+ * `SLOT_KEY_ESCAPE_BUDGET` (246, review finding `N2`), so `notes:v1:` (9) + slot
+ * key is at most 255 characters: strictly inside the 256-character key budget,
+ * with one character of headroom instead of none. A truncated slot key is not reversible: the page key
  * is read back from the `pages:v1` index (`page-index.ts`).
  *
  * Accepted trade-off: two page keys that share a `SLOT_KEY_TRUNCATED_PREFIX`
@@ -35,8 +36,12 @@
  * emits well-formed Unicode, so the case is out of scope here.
  */
 
-/** Escaped slot keys up to this length are kept whole. */
-export const SLOT_KEY_ESCAPE_BUDGET = 247;
+/**
+ * Escaped slot keys up to this length are kept whole. 246 keeps the composed
+ * storage key strictly below 256 (`ENTRY_KEY_PREFIX` is 9 characters), which is
+ * the headroom review finding `N2` asked for.
+ */
+export const SLOT_KEY_ESCAPE_BUDGET = 246;
 
 /** Escaped characters kept from the front of an over-budget key. */
 export const SLOT_KEY_TRUNCATED_PREFIX = 200;
