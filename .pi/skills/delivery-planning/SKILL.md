@@ -37,6 +37,20 @@ metadata:
 - No literal commands that depend on the runtime; link to the green gates in `docs/project-profile.md`.
 - Fast path: single file plus no contract change → merge spec and implementation into one task, review afterwards.
 
+## Slice size and timeouts (learned in Stage 1 of this repo)
+
+- A timed-out run counts as an attempt. Do not re-issue the same brief: the second brief is a **completion brief** —
+  the hand-over is already in the working tree, so the order is: run the test gate first, fix, audit AC coverage,
+  edit the spec, run all gates, commit, report. State explicitly that a committed green state with a short report is
+  accepted and an uncommitted perfect one is not.
+- A slice that touches **two layers at once** (domain + adapter/UI + a new test harness) is the shape that overruns
+  the runtime ceiling. Keep such a slice at ≤5 substantive AC, or split it into one-layer tasks; single-layer slices
+  of the same size finish inside the ceiling.
+- Put the work order into every brief, not into a follow-up message: the child session does not see the negotiation.
+- Carry review findings forward by name (`N2`, `R6`, residual risk 4): the next brief repeats them, because the next
+  engineer session has no memory of the previous review.
+- Copy each review artifact into `docs/state/<task-id>-review.md`; a brief may only name paths that exist in the repo.
+
 ## Not for:
 
 - Writing the spec content itself — see `requirements-spec`.
