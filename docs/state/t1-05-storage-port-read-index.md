@@ -53,16 +53,48 @@ review in flight). Next: `t1-06-entry-write-path` closes Stage 1.
   `slot-key.ts`, `page-index.ts`, two core test files, `tsconfig.spec.json`, `docs/specs/inline-comment-model.md`.
 - attempt 2: **completion-only brief** (`3d022378`): fix the tests → verify AC coverage → finish the spec edit → run the
   gates → commit → short report. Explicit rule added to the brief: "a committed green state with a short report is
-  accepted, an uncommitted perfect one is not".
+  accepted, an uncommitted perfect one is not". Result: **green**, commit `084a5c1` (16 files, +1945/-14), 13 test
+  files / 206 tests, `npm run typecheck` clean. The handed-over tree turned out to be already passing, so attempt 2
+  spent its time on verification, one missing spec line, the gates and the commit.
+
+## Verdicts
+
+- engineer report: attempt 2 complete, all three gates quoted (`npm test` 206/206, `npm run build` self-contained `dist/`, checker 0 errors / 9 INFO — the standing planned-path rule). Artifact: `…/subagent-artifacts/outputs/3d022378-60af-4d1c-b8e7-e851e4a0d743/docs/state/t1-05-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, remarks `R1`–`R8`. Artifact copied into the repo at
+  `docs/state/t1-05-review.md` (fixes remark `R8`: review artifacts used to live only under
+  `subagent-artifacts/outputs/<run>/docs/state/`, which broke the path convention the next brief expects).
+- PM decision: task closed at attempt 2/2; commit `084a5c1` is final. All four carried findings of `t1-03`
+  (`N1`, `N2`, `N4`, `N5`) and the `t1-04` residual risks 1, 3, 5 are closed.
+
+## PM rulings on the engineer's open questions
+
+- `A13` **Timeout ceiling**: no answer from the user after two requests, so the least-risky default is applied and recorded as an assumption — `timeoutMs` stays **1800000**, and every cross-layer brief must carry the "commit early, commit often" instruction plus "a committed green state beats an uncommitted perfect one". The user may raise it later; the change site is `docs/project-profile.md` → Runtime Model plus the three role files and `agentOverrides`.
+- `A14` **Repair scope**: per-page repair on read is sufficient for v1. No full-index scan; `clear page` does not sweep other pages' orphans.
+- `A15` **`settings:v1` decode guard** belongs to `t4-02-options-name-field` (the settings UI is its first and only consumer), not to `t1-06`.
+- **Open question 1 (corrupt records vs a whole-list write) — asked twice, no answer; applied as
+  `Assumption` `A16`**: no silent data loss. The write path must carry unreadable raw records through every write
+  verbatim (the slot value grows an `unreadable: unknown[]` part), count them, and only `clear page` discards them.
+  The reviewer confirmed the read path already refuses to delete them, so this ruling keeps read and write honest.
+  Reversible by a later ruling if the user prefers self-healing drops.
+- `A17` remark `R2` resolved: the durable rule is the **spec** wording — a slot holding a malformed record or a
+  foreign `version` is NOT repaired; only an absent or valid-but-empty slot is. The AC paraphrase in this file was
+  looser; the acceptance ledger follows the spec.
+- `A18` remarks `R1`, `R7` are bookkeeping: no `QuotaError` type is introduced (the vocabulary is
+  `StorageFailureError` + `code`), and the checker prints INFO lines one per line.
+- Carried into `t1-06`: `R3` (a scan asserting `chrome.storage` appears in exactly one shipped file) and `R6`
+  (the stale `{1,208}` regex in `tests/core-storage-keys.spec.ts:86` must become the universal 246 bound).
 
 ## Runtime observation (systemic)
 
 Two of five tasks hit the 30-minute ceiling (`t1-03`, `t1-05`); three finished inside it (`t1-01`, `t1-02`, `t1-04`).
 The pattern: slices that create **new files in two layers** (core + content adapter + test harness) do not fit;
-slices that stay in one layer do. Options for the PM, pending the user's answer:
+slices that stay in one layer do. Options for the PM, pending the user's answer (resolved by ruling `A13`):
 1. raise `timeoutMs` to 3600000 in the three role files, the `agentOverrides` block and `docs/project-profile.md`;
 2. keep 30 minutes and split cross-layer slices into two (adapter-only, then core-only);
 3. keep 30 minutes and start every cross-layer slice with a "commit early, commit often" instruction.
+
+Outcome after applying (3): attempt 2 of `t1-03` and attempt 2 of `t1-05` both finished inside the ceiling, because
+the hand-over was already in the tree. The completion-slice pattern works; the ceiling itself is untouched.
 
 Brief (attempt 1):
 - Task: storage seam + page-index policy + entry decoding (read path only).
