@@ -48,16 +48,19 @@ Anything in `src/content/` (the anchor-directory fixes are `t3-04-content-anchor
 
 ## Attempts log
 
-- attempt 1: brief prepared after the `t2-03` acceptance; delegated immediately (Stage 2 close-out).
+- attempt 1 (`a3a5f33e`): **accepted on the first attempt** — the first task since `t1-04` that did not need a second
+  pass, which is consistent with the slice being one-layer and 4 AC. Commit `c2cc64c` (4 files, +87/−15), tree clean,
+  report copied to `docs/state/t2-04-engineer.md`. PM gates on the commit: `npm test` **398 passed**, `npm run build`
+  self-contained `dist/`, `npm run typecheck` clean, checker `0 errors / 0 warnings / 19 INFO`.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 + reviewer ×1 in flight).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: attempt 1, commit `c2cc64c`; copied to `docs/state/t2-04-engineer.md`.
+- reviewer verdict: running (`7086c939`), range `c2cc64c^..c2cc64c`.
 
 ## Open questions
 
