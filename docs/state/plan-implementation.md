@@ -87,13 +87,15 @@ cross-tab refresh (→ `t4-03`). Known v1 limitation, accepted: a read-modify-wr
 - `A23` two entries are duplicates when the resolved range and the normalized comment are equal.
 - `A24` a stale entry has no range and cannot cause an overlap.
 
-## Stage 3 pre-split (ruling `A34`, awaiting the user)
+## Stage 3 split (ruling `A34`) — **confirmed by the user (2026-11-16): "оставляем"**
 
 `t2-02` — a two-layer slice (core-adjacent DOM code + a new jsdom harness) — overran even the 60-minute ceiling.
 `t3-01` as originally briefed is strictly bigger: shadow host + selection capture + card UI + a new core settings read
 + a message map, i.e. three layers. `A34` splits it into `t3-01-settings-read-core` (pure core, 3 AC) and
 `t3-01-content-create-card` (content only, 5 AC). Consequence: Stage 3 becomes 4 tasks, which exceeds the
-≤3-tasks-per-stage budget, so this is a renegotiation item, not a silent change. Default applied if unanswered.
+≤3-tasks-per-stage budget, so it was put to the user as a renegotiation item. **The user approved the split**, so
+Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-settings-read-core` →
+`t3-01-content-create-card` → `t3-02` → `t3-03`.
 
 ## Open questions asked of the user (least-risky defaults applied if unanswered)
 

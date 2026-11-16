@@ -74,11 +74,20 @@ rule (`t2-03`). `jsdom` must not enter `dependencies`, the manifest, or any `dis
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegated after `t2-01` acceptance.
+- attempt 1 (`5dd81ad4`): **timeout at 3600000 ms** — the first task to overrun even the raised ceiling. The work
+  survived complete and green in the tree (two modules, 57 tests, jsdom as a devDependency, spec edits); only the commit
+  and the report were missing. PM verified the gates in the tree: `npm test` 361/361, `npm run build` green,
+  checker 0 errors.
+- attempt 2 (`0123b136`): tiny completion slice — audit against AC1–AC5, add the genuinely missing cases, gates, commit,
+  report. Result: commit `1efeda4` (11 files, +1921/-5), **no `src/` change was needed** in attempt 2, six cases added.
+  PM re-ran the gates on the commit: `npm test` **367 passed**, `npm run build` self-contained `dist/`,
+  checker `0 errors / 0 warnings / 16 INFO`.
+- reviewer: running (`affdbdb4`), range `305b416..1efeda4`. Attempt budget **2/2 used**: a `changes requested` verdict
+  stops the line and goes to the user, it does not buy a third attempt.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×2 attempts, reviewer ×1 in flight).
 
 ## Verdicts
 
