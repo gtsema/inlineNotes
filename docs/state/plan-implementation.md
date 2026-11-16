@@ -89,7 +89,7 @@ cross-tab refresh (→ `t4-03`). Known v1 limitation, accepted: a read-modify-wr
 - `A23` two entries are duplicates when the resolved range and the normalized comment are equal.
 - `A24` a stale entry has no range and cannot cause an overlap.
 
-## Carried-fix slices (ruling `A48`) — **second renegotiation item, awaiting the user**
+## Carried-fix slices (ruling `A48`) — **confirmed by the user (2026-11-16: "Да, давай")**
 
 `A48`: **more than two carried review findings get their own slice**, never stacked onto the next feature task (the rule
 is in `.pi/skills/delivery-planning/SKILL.md`, learned when `t2-03` died with 5 AC + 4 carried fixes). Applying it to
@@ -127,7 +127,7 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   block-boundary separator counts as touching, not sharing.
 - `A38`–`A40` (t3-02 brief): CSS Highlight API with one named highlight per entry; teardown deletes every
   `inlinenotes-…` name; hidden and stale entries are simply absent from the paint (no dimmed state).
-- `A41` **open question for the user** (t3-02): the CSS Highlight API cannot be styled from the shadow tree, so the
+- `A41` **confirmed by the user (2026-11-16: "Да")** (t3-02): the CSS Highlight API cannot be styled from the shadow tree, so the
   paint style must be registered at document level. PM default, in order of preference: append a constructed stylesheet
   to `document.adoptedStyleSheets` (no page element added), and only if the Stage 3 smoke shows that does not apply
   `::highlight()` rules, fall back to exactly one `<style id="inlinenotes-paint">` element — which then forces an edit
@@ -140,5 +140,5 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   the overlap and duplicate checks; `CreateAttempt.spans` stays optional for pure rule tests. PM default, one `?` to revert.
 - `A47` (`t2-03` remark 5): `duplicate` gets its own Russian message `Такая заметка на этом выделении уже есть`, distinct
   from the overlap message, because the two refusals ask the user for different actions.
-- `A48`: a review that leaves more than two carried findings produces its own cleanup slice — `t2-04-core-create-hardening`
+- `A48` **confirmed by the user (2026-11-16)**: a review that leaves more than two carried findings produces its own cleanup slice — `t2-04-core-create-hardening`
   and `t3-04-content-anchor-hardening`, which makes Stage 2 4 tasks and Stage 3 5 tasks. Awaiting the user's confirmation.

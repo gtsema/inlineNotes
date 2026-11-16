@@ -80,8 +80,10 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Open questions
 
-- `A38`/`A39`/`A40`/`A41` are PM defaults applied without an answer from the user. **`A41` is the one worth asking
-  about**: it adds one `<style>` element to every page where the extension paints, because the Highlight API cannot be
-  styled from a shadow tree. Everything else is one module to change.
+- `A38`–`A40` are PM defaults; each is one module to change.
+- `A41` is **confirmed by the user (2026-11-16: "Да")**: try `document.adoptedStyleSheets` first (no page element is
+  added, so overlay AC2 stays literally true); the single `<style id="inlinenotes-paint">` fallback is used only if the
+  Stage 3 smoke shows `::highlight()` rules do not apply through an adopted sheet, and then overlay AC2 is amended in
+  the same commit. `t3-02` must state in its report which variant shipped.
 - Whether the tooltip follows text selection inside itself (it must not open the create card) — `t3-03` owns that
   interaction; recorded so the two slices do not collide on the `selectionchange` handler.
