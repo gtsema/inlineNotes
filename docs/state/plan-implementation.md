@@ -41,4 +41,6 @@ Gates per task: `npm test`, `npm run build`, `node scripts/check-agent-config.mj
 
 - `A1` `visible` flag: overlay spec persists it in the entry record, model spec entry shape omits it. Default: `Entry.visible: boolean` (default `true`), `inline-comment-model.md` edited in the same commit as `t1-03`.
 - `A2` Anchor tests need a DOM: default `jsdom` as a **dev** dependency (Vitest environment); runtime deps stay Angular + Preact only.
-- `A3` Build wiring: Angular application builder for popup+options, esbuild for the content/core bundle, one node script assembles `dist/` + copies the manifest.
+- `A3` Build wiring: Angular application builder for popup+options, esbuild for the content/core bundle, one node script assembles `dist/` + copies the manifest. Default accepted (t1-01 review `accepted`).
+- `A5` PM ruling on t1-01 remark 2: `content_scripts.matches` is narrowed to `http://*/*` + `https://*/*`; the spec line lands in `content-overlay-ui.md` with the t1-02 commit.
+- `A6` PM ruling on t1-01 open question 2: the overlay shadow root mode stays `open` for v1 (dev-tool inspectability during the manual verification loop); `t3-01` owns the widget.

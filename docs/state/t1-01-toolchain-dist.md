@@ -52,4 +52,4 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer, revi
 ## Open questions
 
 - `A3` build wiring applied as the default (Angular builder + esbuild + assembly script); accepted as-is.
-- Stage 1 done-criterion still needs the human `chrome://extensions` → "Load unpacked" confirmation (stock Chrome refuses `--load-extension`).
+- Stage 1 done-criterion closed: the user loaded `dist/` in `chrome://extensions` ("Загрузил. Ошибок нет") — human confirmation collected 2026-11-16. Re-confirm once after t1-02 (manifest scheme narrowing + hidden placeholder fix).
