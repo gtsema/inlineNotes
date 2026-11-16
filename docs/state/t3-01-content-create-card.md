@@ -40,18 +40,34 @@ disabled Save button, the save call into core, and the refusal messages. No pain
   document-order copy, so a saved note can paint somewhere else on the page with no signal. Accepted v1 limitation,
   recorded in the state file and in the spec's Edge Cases.
 
-## Carried fixes from `docs/state/t2-02-review.md` (same directory, do them first and commit them separately)
+## Carried fixes moved out (ruling `A34` follow-up + the slice-budget rule)
 
-- `A36` — `locateAnchorInStream` must be all-or-nothing: any mapped node no longer inside the subtree ⇒
-  `anchor_stale` (today it returns `ok: true` with the survivor, contradicting its own doc comment).
-- `A35` — `td` and `th` join the `A20` block-boundary list (`<td>a</td><td>b</td>` streams as `"a b"`), spec line included.
-- `N2` — replace the false spec/header equality "equals `normalizeText` applied to the raw subtree text" with the
-  precise statement (normalized by construction, one U+0020 per `A20` boundary, trimmed), and tighten the fixture test
-  that currently proves a different claim.
-- `N3` — the `dist/` half of the jsdom scan must fail when `dist/` is missing instead of passing vacuously.
-- `N4` — bound the module-scoped whitespace decision cache to the whitespace set (it currently grows with every
-  distinct code point of every page the content script visits).
-- `N5` — `docs/specs/INDEX.md` covered-paths column must list `src/content/anchor/`.
+The `t2-02` review fixes that live in `src/content/anchor/` (`A36`, `A35`, `N2`, `N3`, `N4`, `N5`) are **not** part of
+this task — they land first in `docs/state/t3-04-content-anchor-hardening.md`. The `t2-03` review fixes that live in
+`src/core/` (`A46`, purity-scan line, the `A27`/`A28` spec clauses, the write-API spans tests) land in
+`docs/state/t2-04-core-create-hardening.md`. This task starts from a tree where both are already accepted.
+
+## Contract handed over by `t2-03` (`docs/state/t2-03-review.md` → `t3-01` readiness)
+
+```ts
+interface CodePointRange { start: number; end: number }             // half-open, CODE POINTS
+ type ResolvedEntryRanges = ReadonlyMap<string, CodePointRange>;    // key = stored Entry.id; stale = absent
+interface ResolvedSpans  { candidate: CodePointRange; byEntryId: ResolvedEntryRanges }
+```
+
+- **Always pass `spans`** to `createEntryOnPage` — after `A46` the compiler enforces it, and a half-populated
+  `byEntryId` reads as "all entries stale" (`A24`), not as an error (residual risk 1).
+- The map must be keyed by the **stored ids of the same page read the write performs**; a map built from a different
+  page key is indistinguishable from an empty one.
+- Resolve the candidate from the selection's own stream offsets and **every existing entry from one and the same
+  stream** (`A37`): one `buildTextStream` per create, then `locateAnchorInStream` per entry with the same `root` (`N7`).
+  A create on a full page is 21 resolves — do not re-enter `locateAnchor` per entry (residual risk 2).
+- `spans.candidate` must be usable (`end > start`): core **allows** a degenerate candidate rather than refusing it
+  (`t2-03` remark 6), so the card is the only line of defence for empty/whitespace selections (residual risk 5).
+- `buildAnchor` now also returns `null` for an out-of-domain `fragments`/`contextWindow` (`A28`): treat that as
+  "do not enable Save", never as `entry_invalid` (residual risk 4).
+- `duplicate` and `overlap` are distinct refusals with distinct Russian strings (`A47`:
+  `Такая заметка на этом выделении уже есть`); do not let two codes collapse into one message (`t2-03` remark 5).
 
 ## AC (5 substantive + gates)
 
@@ -110,3 +126,5 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
   to change if the user prefers differently.
 - Whether the card closes on `Esc` — yes, same as `Отмена` (overlay AC4 owns the editor's `Esc`, the card gets the same
   affordance for consistency). Recorded as an assumption.
+- Repeated text can make the card refuse a selection the user sees as empty of collisions, or accept one they expected
+  to collide, with no UI signal (`t2-03` residual risk 6). Accepted v1 limitation, restated in the spec's Edge Cases.

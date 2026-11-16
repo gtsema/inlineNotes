@@ -71,12 +71,44 @@ No DOM range math (that is `t2-02`'s output), no content-script UI, no popup, no
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×2 attempts; reviewer not yet delegated).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer ×2 attempts + reviewer ×1).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: attempt 2, commit `5a029c5`; artifact copied to `docs/state/t2-03-engineer.md` (managed path
+  `…/outputs/cb93b848-ec2c-49be-b033-dcba8d897d07/docs/state/t2-03-engineer.md`).
+- reviewer verdict: **accepted**, no blocking findings, remarks `1`–`9`; artifact copied to `docs/state/t2-03-review.md`.
+  Verdict recorded against the **state-file** AC numbering (review remark `8`: the report numbered the spec edit as
+  AC4/AC5 differently — same class as `t2-01` remark `R7b`).
+- PM decision: task closed at attempt 2/2; **Stage 2 is closed**. The review's remarks are not carried into a UI task:
+  they become `t2-04-core-create-hardening` (core, same files) and `t3-04-content-anchor-hardening` (content anchor
+  directory), per the skill rule that more than two carried fixes need their own slice.
+
+## PM rulings on the review remarks
+
+- `A46` (remark 3, `spans` is optional so steps 5–6 can be skipped silently): **required on the write API.**
+  `CreateEntryOnPageInput.spans` loses its `?` — a shipped caller that forgets it fails to compile instead of silently
+  emitting an un-emitted overlap. `CreateAttempt.spans` stays optional so the pure rule gate stays unit-testable in
+  isolation, and the spec gains the clause "every shipped create passes `spans` built from the same page read".
+  Lands in `t2-04`.
+- `A47` (remark 5, no wording for `duplicate`): `duplicate` gets **its own** Russian message, not the overlap one —
+  `Такая заметка на этом выделении уже есть`. Rationale: an overlap says "move your selection", a duplicate says
+  "you already wrote this"; mapping both to one string would lose the difference the user acts on. Lands in
+  `t3-01-content-create-card` (the message map lives in `src/content/text.ts`).
+- Remark 1 (the new module is missing from the shared `MODULES` purity scan): accepted, one line in
+  `tests/core-storage-port.spec.ts`; lands in `t2-04` (that file is already in the accepted-fix list).
+- Remark 2 (`A27`/`A28` shipped as code rules with no spec clause): accepted — two clauses on the Anchoring/Anchor-window
+  rules (window taken at the trimmed span; an out-of-domain option refuses the anchor, same stance as `A26`).
+  Lands in `t2-04`. Report-accuracy part noted: the deviation was not listed in the report.
+- Remark 4 (no test exercises `spans` through the write API): accepted, two cases (create with spans; create at the cap
+  with spans) using one shared helper; lands in `t2-04`.
+- Remark 6 (a degenerate `spans.candidate` is allowed, not refused): **accepted as shipped** — the card is the line of
+  defence (risk 5 for `t3-01`), core stays total. No change.
+- Remark 7 (INDEX covered-paths): carried, now assigned to `t3-04-content-anchor-hardening` together with `t2-02`
+  remark `N5`.
+- Residual risks for `t3-03` are recorded in `docs/state/t3-03-content-editor.md` (self-exclusion via `removeById`,
+  cap measured before filtering, `duplicate` unreachable on the edit path, comment compared normalized).
+- Cross-tab race stays open by design until `t4-03`.
 
 Carried fixes from the `t2-01` review (they belong to this module's neighborhood; they must not add ACs):
 

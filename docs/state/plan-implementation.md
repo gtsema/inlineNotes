@@ -30,6 +30,7 @@ is confirmed on a real browser.
 | `t2-01-core-anchor-text` | text normalization, `anchor` build, string-level resolve + disambiguation | model AC5 (text part), edge cases same-text |
 | `t2-02-content-anchor-dom` | normalized match → `Range` fragments across block/inline boundaries | overlay AC2, edge: multi-block frame |
 | `t2-03-core-overlap` | range model, intersection vs boundary-touch rejection | model AC6 |
+| `t2-04-core-create-hardening` | `A46` required resolved spans, purity-scan line, `A27`/`A28` spec clauses | closes `t2-03` review remarks 1–4 |
 
 ## Stage 3 — content overlay (Preact). Done-criterion: select → card → save → highlight → hover tooltip → edit/delete works on a real article.
 
@@ -37,6 +38,7 @@ is confirmed on a real browser.
 |---|---|---|
 | `t3-01-settings-read-core` | `loadSettings(port)` + decode guard + tests + spec line (core only) | model AC9/AC10 storage half |
 | `t3-01-content-create-card` | shadow host, selection capture, create card, counter, keyboard (content only) | overlay AC1, AC9, AC11, model AC9 |
+| `t3-04-content-anchor-hardening` | `A36` liveness, `A35` table cells, `N2`–`N5` hygiene in `src/content/anchor/` | closes `t2-02` review remarks |
 | `t3-02-content-highlight-tooltip` | CSS Highlight painting, frame, hover tooltip, mine vs foreign header | overlay AC2, AC3 |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
@@ -87,6 +89,15 @@ cross-tab refresh (→ `t4-03`). Known v1 limitation, accepted: a read-modify-wr
 - `A23` two entries are duplicates when the resolved range and the normalized comment are equal.
 - `A24` a stale entry has no range and cannot cause an overlap.
 
+## Carried-fix slices (ruling `A48`) — **second renegotiation item, awaiting the user**
+
+`A48`: **more than two carried review findings get their own slice**, never stacked onto the next feature task (the rule
+is in `.pi/skills/delivery-planning/SKILL.md`, learned when `t2-03` died with 5 AC + 4 carried fixes). Applying it to
+the `t2-02` and `t2-03` reviews adds two small tasks: **`t2-04-core-create-hardening`** (core) and
+**`t3-04-content-anchor-hardening`** (content anchor directory). Consequence: **Stage 2 = 4 tasks, Stage 3 = 5 tasks**,
+both above the ≤3 budget. Default applied, because leaving the findings unclosed means building UI on top of a known
+liveness bug (`N1`) and a silently skippable overlap check (`A46`).
+
 ## Stage 3 split (ruling `A34`) — **confirmed by the user (2026-11-16): "оставляем"**
 
 `t2-02` — a two-layer slice (core-adjacent DOM code + a new jsdom harness) — overran even the 60-minute ceiling.
@@ -125,3 +136,9 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A42`–`A45` (t3-03 brief, defaults applied without an answer): click outside the editor = cancel, not save; `Esc` =
   cancel; `Удалить` deletes immediately with no confirmation and no undo in v1; a re-selection made inside the editor
   may move the entry's range and is overlap-checked excluding the entry itself (`A45`, on top of `A37`).
+- `A46` (`t2-03` remark 3): resolved spans become **required** on `createEntryOnPage`, so a caller cannot silently skip
+  the overlap and duplicate checks; `CreateAttempt.spans` stays optional for pure rule tests. PM default, one `?` to revert.
+- `A47` (`t2-03` remark 5): `duplicate` gets its own Russian message `Такая заметка на этом выделении уже есть`, distinct
+  from the overlap message, because the two refusals ask the user for different actions.
+- `A48`: a review that leaves more than two carried findings produces its own cleanup slice — `t2-04-core-create-hardening`
+  and `t3-04-content-anchor-hardening`, which makes Stage 2 4 tasks and Stage 3 5 tasks. Awaiting the user's confirmation.
