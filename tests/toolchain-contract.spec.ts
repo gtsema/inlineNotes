@@ -66,7 +66,20 @@ describe('manifest contract', () => {
     expect(typeof manifest.action?.default_popup).toBe('string');
     expect(typeof manifest.options_page).toBe('string');
     expect(manifest.content_scripts?.[0]?.js).toContain('content.js');
-    expect(manifest.content_scripts?.[0]?.matches).toContain('<all_urls>');
+  });
+
+  it('registers the content script for http and https only', () => {
+    const manifest = readManifest();
+    expect(manifest.content_scripts?.[0]?.matches).toEqual(['http://*/*', 'https://*/*']);
+
+    // The scheme decision must live in the spec, in the same commit as the code.
+    const spec = readFileSync(
+      join(projectRoot, 'docs', 'specs', 'content-overlay-ui.md'),
+      'utf8',
+    );
+    expect(spec).toContain('- Registered schemes:');
+    expect(spec).toContain('`http://*/*`');
+    expect(spec).toContain('`https://*/*`');
   });
 
   it('declares no host_permissions and no permission beyond storage', () => {

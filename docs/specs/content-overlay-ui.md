@@ -40,6 +40,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Own entries and foreign entries are visually distinguished only in the tooltip header (`Вы` vs the author name); the highlight style is identical.
 - Tooltip default opacity: semi-transparent (about 0.75); after click: 1.0 and the textarea receives focus. Only one editor instance may be open at a time.
 - Overlay host: a single element with `position: fixed`, `z-index: 2147483000`, isolated styles (all rules namespaced under one host with a shadow root so page CSS cannot reach the widgets and widget CSS cannot leak out).
+- Registered schemes: the content script is registered for `http://*/*` and `https://*/*` only (`src/manifest.json` -> `content_scripts[0].matches`); `file://`, `chrome://`, Web Store and PDF viewer pages are never injected into.
 - Selection capture ignores selections inside the overlay host and inside `chrome://`, Web Store and PDF viewer pages (content script is not registered there).
 - The card and the editor must be reachable by keyboard: `Esc` = cancel, `Ctrl/Cmd+Enter` = save, `Tab` cycles the buttons.
 - Counter rules: `N/256`, turns warning color at ≥240, blocks input beyond 256 code points, `Сохранить` is disabled while the comment is empty after trim or over the cap.

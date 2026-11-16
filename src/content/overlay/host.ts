@@ -4,29 +4,20 @@
  * Painting never mutates the host page (`docs/specs/content-overlay-ui.md` ->
  * Rules / Semantics -> Overlay host): the page receives exactly one element, an
  * isolated shadow root, and nothing else. Frame scope is the top frame only.
+ *
+ * The host is created hidden, so before `t3-01` nothing of the extension is
+ * painted on the page. Revealing it is one call: set `hidden = false` and refresh
+ * the inline style with `hostInlineStyle(false)`.
  */
+import { hostInlineStyle } from './host-style';
 
 /** Id of the one element this extension adds to the page. */
 export const OVERLAY_HOST_ID = 'inlinenotes-overlay-host';
-
-/** Bounded but dominant stacking level from the overlay spec. */
-export const OVERLAY_HOST_Z_INDEX = 2147483000;
 
 export interface OverlayHost {
   readonly host: HTMLElement;
   readonly root: ShadowRoot;
 }
-
-const HOST_RESET = [
-  'all: initial',
-  'position: fixed',
-  'top: 0',
-  'left: 0',
-  'width: 0',
-  'height: 0',
-  `z-index: ${String(OVERLAY_HOST_Z_INDEX)}`,
-  'pointer-events: none',
-].join(';');
 
 /**
  * Returns the existing shadow host or creates it.
@@ -44,9 +35,11 @@ export function ensureOverlayHost(): OverlayHost | null {
 
   const host = document.createElement('div');
   host.id = OVERLAY_HOST_ID;
-  host.setAttribute('style', HOST_RESET);
-  // Placeholder slice `t1-01`: the widget is not shown to the user yet.
+  // Placeholder slice `t1-01`: the widget is mounted but never painted, because
+  // the inline style declares `display: none` after `all: initial` and the
+  // element carries the `hidden` attribute.
   host.hidden = true;
+  host.setAttribute('style', hostInlineStyle(host.hidden));
 
   const root = host.attachShadow({ mode: 'open' });
   document.documentElement.append(host);
