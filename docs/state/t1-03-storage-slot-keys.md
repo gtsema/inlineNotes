@@ -62,8 +62,22 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer attem
 
 ## Verdicts
 
-- engineer report: pending
-- reviewer verdict: pending
+- engineer report (attempt 2): gates quoted and complete — `npm test` 89/89 (pre-fix baseline 18 failed / 60 passed), `npm run build` self-contained `dist/`, checker 0 errors. Artifact: `…/subagent-artifacts/outputs/b8e40c18-b8f2-40ff-b86a-f08006e45da0/docs/state/t1-03-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, 5 non-blocking findings N1–N5. Artifact: `…/subagent-artifacts/outputs/9b2fe0cd-833f-4ff5-bf5b-fd2de09ee6f9/docs/state/t1-03-review.md`. The reviewer re-ran the checker (identical output) and independently checked the hostile-slot question: **not exploitable** (`~` always escapes to `%7E`, `SLOT_KEY_SHAPE` admits one `~` only in the penultimate position with a 7-char lowercase base36 tail).
+- PM decision: task closed at attempt 2/2; commit `b3231b6` is final.
+
+## PM rulings on the review findings
+
+- `N1` accepted, fix scheduled: the FNV-1a collision trade-off needs one clause in `inline-comment-model.md` → done in `t1-05`.
+- `N2` accepted: the universal bound is `{1,247}`, `{1,208}` only for the truncation branch; and `9 + 247 = 256` sits exactly at the defensive cap with no headroom → **budget becomes 246** in `t1-05` (one constant + one test + one spec number).
+- `N3` accepted as-is: `pageKeys: readonly string[]` stays, the stored JSON shape is identical.
+- `N4` invariant for `t1-05`: no shipped code may `decodeURIComponent` a slot key — the index is the only way back to a page key; the 200-character cut may split a `%XX` group.
+- `N5` invariant for `t1-05`: the write path is `resolvePageKey(url, index) ?? pageKeyFromUrl(url)` and `addToIndex` must reject a non-normalized page key instead of forking a page.
+
+## Process findings from this task (feed into docs/retro.md)
+
+1. Attempt 1 died on the 30-minute runtime limit while carrying 7 ACs. Fix: a core slice carries at most 5 substantive ACs, and the brief states the work order (gates → spec → commit).
+2. The reviewer run was reported as `failed: Acceptance rejected: Structured acceptance report not found`, although the review artifact itself was complete and its verdict usable. Cause: the role frontmatter asked for `acceptance: checked`, while a read-only reviewer's verdict is the artifact. Harness fix applied by the PM: `.pi/agents/code-reviewer.md` now carries `acceptance: { level: none, reason: ... }` (a bare `"none"` is rejected by the runtime); `node scripts/check-agent-config.mjs` → 0 errors.
 
 ## Open questions
 

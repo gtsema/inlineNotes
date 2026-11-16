@@ -12,7 +12,9 @@ output: docs/state/reviewer-report.md
 defaultReads: docs/specs/INDEX.md, docs/specs/code-review-flow.md
 defaultContext: fresh
 allowedAgents:
-acceptance: checked
+acceptance:
+  level: none
+  reason: "read-only reviewer: the verdict is the review artifact, and the PM records it in the task state file"
 acceptanceRole: read-only
 timeoutMs: 1800000
 advertise: true

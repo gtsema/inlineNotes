@@ -1,9 +1,11 @@
 # Stage plan — extension implementation (request: "начинаем реализовывать")
 
-Owner: interactive PM (main session). Renegotiated budget: **4 stages / 13 tasks** (default limit is 3/3;
-Stage 1 grew to 4 tasks after the `t1-02` review surfaced the storage-key platform constraint).
+Owner: interactive PM (main session). Renegotiated budget: **4 stages / 14 tasks** (default limit is 3/3;
+Stage 1 grew to 5 tasks — the storage-key constraint appeared in review, and the entry slice was split after the
+`t1-03` runtime timeout proved that 7 ACs do not fit one attempt on this model).
 Renegotiation reason: the user asked for smaller tasks; one slice = one verifiable behavior.
-Child count: 13 engineer + 13 reviewer = 26 (parallelism 1, one writer per worktree).
+Child count: ~14 engineer + 14 reviewer (parallelism 1, one writer per worktree).
+Slice-size rule adopted after `t1-03`: a `src/core/` slice carries at most 5 substantive ACs (`docs/specs/code-review-flow.md`).
 Gates per task: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs` — quoted by the engineer.
 
 ## Stage 1 — toolchain + pure domain rules. Done-criterion: `dist/` loads in Chrome; core rules of caps and page identity are unit-tested.
@@ -17,7 +19,8 @@ is confirmed on a real browser.
 | `t1-01-toolchain-dist` | package.json/tsconfig/Angular apps/esbuild content bundle/manifest → loadable `dist/` | overlay AC2 (no page DOM touched by design), profile gate contract |
 | `t1-02-core-pagekey` | `pageKey` normalization + path-only fallback lookup | model AC4 |
 | `t1-03-storage-slot-keys` | legal slot-key encoding + `pages:v1` index + trailing-slash identity | model spec Rules/Storage (spec line edited with the code) |
-| `t1-04-core-entry-store` | entry shape with `visible`, settings name, 256 code points, 20 entries, authorship, delete/clear | model AC2, AC3, AC7, AC8, AC10 |
+| `t1-04-entry-model-rules` | entry type with `visible`, 256 code points, 20 entries, author identity and edit rights, ordering | model AC2, AC3, AC7, AC8 |
+| `t1-05-entry-store` | `chrome.storage.local` store: CRUD, `pages:v1` write and compaction policy, quota path | model AC1, AC10, residual risks from the `t1-03` review |
 
 ## Stage 2 — anchors and overlap. Done-criterion: a stored anchor resolves to DOM ranges on a real page; overlap rule is testable.
 
@@ -42,6 +45,12 @@ is confirmed on a real browser.
 | `t4-01-popup-list` | Angular popup: rows, per-entry checkbox, empty/restricted/name-required states | overlay AC7, AC10 |
 | `t4-02-options-name` | Angular options: name field, validation, first-run random name | overlay AC9, model AC9 |
 | `t4-03-spa-refresh-docs` | SPA/history refresh, `storage.onChanged`, README, final verification | overlay AC8, model AC1 |
+
+## Harness decisions taken by the PM during Stage 1
+
+- `.pi/agents/code-reviewer.md` moved from `acceptance: checked` to `acceptance: { level: none, reason: … }`: the
+  runtime rejects a read-only reviewer for not producing a structured acceptance report, although its verdict is the
+  review artifact. `docs/specs/code-review-flow.md` records the rule; `node scripts/check-agent-config.mjs` → 0 errors.
 
 ## Open questions asked of the user (least-risky defaults applied if unanswered)
 
