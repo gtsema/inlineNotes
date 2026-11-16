@@ -18,6 +18,7 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 | `slot key` | — | encoding of a `pageKey` inside a storage key: `notes:v1:<slotKey>` |
 | `page index` | — | the `pages:v1` value: ordered list of every `pageKey` the store knows |
 | `anchor` | — | text-based locator of the selected span |
+| `visible` | — | per-entry show/hide flag behind the popup checkbox; UI label is owned by `content-overlay-ui.md` |
 | `authorName` | «Имя» | author string set in options; identity of the writer |
 | `stale entry` | «запись недоступна» | entry whose anchor no longer resolves on the page |
 | `overlap` | «пересечение» | intersection of a new range with an existing entry range |
@@ -28,7 +29,7 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 1. Content script captures a non-empty user selection and resolves it to an ordered list of `(element, startOffset, endOffset)` fragments.
 2. Core computes `pageKey` from the current URL and loads `entries[pageKey]`.
 3. Core checks the creation rules in this order: name set → selection not empty → comment length ≤ 256 → entry count < 20 → no overlap → no identical existing entry.
-4. Core builds the entry: `id` (random 12-char base36), `pageKey`, `authorName`, `text` (normalized selection text), `comment`, `anchor`, `createdAt`, `updatedAt` (ISO strings, same value on create).
+4. Core builds the entry: `id` (random 12-char base36), `pageKey`, `authorName`, `text` (normalized selection text), `comment`, `anchor`, `visible` (default `true`, PM ruling `A1`), `createdAt`, `updatedAt` (ISO strings, same value on create).
 5. Core writes the whole page list under one storage key and notifies the content script and popup.
 6. On page load or SPA URL change, the content script asks core for the page's entries, resolves each anchor, and reports which entries are displayable.
 7. Edit path: the editor may save only if `entry.authorName === currentName`; the save mutates `comment`, `updatedAt`, and keeps `id`, `pageKey`, `anchor`.
@@ -52,6 +53,7 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 - Anchoring: `anchor = { text, prefix, suffix, fragmentCount }` where `text` is the normalized selection text (whitespace collapsed), `prefix`/`suffix` are up to 40 normalized characters before/after. Resolution: find `prefix + text + suffix` in the page's normalized text stream, then map the match back to DOM fragments. Raw offsets are stored only as a hint and are never the authority.
 - Staleness: if the anchor does not resolve, the entry produces no highlight but stays in the popup list and stays deletable. It is never auto-removed.
 - Ordering in the popup: creation order ascending.
+- `visible`: boolean, `true` at creation and the default when the field is absent (PM ruling `A1`). It controls only whether the entry's highlight is painted on the page; it never affects entry identity, ordering, edit rights, the caps or the anchor. A hidden entry keeps its anchor and reappears when the checkbox is turned back on.
 - Quota: writes are whole-list writes. If a write fails with a quota error, the entry is not created and the UI shows `Хранилище переполнено`.
 
 ## Edge Cases
