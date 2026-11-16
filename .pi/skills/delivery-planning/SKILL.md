@@ -49,6 +49,11 @@ metadata:
 - **Carried fixes count toward the slice budget.** A brief with 5 AC plus 4 carried review findings is 9 work items
   even though the AC count is legal — that is the shape that killed `t2-03` at the ceiling. If a review produces more
   than 2 carried fixes, plan a separate small cleanup slice instead of stacking them onto the next task.
+- **Commit the green state before polishing (ruling `A53`).** The `t3-01` timeout happened with **passing tests already in
+  the tree** (424 green, 449 lines written) and nothing committed: the wall-clock cost of this runtime is per turn
+  (generation speed), so a run can burn the whole ceiling on 24 tool calls. Every brief therefore says: the moment
+  `npm test` is green, **commit the code and tests**, then do the spec edit and commit again. Two commits per task is
+  allowed and expected; one perfect uncommitted commit is not.
 - Put the work order into every brief, not into a follow-up message: the child session does not see the negotiation.
 - Carry review findings forward by name (`N2`, `R6`, residual risk 4): the next brief repeats them, because the next
   engineer session has no memory of the previous review.
