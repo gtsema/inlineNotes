@@ -18,6 +18,8 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 | `tooltip` | — | semi-transparent card shown on hover over a highlight |
 | `highlight` | «подсветка» | CSS Highlight painting of the entry range |
 | `highlight frame` | — | translucent outline drawn around the highlighted range |
+| `text fragment` | — | one contributing text node the paint is built over; the contract and both offset domains are owned by `inline-comment-model.md` |
+| `page text stream` | — | the normalized stream the content layer rebuilds for every re-resolve; its construction rules are owned by `inline-comment-model.md` |
 | `entry row` | — | one popup line: author name + show/hide checkbox |
 | `visibility flag` | — | per-entry boolean deciding whether its highlight is painted |
 
@@ -36,6 +38,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 ## Rules / Semantics
 
 - Highlight painting: CSS Highlight API (`CSS.highlights` + `::highlight(inline-notes)`), one named highlight per entry. Painting never mutates the host DOM and never adds elements to the page body other than the overlay host.
+- Text stream and fragments: before painting, the resolved anchor range is mapped onto `text fragment`s taken from a freshly rebuilt `page text stream`. The stream construction (block boundary space, excluded subtree), the fragment contract, the code-point versus UTF-16 domains and the locate codes `anchor_not_found` / `anchor_stale` are owned by `inline-comment-model.md` -> Rules / Semantics. Painting consumes the fragments it is given, never runs a text search of its own, and never paints a range that was not resolved against the current stream.
 - `highlight frame`: `outline`-like translucent border around the highlighted box set (`text-decoration`/`outline` on the highlight pseudo-element), `rgba` color, no background fill of the author's own color choice — one shared style for all entries.
 - Own entries and foreign entries are visually distinguished only in the tooltip header (`Вы` vs the author name); the highlight style is identical.
 - Tooltip default opacity: semi-transparent (about 0.75); after click: 1.0 and the textarea receives focus. Only one editor instance may be open at a time.
@@ -54,6 +57,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Selection in a scrolled, sticky or transformed container: the card is positioned in viewport coordinates and repositions on scroll without detaching from the range.
 - Highlight of a range that spans several block elements must draw a frame around every fragment box, not one bounding rectangle.
 - The site re-renders the article (virtual list, lazy load): a stale highlight disappears; the entry remains in the popup list.
+- A locate that reports `anchor_not_found` or `anchor_stale` produces no highlight, no frame and no tooltip at all; the entry is still listed in the popup and still deletable (`inline-comment-model.md` -> Staleness).
 - A tooltip near the viewport edge flips to the opposite side; it never covers the range it describes.
 - Host page with an aggressive CSS reset or `all: unset`: shadow-root isolation must still render the widget correctly.
 - Popup opened while the content script failed to inject (restricted page): the popup still lists the entries and states that the page cannot show highlights.

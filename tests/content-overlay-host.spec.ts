@@ -14,9 +14,11 @@ import { OVERLAY_HOST_Z_INDEX, hostInlineStyle } from '../src/content/overlay/ho
  * before `t3-01`, so the host must really be hidden: `all: initial` resets
  * `display` and would defeat the user-agent `[hidden] { display: none }` rule.
  *
- * There is no DOM in this unit run (no jsdom dependency is allowed), so the
- * proof is the style string the host element receives plus a source check that
- * `ensureOverlayHost` applies it while the element is hidden.
+ * This file deliberately runs without a DOM: PM ruling `A2` admits `jsdom` as a
+ * dev-only environment for the anchor and stream tests
+ * (`tests/content-anchor-*.spec.ts`), and nothing else needs a document. The
+ * proof here is the style string the host element receives plus a source check
+ * that `ensureOverlayHost` applies it while the element is hidden.
  */
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
