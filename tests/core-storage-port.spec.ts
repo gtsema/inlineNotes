@@ -140,6 +140,7 @@ describe('failure codes (AC1)', () => {
 describe('purity of the core modules (AC1, review remark R6)', () => {
   const MODULES: readonly string[] = [
     'storage-port.ts',
+    'settings-store.ts',
     'page-index-store.ts',
     'entry-store-read.ts',
     'entry-store-write.ts',
