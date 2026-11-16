@@ -53,6 +53,19 @@ is confirmed on a real browser.
   runtime rejects a read-only reviewer for not producing a structured acceptance report, although its verdict is the
   review artifact. `docs/specs/code-review-flow.md` records the rule; `node scripts/check-agent-config.mjs` → 0 errors.
 
+## Stage 1 close-out (after `1e91276`)
+
+Done: every business rule of `docs/specs/inline-comment-model.md` with no DOM dependency exists in `src/core/` and is
+unit-tested against the in-memory port — page identity and slot-key encoding, the entry model, the 256-code-point and
+20-entry caps, author identity and edit rights, ordering, the `StoragePort` seam with one adapter, the index
+read/write/repair policy, the decode guard, and the whole write path (create / save / delete / `setVisible` / clear,
+with refusal codes). 257 tests over 14 files, build green, checker clean.
+
+Still open by design: the overlap rule and Flow-3 step 6 (→ `t2-03`), the anchor codec (→ `t2-01`/`t2-02`), staleness
+end-to-end (→ `t2-01`/`t2-02`/`t3-03`), every UI half of the model ACs (→ Stage 3/4), `settings:v1` decode and the
+first-run name wiring (`A15` → `t4-02`), the Russian message strings (→ `t3-01`, `t4-01`), and `storage.onChanged`
+cross-tab refresh (→ `t4-03`). Known v1 limitation, accepted: a read-modify-write race between two tabs.
+
 ## Runtime rulings taken during Stage 1
 
 - `A9` timestamps are UTC ISO-8601 `Z` from an injected clock; `A10` decode defaults live in the core read path;

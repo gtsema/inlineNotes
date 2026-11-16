@@ -36,6 +36,18 @@ Terms `anchor` / `stale entry`), `docs/state/t2-01-core-anchor-text.md` (this fi
    normalization definition (which characters collapse), the prefix/suffix window measured in code points, the
    two-step search (`prefix+text+suffix`, then `text`), and the document-order tie-break.
 
+Carried fixes from the `t1-06` review (docs/tests only, do not expand the AC list):
+
+- `R2` — the write module and its test cite a spec bullet "Write result" that does not exist; either add that bullet
+  under Rules/Semantics or fix the two citations (they are English grep anchors, a repo rule).
+- `R3` — the "Page lookup" rule is phrased unconditionally; add the clause "when the index read succeeded".
+- `R4` — the index write policy names only the read side; state that a write publishes the **decoded** index.
+- `R5` — add one test for the removal half of `removeSlotThenIndex`: the slot removal succeeded and the index
+  publication failed.
+- `R6` — add `crypto` to the shared `MODULES` purity scan in `tests/core-storage-port.spec.ts`.
+- `A26` — `createEntryOnPage` refuses with `entry_invalid` unless `text === anchor.text` and `text` is already
+  normalized by `normalizeText`; two tests (a non-normalized text, and a text/anchor mismatch).
+
 Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
 
 Work order: module + tests → `npm test` early → spec lines → gates → commit `feat(t2-01): text normalization and anchor resolution`. Commit as soon as green.
@@ -61,6 +73,8 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Open questions
 
+- `A26` (applied): normalization is owned by the content layer at capture time; core refuses non-normalized input
+  instead of rewriting it silently.
 - Whether the page-text stream used by `resolveAnchor` is produced per frame or per document — answered in `t2-02`,
   where the DOM side decides; here the stream is an input string.
 - Whether `prefix`/`suffix` should be trimmed of punctuation before matching — no: the spec pairs them with the text

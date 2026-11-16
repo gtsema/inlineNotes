@@ -87,8 +87,33 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 ## Verdicts
 
-- engineer report: pending
-- reviewer verdict: pending
+- engineer report: attempt 2 complete; commit `1e91276` (8 files, +1462/-6); gates quoted 1–8 — `npm test` 257/257
+  (14 files), `npm run build` self-contained `dist/`, checker 0 errors / 9 INFO, `npm run typecheck` clean.
+  Artifact: `…/subagent-artifacts/outputs/18334e9e-acdf-4b69-aec5-04e63c692767/docs/state/t1-06-engineer.md`.
+- reviewer verdict: **accepted**, no blocking findings, remarks `R1`–`R8`; Stage 1 close-out paragraph present.
+  Artifact copied to `docs/state/t1-06-review.md`.
+- PM decision: task closed at attempt 2/2; **Stage 1 is closed** (see `docs/state/plan-implementation.md`).
+
+## PM rulings on the review remarks
+
+- `A25` (remark `R1`, needed before `t3-03`): **core keeps `deleteEntry` and `clearPage` ungated by authorship; the UI
+  hides the Delete affordance on a foreign row.** Rationale: `clearPage` must be able to remove every record of the
+  page (a personal store, not a permission system), while the read-only promise of `inline-comment-model.md` is about
+  *editing* a record. `t3-03` adds one sentence under "Edit rights" in the same commit as its code: "delete and clear
+  are not authorship-gated in core; the popup and the editor hide Delete for an entry of another author".
+- `A26` (residual risk 1): **the content layer normalizes the selection text; core refuses a non-normalized input.**
+  After `t2-01`, `createEntryOnPage` refuses with `entry_invalid` unless `text === anchor.text` and `text` is already
+  `normalizeText(text)`. A silent rewrite is rejected: the anchor and the stored text must be the same string, or the
+  entry cannot be re-anchored later.
+- `R2`, `R3`, `R4` accepted as docs-only fixes → carried into `t2-01` (it edits the same spec).
+- `R5`, `R6` accepted as test fixes → carried into `t2-01` (one test for the removal half of `removeSlotThenIndex`;
+  `crypto` added to the shared `MODULES` purity scan).
+- `R7` accepted as a leak, not a data loss: a stored `null` under a slot key is treated as absent everywhere, so it is
+  invisible and unreachable; no fix in v1, recorded here.
+- `R8` accepted: `snapshot()` is a shallow copy, so "changes nothing" is proven by the call log and identity
+  assertions, not by `toEqual`. Deep-copying the fake port is optional hardening, deferred.
+- Residual risk 4 (cross-tab read-modify-write race) is **carried, not fixed in v1**: `t4-03` adds `storage.onChanged`
+  and may add a re-read before `commitRecords`. Recorded as a known v1 limitation.
 
 ## Open questions
 
