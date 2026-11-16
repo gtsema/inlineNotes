@@ -253,6 +253,11 @@ for (const file of agentFiles) {
     else if (allowedAgents.length > 0) err(r, 'specialists must have an empty allowedAgents list');
   }
 
+  // Pi's frontmatter parser turns a flow-style empty list into the literal entry "[]",
+  // which makes the whole agent definition invalid. Require the bare-key form instead.
+  const flowEmpty = text.match(/^([A-Za-z]+): *\[\] *$/m);
+  if (flowEmpty) err(r, `"${flowEmpty[1]}: []" is parsed by Pi as a literal entry; write "${flowEmpty[1]}:" with no value`);
+
   const isReviewer = /review/.test(expected);
   if (isReviewer) {
     if (hasWrite) err(r, 'reviewer must be read-only (no edit/write)');

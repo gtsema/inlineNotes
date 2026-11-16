@@ -12,3 +12,7 @@
   (`src/`, `tests/`, `dist/`) are reported as info instead of error, which keeps the harness-only stage honest.
 - Residual risk: the green gates `npm test` and `npm run build` reference a `package.json` that does not
   exist yet, so the first implementation task must create it before the gate rule can be enforced.
+- Discovery failure found by the smoke stage: `allowedAgents: []` in a role frontmatter is parsed by Pi as the
+  literal entry `"[]"`, and both specialist roles were reported as invalid definitions (not launchable).
+  Fix: write `allowedAgents:` with no value; the checker now rejects the flow-style empty list form. The
+  "specialists do not delegate" guarantee is carried by the missing `subagent` tool plus `maxSubagentDepth: 1`.

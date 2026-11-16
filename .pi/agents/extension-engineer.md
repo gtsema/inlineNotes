@@ -11,7 +11,7 @@ skills: chrome-mv3-extension-ts, requirements-spec
 output: docs/state/engineer-report.md
 defaultReads: docs/project-profile.md
 defaultContext: fresh
-allowedAgents: []
+allowedAgents:
 acceptance: checked
 acceptanceRole: writer
 timeoutMs: 1800000

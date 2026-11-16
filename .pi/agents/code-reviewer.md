@@ -11,7 +11,7 @@ skills: code-review-checklist, chrome-mv3-extension-ts
 output: docs/state/reviewer-report.md
 defaultReads: docs/specs/INDEX.md, docs/specs/code-review-flow.md
 defaultContext: fresh
-allowedAgents: []
+allowedAgents:
 acceptance: checked
 acceptanceRole: read-only
 timeoutMs: 1800000
