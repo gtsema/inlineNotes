@@ -1,0 +1,94 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "projects": {
+    "popup": {
+      "projectType": "application",
+      "root": "src/popup",
+      "sourceRoot": "src/popup",
+      "prefix": "inl",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/popup/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "index": "src/popup/index.html",
+            "baseHref": "./",
+            "polyfills": [],
+            "styles": [],
+            "scripts": [],
+            "outputPath": {
+              "base": "dist/popup",
+              "browser": ""
+            },
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "400kB",
+                "maximumError": "800kB"
+              },
+              {
+                "type": "anyComponentStyle",
+                "maximumWarning": "4kB",
+                "maximumError": "8kB"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "sourceMap": false,
+              "namedChunks": false
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    },
+    "options": {
+      "projectType": "application",
+      "root": "src/options",
+      "sourceRoot": "src/options",
+      "prefix": "inl",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/options/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "index": "src/options/index.html",
+            "baseHref": "./",
+            "polyfills": [],
+            "styles": [],
+            "scripts": [],
+            "outputPath": {
+              "base": "dist/options",
+              "browser": ""
+            },
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "400kB",
+                "maximumError": "800kB"
+              },
+              {
+                "type": "anyComponentStyle",
+                "maximumWarning": "4kB",
+                "maximumError": "8kB"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "sourceMap": false,
+              "namedChunks": false
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    }
+  }
+}

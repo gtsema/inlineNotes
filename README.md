@@ -5,8 +5,9 @@
 список «имя + чекбокс» на каждую запись. Данные только локальные (`chrome.storage.local`), без сервера
 и без сетевых запросов.
 
-**Текущий статус:** настроен агентный харнесс (инструкционная система). Код расширения ещё не начат —
-`src/`, `tests/`, `package.json` появятся при задаче «реализация».
+**Текущий статус:** агентный харнесс настроен; идёт реализация. Стадия 1 (инструментарий сборки) сделана:
+`package.json`, `src/`, `tests/` на месте, `npm run build` собирает `dist/` как unpacked MV3-расширение
+(попап и настройки на Angular, content-скрипт на Preact). Поведение продукта пока — заглушки.
 
 ## Как устроена работа
 
@@ -37,6 +38,10 @@
 ## Команды
 
 ```bash
+npm install                                      # зависимости: Angular (попап/настройки) + Preact (контент)
+npm run build                                    # сборка unpacked-расширения в dist/ (manifest + 3 бандла)
+npm test                                         # Vitest: чистые правила src/core + контракты слоёв
+npm run typecheck                                # tsc --noEmit по трём tsconfig (контент, Angular, тесты)
 node scripts/check-agent-config.mjs              # механическая проверка харнесса (0 ошибок обязательно)
 node scripts/check-agent-config.mjs --strict     # предупреждения тоже считаются ошибками
 node scripts/check-agent-config.mjs --json       # машиночитаемый отчёт

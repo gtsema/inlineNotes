@@ -1,0 +1,30 @@
+{
+  "name": "inlinenotes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome MV3 extension: personal inline notes on web articles.",
+  "scripts": {
+    "build": "node scripts/build-extension.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.content.json --noEmit && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
+    "check:agents": "node scripts/check-agent-config.mjs"
+  },
+  "dependencies": {
+    "@angular/common": "^20.3.35",
+    "@angular/compiler": "^20.3.35",
+    "@angular/core": "^20.3.35",
+    "@angular/platform-browser": "^20.3.35",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.3.43",
+    "@angular/cli": "^20.3.43",
+    "@angular/compiler-cli": "^20.3.35",
+    "@types/chrome": "^0.1.43",
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

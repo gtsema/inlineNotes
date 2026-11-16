@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2022", "dom"],
+    "types": []
+  },
+  "files": ["src/popup/main.ts", "src/options/main.ts"],
+  "include": ["src/popup/**/*.ts", "src/options/**/*.ts", "src/core/**/*.ts"]
+}

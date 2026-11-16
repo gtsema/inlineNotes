@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "inlineNotes",
+  "version": "0.1.0",
+  "description": "Личные заметки прямо на странице статьи.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "inlineNotes"
+  },
+  "options_page": "options/index.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
