@@ -52,4 +52,5 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer, revi
 
 ## Open questions
 
-- none open for this task; the human Chrome re-confirm (reload `dist/`: no stray card, injection on `http/https`, none on `file://`) is tracked in `docs/state/plan-implementation.md`.
+- none open for this task; the human Chrome re-confirm is **done** — the user reloaded `dist/` and reported
+  no placeholder card in the page corner (2026-11-16), so AC6 is confirmed in a real browser as well as by unit test.

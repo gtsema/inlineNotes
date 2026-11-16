@@ -8,8 +8,9 @@ Gates per task: `npm test`, `npm run build`, `node scripts/check-agent-config.mj
 
 ## Stage 1 — toolchain + pure domain rules. Done-criterion: `dist/` loads in Chrome; core rules of caps and page identity are unit-tested.
 
-Human confirmation collected: the user loaded `dist/` in `chrome://extensions` with no errors (t1-01 build).
-One more reload is requested after `t1-03`: no placeholder card in the page corner, injection on `http`/`https`, none on `file://`.
+Human confirmation collected: the user loaded `dist/` in `chrome://extensions` with no errors (t1-01 build) and
+reloaded after `t1-02`: **no placeholder card in the page corner** (user, 2026-11-16) — the `t1-02` AC6 end-state
+is confirmed on a real browser.
 
 | Task | Slice | Owning spec AC |
 |---|---|---|
@@ -45,9 +46,12 @@ One more reload is requested after `t1-03`: no placeholder card in the page corn
 ## Open questions asked of the user (least-risky defaults applied if unanswered)
 
 - `A1` `visible` flag: overlay spec persists it in the entry record, model spec entry shape omits it. PM default: `Entry.visible: boolean` (default `true`), `inline-comment-model.md` edited in the same commit as `t1-04`.
-- `A2` Anchor tests need a DOM: default `jsdom` as a **dev** dependency (Vitest environment); runtime deps stay Angular + Preact only.
+- `A2` Anchor tests need a DOM — **user delegated the choice to the PM (2026-11-16), PM decision: approved**.
+  `jsdom` is added as a **dev** dependency and used only as the Vitest environment for anchor/DOM tests in
+  Stage 2 (`t2-02`). Runtime dependencies stay `@angular/*` + `preact`; `jsdom` must never appear in
+  `dependencies`, in `src/manifest.json`, or in any shipped bundle.
 - `A3` Build wiring: Angular application builder for popup+options, esbuild for the content/core bundle, one node script assembles `dist/` + copies the manifest. Default accepted (t1-01 review `accepted`).
 - `A5` PM ruling on t1-01 remark 2: `content_scripts.matches` is narrowed to `http://*/*` + `https://*/*`; the spec line lands in `content-overlay-ui.md` with the t1-02 commit.
 - `A6` PM ruling on t1-01 open question 2: the overlay shadow root mode stays `open` for v1 (dev-tool inspectability during the manual verification loop); `t3-01` owns the widget.
 - `A7` PM decision (platform constraint found in the `t1-02` review): `chrome.storage.local` forbids `.` `/` `\` `"` in a key and caps it at 256 characters, so `notes:v1:<url>` was never legal. Layout becomes `notes:v1:<escaped slot key>` plus a `pages:v1` index key; the spec line is edited together with the code.
-- `A8` PM default (user may veto): a trailing slash is not part of page identity — `/a` and `/a/` are the same page.
+- `A8` **Confirmed by the user (2026-11-16)**: a trailing slash is not part of page identity — `/a` and `/a/` are the same page.

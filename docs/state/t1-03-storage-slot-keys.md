@@ -56,7 +56,7 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 1 (engineer).
 ## Open questions
 
 - `A7` PM decision (not a user decision — a platform constraint): escaped slot key + `pages:v1` index.
-- `A8` PM default (user may veto): `/a` and `/a/` are the same page.
+- `A8` **Confirmed by the user (2026-11-16)**: `/a` and `/a/` are the same page.
 
 ## PM correction during attempt 1 (brief defect, not an engineer deviation)
 
