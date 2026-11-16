@@ -46,6 +46,9 @@ metadata:
 - A slice that touches **two layers at once** (domain + adapter/UI + a new test harness) is the shape that overruns
   the runtime ceiling. Keep such a slice at ≤5 substantive AC, or split it into one-layer tasks; single-layer slices
   of the same size finish inside the ceiling.
+- **Carried fixes count toward the slice budget.** A brief with 5 AC plus 4 carried review findings is 9 work items
+  even though the AC count is legal — that is the shape that killed `t2-03` at the ceiling. If a review produces more
+  than 2 carried fixes, plan a separate small cleanup slice instead of stacking them onto the next task.
 - Put the work order into every brief, not into a follow-up message: the child session does not see the negotiation.
 - Carry review findings forward by name (`N2`, `R6`, residual risk 4): the next brief repeats them, because the next
   engineer session has no memory of the previous review.

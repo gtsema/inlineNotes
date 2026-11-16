@@ -55,11 +55,19 @@ No DOM range math (that is `t2-02`'s output), no content-script UI, no popup, no
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegated after `t2-02` acceptance.
+- attempt 1 (`3d150ac8`): **timeout at 3600000 ms.** The code survived in the tree; the PM measured
+  `npm test` → 394 passed / **1 failed**, `npm run build` green, checker 0 errors. What was missing: the spec edits
+  (AC5), carried fix `R1`, the commit and the report.
+  **PM error, recorded:** this brief carried 5 substantive AC **plus** four carried fixes (`A27`, `A28`, `R1`, `R2`) —
+  nine work items in one slice, which breaks the slice-size rule in `docs/specs/code-review-flow.md` in spirit even
+  though the AC count was legal. `attempt 2` therefore had a much smaller job.
+- attempt 2 (`cb93b848`): completion slice — fix the broken `A24` fixture (`tests/core-entry-overlap.spec.ts:197-198`,
+  the fixture asserts `null` for a range that really does overlap `[10,20)` — the code is right, the test is wrong),
+  finish `R1`, write the AC5 spec lines, gates, commit, report.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×2 attempts; reviewer not yet delegated).
 
 ## Verdicts
 
