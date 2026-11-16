@@ -14,7 +14,9 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 | Term (EN, grep anchor) | Russian UI wording | Meaning |
 |---|---|---|
 | `entry` | «запись», «комментарий» | one stored note: a text span + a comment + an author name |
-| `pageKey` | — | normalized page identity used as the storage key |
+| `pageKey` | — | normalized page identity; it is the value stored in the page index, not a storage key by itself |
+| `slot key` | — | encoding of a `pageKey` inside a storage key: `notes:v1:<slotKey>` |
+| `page index` | — | the `pages:v1` value: ordered list of every `pageKey` the store knows |
 | `anchor` | — | text-based locator of the selected span |
 | `authorName` | «Имя» | author string set in options; identity of the writer |
 | `stale entry` | «запись недоступна» | entry whose anchor no longer resolves on the page |
@@ -34,9 +36,13 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 
 ## Rules / Semantics
 
-- Storage: `chrome.storage.local` only. One key per page: `notes:v1:<pageKey>`, value `{ version: 1, entries: Entry[] }`. A separate key `settings:v1` holds `{ name }`.
+- Storage: `chrome.storage.local` only. One key per page: `notes:v1:<slotKey>`, value `{ version: 1, entries: Entry[] }`. A separate key `settings:v1` holds `{ name }`; a separate key `pages:v1` holds the page index.
+- Slot key encoding (`A7`): a storage key uses only characters legal for `chrome.storage` keys, so a raw `pageKey` (a whole URL) never appears in one. Every character outside `[A-Za-z0-9_-]` is replaced by its uppercase `%XX` UTF-8 escape, so the escaped alphabet is `[A-Za-z0-9_%-]` and `decodeURIComponent` of the escaped slot key returns the original `pageKey`.
+- Slot key length (`A7`): an escaped slot key longer than 247 characters becomes its first 200 escaped characters + `~` + `fnv1a32(pageKey)` in base36 padded to 7 characters, so a truncated slot key is at most 208 characters and `notes:v1:` + slot key stays inside the 256-character key budget. `~` is legal as the separator because the escape never emits it (a `pageKey` carrying `~` produces `%7E`), so a page key cannot forge it. A truncated slot key is not reversible. The charset rule and the 256-character budget are defensive project constraints, not a quotation of a published Chrome statement (not confirmed empirically).
+- Page index: `pages:v1` holds `{ version: 1, pageKeys: string[] }` in insertion order and is the authoritative source of page keys. A slot is resolved through the index, never by decoding the key text, because a truncated slot key cannot be decoded back to a `pageKey`.
+- Page lookup: an exact normalized `pageKey` match first; otherwise the oldest path-only match, meaning the earliest key in `pages:v1` whose `origin + pathname` equals the URL's (`A4`). The stored key is used unchanged, so a page never forks into two entry lists.
 - No sync, no IndexedDB, no server. Nothing leaves the browser.
-- `pageKey` normalization: `origin + pathname` in lowercase path; drop the hash; drop query params matching `utm_*`, `gclid`, `gsas`, `fbclid`, `_ga`, `_gl`, `_hs`, `mc_*`, `ref`, `ref_src`, `igshid`, `s_kwcid`; keep remaining params sorted by name. Lookup additionally falls back to an `origin + pathname` (path-only) match against stored keys, so a note saved on a URL that later gains or loses parameters is still found.
+- `pageKey` normalization: `origin + pathname` in lowercase path; drop the hash; drop query params matching `utm_*`, `gclid`, `gsas`, `fbclid`, `_ga`, `_gl`, `_hs`, `mc_*`, `ref`, `ref_src`, `igshid`, `s_kwcid`; keep remaining params sorted by name. A trailing slash is not part of page identity: `/a`, `/a/` and `/a//` give the key of `/a`, while the site root keeps its own `/` key (`A8`); an `index.html` suffix is not normalized (reviewer note `R7`). Lookup additionally falls back to an `origin + pathname` (path-only) match against indexed keys, so a note saved on a URL that later gains or loses parameters is still found.
 - Cap 256 characters counts Unicode code points of `comment`, trimmed of leading/trailing whitespace. Empty comment after trim → rejected.
 - Cap 20 entries per `pageKey`. Creation at the cap is refused with the message `Достигнут лимит 20 записей на странице`.
 - `authorName` is mandatory and must be a non-empty trimmed string, max 40 characters. If it is missing, creation and editing are disabled and the popup shows `Укажите имя в настройках`. First run generates a random 8-character name (lowercase base36) and stores it.
@@ -64,7 +70,7 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 
 Each verifiable without re-reading the implementation:
 
-1. With a name set, selecting text and saving a ≤256-char comment stores exactly one entry under `notes:v1:<pageKey>`; reopening the same URL shows it again.
+1. With a name set, selecting text and saving a ≤256-char comment stores exactly one entry under `notes:v1:<slotKey>` of its `pageKey`; reopening the same URL shows it again.
 2. A 257-code-point comment cannot be saved; the counter shows `256/256` at the cap and the Save button is disabled.
 3. The 21st entry on a page cannot be created and the refusal message is shown.
 4. An entry created on `https://example.com/a?utm_source=x#sec` is found on `https://example.com/a?utm_source=y&fbclid=1`.

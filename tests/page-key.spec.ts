@@ -6,16 +6,25 @@ import { describe, expect, it } from 'vitest';
 import {
   TRACKING_PARAM_NAMES,
   TRACKING_PARAM_PREFIXES,
-  findPageKey,
   isTrackingParam,
   pageKeyFromUrl,
   pathOnlyKey,
-  pathOnlyOfStoredKey,
+  pathOnlyOfPageKey,
 } from '../src/core/page-key';
-import { ENTRY_KEY_PREFIX, entryStorageKey, pageKeyFromStorageKey } from '../src/core/storage-keys';
+import { addToIndex, emptyPageIndex, resolvePageKey } from '../src/core/page-index';
+import type { PageIndex } from '../src/core/page-index';
+import {
+  ENTRY_KEY_PREFIX,
+  SETTINGS_KEY,
+  entryStorageKey,
+  isEntryStorageKey,
+  slotKeyFromStorageKey,
+} from '../src/core/storage-keys';
 
 /**
- * `pageKey` normalization and the loss-proof lookup of task `t1-02`.
+ * `pageKey` normalization and the loss-proof lookup of task `t1-02`, re-cut for
+ * the slot-key layout of task `t1-03`: the lookup runs over the `pages:v1` index
+ * (`resolvePageKey`), never over storage-key text.
  *
  * Rule owner: `docs/specs/inline-comment-model.md` -> Rules / Semantics ->
  * "`pageKey` normalization"; the acceptance mirror is that spec's AC4.
@@ -49,6 +58,11 @@ function codeOnly(text: string): string {
 
 function pageKeySource(): string {
   return codeOnly(readFileSync(join(projectRoot, 'src', 'core', 'page-key.ts'), 'utf8'));
+}
+
+/** Index of page keys in insertion order (the order rule of PM ruling `A4`). */
+function index(...pageKeys: string[]): PageIndex {
+  return { version: 1, pageKeys };
 }
 
 describe('pageKeyFromUrl (AC1)', () => {
@@ -137,22 +151,23 @@ describe('model spec AC4 (AC2)', () => {
     const savedPageKey = pageKeyFromUrl('https://example.com/a?utm_source=x#sec');
     expect(savedPageKey).toBe('https://example.com/a');
 
-    const storageKeys = [`${ENTRY_KEY_PREFIX}${savedPageKey ?? ''}`, 'settings:v1'];
-    const foundPageKey = findPageKey('https://example.com/a?utm_source=y&fbclid=1', storageKeys);
+    const stored = addToIndex(emptyPageIndex(), savedPageKey ?? '');
+    const foundPageKey = resolvePageKey('https://example.com/a?utm_source=y&fbclid=1', stored);
 
     expect(foundPageKey).toBe('https://example.com/a');
-    expect(entryStorageKey(foundPageKey ?? '')).toBe(storageKeys[0] ?? '');
+    expect(entryStorageKey(foundPageKey ?? '')).toBe(entryStorageKey(savedPageKey ?? ''));
   });
 
-  it('accepts stored page keys as well as whole storage keys', () => {
+  it('reads a stored page back from its slot: slot -> page key -> same slot', () => {
     const storageKey = entryStorageKey('https://example.com/a?lang=ru');
-    const storedPageKeys = [pageKeyFromStorageKey(storageKey) ?? ''];
-    expect(findPageKey('https://example.com/a?utm_source=y', storedPageKeys)).toBe(
+    const slot = slotKeyFromStorageKey(storageKey);
+    expect(slot).not.toBeNull();
+
+    const stored = addToIndex(emptyPageIndex(), decodeURIComponent(slot ?? ''));
+    expect(resolvePageKey('https://example.com/a?utm_source=y', stored)).toBe(
       'https://example.com/a?lang=ru',
     );
-    expect(findPageKey('https://example.com/a?utm_source=y', [storageKey])).toBe(
-      'https://example.com/a?lang=ru',
-    );
+    expect(entryStorageKey('https://example.com/a?lang=ru')).toBe(storageKey);
   });
 });
 
@@ -172,73 +187,119 @@ describe('pathOnlyKey (AC3)', () => {
   });
 
   it('derives the same path-only form from a stored page key', () => {
-    expect(pathOnlyOfStoredKey('https://example.com/a?lang=ru')).toBe('https://example.com/a');
-    expect(pathOnlyOfStoredKey('https://example.com/a#x')).toBe('https://example.com/a');
-    expect(pathOnlyOfStoredKey('settings:v1')).toBe('settings:v1');
+    expect(pathOnlyOfPageKey('https://example.com/a?lang=ru')).toBe('https://example.com/a');
+    expect(pathOnlyOfPageKey('https://example.com/a#x')).toBe('https://example.com/a');
+    expect(pathOnlyOfPageKey('https://example.com/Article?Lang=ru')).toBe(
+      'https://example.com/article',
+    );
+    expect(pathOnlyOfPageKey('https://example.com/a//')).toBe('https://example.com/a');
+    expect(pathOnlyOfPageKey('settings:v1')).toBe('settings:v1');
   });
 });
 
-describe('findPageKey (AC3)', () => {
+describe('trailing-slash identity (AC5, ruling A8)', () => {
+  it('treats /a, /a/ and /a// as one page', () => {
+    const base = pageKeyFromUrl('https://example.com/a');
+    expect(base).toBe('https://example.com/a');
+    expect(pageKeyFromUrl('https://example.com/a/')).toBe(base);
+    expect(pageKeyFromUrl('https://example.com/a//')).toBe(base);
+    expect(pageKeyFromUrl('https://example.com/a/?lang=ru')).toBe('https://example.com/a?lang=ru');
+    expect(pathOnlyKey('https://example.com/a/')).toBe('https://example.com/a');
+    expect(pathOnlyKey('https://example.com/a//')).toBe('https://example.com/a');
+  });
+
+  it('keeps the site root as its own page', () => {
+    expect(pageKeyFromUrl('https://example.com')).toBe('https://example.com/');
+    expect(pageKeyFromUrl('https://example.com/')).toBe('https://example.com/');
+    expect(pageKeyFromUrl('https://example.com//')).toBe('https://example.com/');
+    expect(pathOnlyKey('https://example.com/')).toBe('https://example.com/');
+  });
+
+  it('does not collapse a nested path onto its parent', () => {
+    expect(pageKeyFromUrl('https://example.com/a/b/')).toBe('https://example.com/a/b');
+    expect(pageKeyFromUrl('https://example.com/a/b')).not.toBe('https://example.com/a');
+  });
+
+  it('leaves an index.html suffix alone (reviewer note R7)', () => {
+    expect(pageKeyFromUrl('https://example.com/a/index.html')).toBe(
+      'https://example.com/a/index.html',
+    );
+    expect(pageKeyFromUrl('https://example.com/a/index.html')).not.toBe(
+      pageKeyFromUrl('https://example.com/a/'),
+    );
+  });
+});
+
+describe('resolvePageKey (AC3, index-backed)', () => {
   it('prefers an exact normalized match over a path-only candidate', () => {
-    const storedKeys = ['https://example.com/a?lang=en', 'https://example.com/a'];
-    expect(findPageKey('https://example.com/a', storedKeys)).toBe('https://example.com/a');
+    const stored = index('https://example.com/a?lang=en', 'https://example.com/a');
+    expect(resolvePageKey('https://example.com/a', stored)).toBe('https://example.com/a');
   });
 
   it('falls back to origin + pathname when a kept parameter appears or disappears', () => {
-    const storedKeys = ['https://example.com/a?lang=ru'];
-    expect(findPageKey('https://example.com/a', storedKeys)).toBe('https://example.com/a?lang=ru');
-    expect(findPageKey('https://example.com/a?utm_source=y', storedKeys)).toBe(
+    const stored = index('https://example.com/a?lang=ru');
+    expect(resolvePageKey('https://example.com/a', stored)).toBe('https://example.com/a?lang=ru');
+    expect(resolvePageKey('https://example.com/a?utm_source=y', stored)).toBe(
       'https://example.com/a?lang=ru',
     );
-    expect(findPageKey('https://example.com/a?lang=ru#sec', storedKeys)).toBe(
+    expect(resolvePageKey('https://example.com/a?lang=ru#sec', stored)).toBe(
       'https://example.com/a?lang=ru',
     );
   });
 
   it('returns the matching stored key unchanged, so a page never forks into two lists', () => {
-    const storedKeys = ['https://example.com/Article?Lang=ru'];
-    const found = findPageKey('https://example.com/article?utm_source=x', storedKeys);
+    const stored = index('https://example.com/Article?Lang=ru');
+    const found = resolvePageKey('https://example.com/article?utm_source=x', stored);
     expect(found).toBe('https://example.com/Article?Lang=ru');
-    expect(entryStorageKey(found ?? '')).toBe('notes:v1:https://example.com/Article?Lang=ru');
+    expect(entryStorageKey(found ?? '')).toBe(
+      'notes:v1:https%3A%2F%2Fexample%2Ecom%2FArticle%3FLang%3Dru',
+    );
   });
 
-  it('returns the stored key verbatim even when the caller passed storage keys', () => {
-    const storageKey = entryStorageKey('https://example.com/Article?Lang=ru');
-    const found = findPageKey('https://example.com/article?utm_source=x', [storageKey]);
-    expect(found).toBe('https://example.com/Article?Lang=ru');
+  it('resolves the same slot for a URL that only differs in noise parameters', () => {
+    const stored = index('https://example.com/Article?Lang=ru');
+    const found = resolvePageKey('https://example.com/article?utm_source=x', stored) ?? '';
+    const storageKey = entryStorageKey(found);
+    expect(storageKey).toBe(entryStorageKey(stored.pageKeys[0] ?? ''));
+    expect(storageKey.startsWith(ENTRY_KEY_PREFIX)).toBe(true);
+    expect(isEntryStorageKey(storageKey)).toBe(true);
+    expect(slotKeyFromStorageKey(storageKey)).toBe(storageKey.slice(ENTRY_KEY_PREFIX.length));
   });
 
-  it('takes the first path-only match in the given order, deterministically', () => {
-    const storedKeys = ['https://example.com/a?lang=en', 'https://example.com/a?lang=ru'];
-    const first = findPageKey('https://example.com/a?x=1', storedKeys);
+  it('takes the oldest path-only match by index order, deterministically', () => {
+    const olderFirst = index('https://example.com/a?lang=en', 'https://example.com/a?lang=ru');
+    const newerFirst = index('https://example.com/a?lang=ru', 'https://example.com/a?lang=en');
+    const first = resolvePageKey('https://example.com/a?x=1', olderFirst);
     expect(first).toBe('https://example.com/a?lang=en');
-    expect(findPageKey('https://example.com/a?x=2', storedKeys)).toBe(first);
-    expect(findPageKey('https://example.com/a?x=1', [...storedKeys].reverse())).toBe(
+    expect(resolvePageKey('https://example.com/a?x=2', olderFirst)).toBe(first);
+    expect(resolvePageKey('https://example.com/a?x=1', newerFirst)).toBe(
       'https://example.com/a?lang=ru',
     );
   });
 
   it('never matches another path or another origin', () => {
-    expect(findPageKey('https://example.com/a', ['https://example.com/ab'])).toBeNull();
-    expect(findPageKey('https://example.com/a/b', ['https://example.com/a'])).toBeNull();
-    expect(findPageKey('https://example.com/a', ['http://example.com/a'])).toBeNull();
+    expect(resolvePageKey('https://example.com/a', index('https://example.com/ab'))).toBeNull();
+    expect(resolvePageKey('https://example.com/a/b', index('https://example.com/a'))).toBeNull();
+    expect(resolvePageKey('https://example.com/a', index('http://example.com/a'))).toBeNull();
   });
 
-  it('survives unrelated storage keys and an empty list', () => {
-    expect(findPageKey('https://example.com/a', ['settings:v1', 'notes:v2:x'])).toBeNull();
-    expect(findPageKey('https://example.com/a', [])).toBeNull();
+  it('survives unrelated keys and an empty index', () => {
+    expect(resolvePageKey('https://example.com/a', index('settings:v1', 'notes:v2:x'))).toBeNull();
+    expect(resolvePageKey('https://example.com/a', emptyPageIndex())).toBeNull();
+    expect(isEntryStorageKey(SETTINGS_KEY)).toBe(false);
+    expect(isEntryStorageKey('notes:v2:x')).toBe(false);
+    expect(isEntryStorageKey(entryStorageKey('https://example.com/a'))).toBe(true);
   });
 
   it('returns null for an unparsable URL', () => {
-    expect(findPageKey('not a url', ['https://example.com/a'])).toBeNull();
+    expect(resolvePageKey('not a url', index('https://example.com/a'))).toBeNull();
   });
 
   it('is deterministic: the same input gives the same key twice', () => {
     const url = 'https://example.com/A?b=2&a=1&utm_source=x#h';
+    const stored = index('https://example.com/a?a=1&b=2');
     expect(pageKeyFromUrl(url)).toBe(pageKeyFromUrl(url));
-    expect(findPageKey(url, ['https://example.com/a?a=1&b=2'])).toBe(
-      findPageKey(url, ['https://example.com/a?a=1&b=2']),
-    );
+    expect(resolvePageKey(url, stored)).toBe(resolvePageKey(url, stored));
   });
 });
 

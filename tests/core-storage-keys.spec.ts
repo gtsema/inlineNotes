@@ -1,29 +1,84 @@
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
   ENTRY_KEY_PREFIX,
+  PAGE_INDEX_KEY,
   SETTINGS_KEY,
   entryStorageKey,
-  pageKeyFromStorageKey,
+  isEntryStorageKey,
+  slotKeyFromStorageKey,
 } from '../src/core/storage-keys';
+import { SLOT_KEY_ESCAPE_BUDGET, SLOT_KEY_MAX_LENGTH, slotKeyFor } from '../src/core/slot-key';
 
 /**
- * Smoke test of the pure core layer: `src/core/` runs in plain Node with no DOM
- * and no `chrome.*`, and the storage key layout of
- * `docs/specs/inline-comment-model.md` holds.
+ * Storage key layout of task `t1-03` (AC1', AC3'), plus the purity contract of
+ * `src/core/`: the layer runs in plain Node with no DOM and no `chrome.*`.
+ *
+ * Rule owner: `docs/specs/inline-comment-model.md` -> Rules / Semantics ->
+ * "Storage" (slot key encoding, page index).
  */
+
+const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
+
+/** Characters a `chrome.storage` key is treated as illegal here (decision `A7`). */
+const FORBIDDEN_KEY_CHARACTERS: readonly string[] = ['.', '/', '\\', '"'];
+
+/** A realistic long article URL, kept parameters included. */
+const REALISTIC_PAGE_KEY =
+  'https://example.com/blog/2026/05/ochen-dlinnaya-zapish-o-tom-kak-razbiraetca-storage?lang=ru&page=2';
+
+/** A page key carrying every character the layout must escape. */
+const HOSTILE_PAGE_KEY = String.raw`https://example.com/a.b"c\d?tag=<x>&q=a b#h~e`;
+
+/** Strips comments so the purity checks look at code, not at prose. */
+function codeOnly(text: string): string {
+  return text.replaceAll(/\/\*[\s\S]*?\*\//g, ' ').replaceAll(/\/\/[^\n]*/g, ' ');
+}
+
+function coreSource(relativePath: string): string {
+  return codeOnly(readFileSync(join(projectRoot, 'src', 'core', relativePath), 'utf8'));
+}
+
 describe('core storage keys', () => {
   it('uses the documented key layout', () => {
     expect(ENTRY_KEY_PREFIX).toBe('notes:v1:');
     expect(SETTINGS_KEY).toBe('settings:v1');
+    expect(PAGE_INDEX_KEY).toBe('pages:v1');
   });
 
-  it('builds one key per page', () => {
-    expect(entryStorageKey('https://example.com/a')).toBe('notes:v1:https://example.com/a');
+  it('builds one slot per page and never pastes the raw URL into a key', () => {
+    expect(entryStorageKey('https://example.com/a')).toBe(
+      'notes:v1:https%3A%2F%2Fexample%2Ecom%2Fa',
+    );
+    expect(entryStorageKey('https://example.com/a')).not.toContain('://');
+    expect(entryStorageKey('https://example.com/a')).toBe(
+      `${ENTRY_KEY_PREFIX}${slotKeyFor('https://example.com/a')}`,
+    );
+    expect(new Set(['https://example.com/a', 'https://example.com/ab'].map(entryStorageKey)).size).toBe(
+      2,
+    );
+  });
+
+  it('stays inside the slot-key budget for realistic and hostile page keys (AC3)', () => {
+    for (const pageKey of [REALISTIC_PAGE_KEY, HOSTILE_PAGE_KEY]) {
+      const storageKey = entryStorageKey(pageKey);
+      expect(storageKey).toMatch(/^notes:v1:[A-Za-z0-9_%-]{1,208}$/);
+      expect(storageKey.length).toBeLessThanOrEqual(ENTRY_KEY_PREFIX.length + SLOT_KEY_ESCAPE_BUDGET);
+      for (const forbidden of FORBIDDEN_KEY_CHARACTERS) {
+        expect(storageKey.includes(forbidden)).toBe(false);
+      }
+      expect(isEntryStorageKey(storageKey)).toBe(true);
+    }
   });
 
   it('trims surrounding whitespace before composing the key', () => {
-    expect(entryStorageKey('  https://example.com/a  ')).toBe('notes:v1:https://example.com/a');
+    expect(entryStorageKey('  https://example.com/a  ')).toBe(
+      'notes:v1:https%3A%2F%2Fexample%2Ecom%2Fa',
+    );
+    expect(entryStorageKey('  https://example.com/a  ')).toBe(entryStorageKey('https://example.com/a'));
   });
 
   it('refuses an empty page key', () => {
@@ -31,14 +86,76 @@ describe('core storage keys', () => {
     expect(() => entryStorageKey('   ')).toThrow('pageKey must not be empty');
   });
 
-  it('reads the page key back out of a storage key', () => {
+  it('reads the slot back out of a storage key and maps it to the same slot', () => {
     const key = entryStorageKey('https://example.com/a?b=2');
-    expect(pageKeyFromStorageKey(key)).toBe('https://example.com/a?b=2');
+    const slot = slotKeyFromStorageKey(key);
+
+    expect(isEntryStorageKey(key)).toBe(true);
+    expect(slot).not.toBeNull();
+    expect(decodeURIComponent(slot ?? '')).toBe('https://example.com/a?b=2');
+    expect(entryStorageKey(decodeURIComponent(slot ?? ''))).toBe(key);
+  });
+
+  it('keeps an over-budget page key recognizable and inside the budget', () => {
+    const pageKey = `https://example.com/${'a'.repeat(2000)}`;
+    const key = entryStorageKey(pageKey);
+    const slot = slotKeyFromStorageKey(key);
+
+    expect(key).toHaveLength(ENTRY_KEY_PREFIX.length + SLOT_KEY_MAX_LENGTH);
+    expect(isEntryStorageKey(key)).toBe(true);
+    expect(slot).toBe(slotKeyFor(pageKey));
+    expect(slot).toHaveLength(SLOT_KEY_MAX_LENGTH);
+    expect(slot === null ? '' : decodeURIComponent(slot)).not.toBe(pageKey);
   });
 
   it('returns null for keys that are not entry lists', () => {
-    expect(pageKeyFromStorageKey(SETTINGS_KEY)).toBeNull();
-    expect(pageKeyFromStorageKey(ENTRY_KEY_PREFIX)).toBeNull();
-    expect(pageKeyFromStorageKey('notes:v2:https://example.com/a')).toBeNull();
+    expect(isEntryStorageKey(SETTINGS_KEY)).toBe(false);
+    expect(isEntryStorageKey(PAGE_INDEX_KEY)).toBe(false);
+    expect(isEntryStorageKey(ENTRY_KEY_PREFIX)).toBe(false);
+    expect(isEntryStorageKey('notes:v2:https://example.com/a')).toBe(false);
+    expect(isEntryStorageKey(`${ENTRY_KEY_PREFIX}https://example.com/a`)).toBe(false);
+
+    expect(slotKeyFromStorageKey(SETTINGS_KEY)).toBeNull();
+    expect(slotKeyFromStorageKey(PAGE_INDEX_KEY)).toBeNull();
+    expect(slotKeyFromStorageKey(ENTRY_KEY_PREFIX)).toBeNull();
+    expect(slotKeyFromStorageKey('notes:v2:https://example.com/a')).toBeNull();
+  });
+});
+
+describe('purity of the task t1-03 core modules (AC1, AC4)', () => {
+  const MODULES: readonly string[] = ['slot-key.ts', 'page-index.ts', 'storage-keys.ts'];
+
+  it('uses no DOM, no chrome.*, no clock, no randomness, no network', () => {
+    for (const name of MODULES) {
+      const code = coreSource(name);
+      for (const forbidden of [
+        'document',
+        'window',
+        'chrome.',
+        'Date',
+        'Math.random',
+        'fetch(',
+        'XMLHttpRequest',
+        'WebSocket',
+      ]) {
+        expect(code).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it('uses no any, no type-system escape hatch and no framework import', () => {
+    for (const name of MODULES) {
+      const code = coreSource(name);
+      expect(code).not.toMatch(/\bany\b/);
+      expect(code).not.toContain('@ts-ignore');
+      expect(code).not.toContain('@ts-expect-error');
+      expect(code).not.toContain('@angular/');
+      expect(code).not.toContain('preact');
+
+      const imported = code.match(/from\s+'([^']+)'/g) ?? [];
+      for (const specifier of imported) {
+        expect(specifier).toMatch(/from\s+'\.\//);
+      }
+    }
   });
 });

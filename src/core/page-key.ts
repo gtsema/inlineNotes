@@ -1,11 +1,11 @@
 /**
- * Page identity of the entry store: `pageKey` normalization and the loss-proof
- * lookup.
+ * Page identity of the entry store: `pageKey` normalization.
  *
  * Pure module: no DOM, no `chrome.*`, no `Date`, no `Math.random`. The rule is
  * owned by `docs/specs/inline-comment-model.md`
- * (Rules / Semantics -> "`pageKey` normalization"). The only import is the key
- * vocabulary of `storage-keys.ts`: no framework and no external module.
+ * (Rules / Semantics -> "`pageKey` normalization"). It imports nothing: the slot
+ * key layout (`slot-key.ts`, `storage-keys.ts`) and the loss-proof lookup
+ * (`page-index.ts`) sit on top of these functions, never the other way round.
  *
  * Determinism notes (pinned here so the same input always gives the same key):
  * - a noise parameter is recognized by its lowercased name; `utm_` and `mc_`
@@ -13,11 +13,12 @@
  * - kept parameters are re-serialized by `URLSearchParams` (percent-encoding
  *   normalized, pairs sorted by name with a stable sort), so two semantically
  *   equal queries produce one key;
+ * - a trailing slash is not part of page identity: `/a`, `/a/` and `/a//` give the
+ *   key of `/a`, while the site root keeps its own `/` key (PM default `A8`); an
+ *   `index.html` suffix is not normalized (reviewer note `R7`);
  * - an empty or unparsable URL yields `null`: the caller leaves the page
  *   unannotated instead of inventing a storage key.
  */
-
-import { ENTRY_KEY_PREFIX } from './storage-keys';
 
 /** Query parameters treated as tracking noise and dropped from the key. */
 export const TRACKING_PARAM_NAMES: readonly string[] = [
@@ -88,55 +89,11 @@ export function pathOnlyKey(url: string): string | null {
 }
 
 /**
- * Loss-proof lookup among the stored page keys of the entry store. A candidate
- * is either a stored `pageKey` or a whole `notes:v1:<pageKey>` storage key, so
- * the caller may pass `Object.keys(storage.local)` unchanged.
- *
- * Resolution order: an exact normalized key first, then the first stored key
- * whose `origin + pathname` is equal, in the order the caller supplied. The
- * matching stored page key is returned unchanged, so `entryStorageKey` of the
- * result is the storage key that already exists and the page never forks into
- * two entry lists. `null` when nothing matches.
+ * `origin + pathname` part of an already normalized stored page key, in the same
+ * form `pathOnlyKey` produces, so an index entry can be compared with a URL.
  */
-export function findPageKey(url: string, storedKeys: readonly string[]): string | null {
-  const exact = pageKeyFromUrl(url);
-  if (exact === null) {
-    return null;
-  }
-
-  const candidates = storedKeys.map(candidatePageKey);
-
-  for (const candidate of candidates) {
-    if (candidate === exact) {
-      return candidate;
-    }
-  }
-
-  const pathOnly = pathOnlyKey(url);
-  if (pathOnly === null) {
-    return null;
-  }
-  for (const candidate of candidates) {
-    if (pathOnlyOfStoredKey(candidate) === pathOnly) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-/** Strips a `notes:v1:` storage prefix so a candidate is always a page key. */
-function candidatePageKey(candidate: string): string {
-  const trimmed = candidate.trim();
-  if (trimmed.startsWith(ENTRY_KEY_PREFIX)) {
-    return trimmed.slice(ENTRY_KEY_PREFIX.length).trim();
-  }
-  return trimmed;
-}
-
-/** `origin + pathname` part of an already normalized stored page key. */
-export function pathOnlyOfStoredKey(storedKey: string): string {
-  const trimmed = storedKey.trim();
+export function pathOnlyOfPageKey(storedPageKey: string): string {
+  const trimmed = storedPageKey.trim();
   let end = trimmed.length;
 
   const queryStart = trimmed.indexOf('?');
@@ -148,7 +105,18 @@ export function pathOnlyOfStoredKey(storedKey: string): string {
     end = hashStart;
   }
 
-  return trimmed.slice(0, end).toLowerCase();
+  const schemeStart = trimmed.indexOf('://');
+  if (schemeStart < 0) {
+    return trimmed.slice(0, end).toLowerCase();
+  }
+
+  const pathStart = trimmed.indexOf('/', schemeStart + 3);
+  if (pathStart < 0 || pathStart >= end) {
+    return trimmed.slice(0, end).toLowerCase();
+  }
+
+  const origin = trimmed.slice(0, pathStart).toLowerCase();
+  return `${origin}${normalizePath(trimmed.slice(pathStart, end).toLowerCase())}`;
 }
 
 function parseUrl(url: string): URL | null {
@@ -164,5 +132,14 @@ function parseUrl(url: string): URL | null {
 }
 
 function pathOnlyOfParsed(parsed: URL): string {
-  return `${parsed.origin}${parsed.pathname.toLowerCase()}`;
+  return `${parsed.origin}${normalizePath(parsed.pathname.toLowerCase())}`;
+}
+
+/**
+ * Path identity: empty segments collapse and a trailing slash is dropped, so
+ * `/a`, `/a/` and `/a//` are one page; the site root keeps its `/` key.
+ */
+function normalizePath(path: string): string {
+  const segments = path.split('/').filter((segment: string) => segment.length > 0);
+  return segments.length === 0 ? '/' : `/${segments.join('/')}`;
 }
