@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Entry, EntryAnchor } from '../src/core/entry';
 import type { RandomSource } from '../src/core/entry-rules';
-import { setEntryVisibility } from '../src/core/entry-rules';
+import { MAX_ENTRIES_PER_PAGE, setEntryVisibility } from '../src/core/entry-rules';
 import { ISO_UTC_TIMESTAMP_PATTERN, loadEntries } from '../src/core/entry-store-read';
 import type { CreateEntryOnPageInput } from '../src/core/entry-store-write';
 import {
@@ -30,9 +30,9 @@ import {
  *
  * Rule owner: `docs/specs/inline-comment-model.md` -> Flow / Sequence 5, 7, 8 and
  * Rules / Semantics -> "Index write policy", "Index write guard", "Decode on
- * write", "Write result", "Timestamps". Every case runs on the hand-written
- * in-memory port, so the failure matrix is observed in the port snapshot and the
- * call log instead of asserted by prose.
+ * write", "Normalized text", "Timestamps", "Page lookup", "Quota". Every case runs
+ * on the hand-written in-memory port, so the failure matrix is observed in the port
+ * snapshot and the call log instead of asserted by prose.
  */
 
 const PAGE_A = 'https://example.com/a';
@@ -812,6 +812,95 @@ describe('failure honesty of every write (AC5)', () => {
       }),
     ).toEqual({ ok: false, code: 'entry_invalid' });
     expect(port.storedKeys()).toEqual([]);
+  });
+});
+
+/**
+ * Ruling `A26` (residual risk 1 of `t1-06`): the content layer normalizes the
+ * selection at capture time, so `createEntryOnPage` refuses a `text` that is not
+ * normalized, or that is not the anchor's own `text`, instead of rewriting it.
+ */
+describe('the A26 text and anchor rule of create (t2-01, AC5)', () => {
+  it('refuses a text that is not normalized, and accepts a normalized one', async () => {
+    const port = new MemoryStoragePort();
+
+    expect(
+      await create(port, {
+        text: 'a  b',
+        anchor: { text: 'a  b', prefix: '', suffix: '', fragmentCount: 1 },
+      }),
+    ).toEqual({ ok: false, code: 'entry_invalid' });
+    expect(
+      await create(port, {
+        text: ' selected\ttext ',
+        anchor: { text: 'selected text', prefix: '', suffix: '', fragmentCount: 1 },
+      }),
+    ).toEqual({ ok: false, code: 'entry_invalid' });
+    expect(port.storedKeys()).toEqual([]);
+
+    const accepted = await create(port, {
+      text: 'a b',
+      anchor: { text: 'a b', prefix: '', suffix: '', fragmentCount: 1 },
+    });
+    expect(accepted).toMatchObject({ ok: true, entry: { text: 'a b' } });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(1);
+  });
+
+  it('refuses a text that is not the anchor text, and writes nothing', async () => {
+    const port = new MemoryStoragePort();
+
+    expect(await create(port, { text: 'another selection' })).toEqual({
+      ok: false,
+      code: 'entry_invalid',
+    });
+    expect(
+      await create(port, { text: ANCHOR.text, anchor: { ...ANCHOR, text: 'the anchor copy' } }),
+    ).toEqual({ ok: false, code: 'entry_invalid' });
+    expect(port.storedKeys()).toEqual([]);
+    expect(writesOf(port)).toEqual([]);
+  });
+
+  it('refuses a create whose anchor is not there, and does not throw', async () => {
+    const port = new MemoryStoragePort();
+
+    expect(
+      await createEntryOnPage(port, {
+        ...createInput(),
+        anchor: null as unknown as EntryAnchor,
+      }),
+    ).toEqual({ ok: false, code: 'entry_invalid' });
+    expect(port.storedKeys()).toEqual([]);
+  });
+
+  it('runs the creation rules first, so a full page still reports page_limit', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, many(PAGE_A, MAX_ENTRIES_PER_PAGE));
+
+    expect(await create(port, { text: 'a  b' })).toEqual({ ok: false, code: 'page_limit' });
+    expect(await create(port, { comment: '   ' })).toEqual({ ok: false, code: 'comment_empty' });
+  });
+
+  it('does not re-check a stored record on a save, because Flow 7 keeps text and anchor', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [
+      entryRecord({
+        id: ID,
+        pageKey: PAGE_A,
+        text: 'legacy  text',
+        anchor: { ...ANCHOR, text: 'a different copy' },
+      }),
+    ]);
+
+    expect(
+      await updateEntryComment(port, {
+        url: PAGE_A,
+        id: ID,
+        comment: 'still saveable',
+        currentName: NAME,
+        now: LATER,
+      }),
+    ).toMatchObject({ ok: true, entry: { comment: 'still saveable', text: 'legacy  text' } });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(1);
   });
 });
 

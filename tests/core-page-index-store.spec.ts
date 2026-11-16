@@ -7,11 +7,12 @@ import {
   pageIndexToStorageValue,
   readPageIndex,
   removeFromIndexAndPublish,
+  removeSlotThenIndex,
   writePageIndex,
   writeSlotThenIndex,
 } from '../src/core/page-index-store';
 import { PAGE_INDEX_KEY, entryStorageKey } from '../src/core/storage-keys';
-import { MemoryStoragePort, indexValue, storedIndexOf } from './support/memory-storage-port';
+import { MemoryStoragePort, indexValue, slotValue, storedIndexOf } from './support/memory-storage-port';
 
 /**
  * The `pages:v1` storage policy of task `t1-05` (AC2).
@@ -244,5 +245,47 @@ describe('writeSlotThenIndex (AC2)', () => {
       { op: 'set', keys: [SLOT_KEY] },
       { op: 'set', keys: [PAGE_INDEX_KEY] },
     ]);
+  });
+});
+
+/**
+ * The removal half of the index write policy, pinned directly (carried fix `R5`
+ * of the `t1-06` review): until now `removeSlotThenIndex` was only observable
+ * through `deleteEntry` and `clearPage`, and the case "the slot removal landed and
+ * the index publication failed" had no test at all.
+ */
+describe('removeSlotThenIndex (carried fix R5 of the t1-06 review)', () => {
+  it('removes the slot first and reports a failed index publication without retrying', async () => {
+    const port = new MemoryStoragePort();
+    port.seed(PAGE_INDEX_KEY, indexValue(['https://example.com/a', 'https://example.com/b']));
+    port.seed(SLOT_KEY, slotValue([{ id: 'a1b2c3d4e5f6' }]));
+    port.failWriteOn(PAGE_INDEX_KEY, 'quota');
+
+    const result = await removeSlotThenIndex(port, {
+      storageKey: SLOT_KEY,
+      index: index('https://example.com/b'),
+    });
+
+    expect(result).toEqual({ ok: false, code: 'quota' });
+    expect(port.calls).toEqual([
+      { op: 'remove', keys: [SLOT_KEY] },
+      { op: 'set', keys: [PAGE_INDEX_KEY] },
+    ]);
+    expect(port.storedKeys()).toEqual([PAGE_INDEX_KEY]);
+    expect(storedIndexOf(port)).toEqual({
+      version: 1,
+      pageKeys: ['https://example.com/a', 'https://example.com/b'],
+    });
+
+    // What this leaves behind is exactly the state the read path repairs: an index
+    // that lists a page whose slot is gone. The repair keeps the order of the
+    // surviving keys, so no page loses its entries and no slot is orphaned.
+    const repaired = await removeFromIndexAndPublish(
+      port,
+      index('https://example.com/a', 'https://example.com/b'),
+      'https://example.com/a',
+    );
+    expect(repaired.write.ok).toBe(true);
+    expect(repaired.index.pageKeys).toEqual(['https://example.com/b']);
   });
 });

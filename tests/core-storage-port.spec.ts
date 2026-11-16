@@ -137,15 +137,18 @@ describe('failure codes (AC1)', () => {
   });
 });
 
-describe('purity of the task t1-05 core modules (AC1)', () => {
+describe('purity of the core modules (AC1, review remark R6)', () => {
   const MODULES: readonly string[] = [
     'storage-port.ts',
     'page-index-store.ts',
     'entry-store-read.ts',
     'entry-store-write.ts',
+    'text-normalize.ts',
+    'anchor-build.ts',
+    'anchor-resolve.ts',
   ];
 
-  it('uses no DOM, no chrome.*, no clock, no randomness, no network', () => {
+  it('uses no DOM, no chrome.*, no clock, no randomness, no crypto, no network', () => {
     for (const name of MODULES) {
       const code = coreSource(name);
       for (const forbidden of [
@@ -154,6 +157,7 @@ describe('purity of the task t1-05 core modules (AC1)', () => {
         'chrome.',
         'Date',
         'Math.random',
+        'crypto',
         'fetch(',
         'XMLHttpRequest',
         'WebSocket',

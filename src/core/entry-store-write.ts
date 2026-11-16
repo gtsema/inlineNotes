@@ -9,8 +9,8 @@
  *
  * Rule owner: `docs/specs/inline-comment-model.md`
  * (Flow / Sequence -> 5, 7, 8; Rules / Semantics -> "Index write policy",
- * "Index write guard", "Decode on write", "Write result", "Timestamps",
- * "Page lookup").
+ * "Index write guard", "Decode on write", "Normalized text", "Timestamps",
+ * "Page lookup", "Quota").
  *
  * Data discipline (PM ruling `A16`):
  * - a stored record the read guard cannot decode is carried through every write
@@ -54,6 +54,7 @@ import { readPageIndex, removeSlotThenIndex, writeSlotThenIndex } from './page-i
 import { pageKeyFromUrl } from './page-key';
 import type { StorageFailureCode, StoragePort, StorageWriteResult } from './storage-port';
 import { entryStorageKey } from './storage-keys';
+import { isNormalizedText } from './text-normalize';
 
 /** Stored value of one page slot, produced only by `entrySlotValue`. */
 export interface EntrySlotValue {
@@ -161,6 +162,12 @@ type ContextResult = { ok: true; context: PageWriteContext } | { ok: false; code
  * (residual risk 2 of `t1-04`). The stored `authorName` and `comment` are the
  * normalized values (residual risk 4 of `t1-04`), `id` comes from `randomId(rng)`
  * and both stamps come from the injected `now` (`A9`).
+ *
+ * Ruling `A26`: the content layer normalizes the selection at capture time, so a
+ * create whose `text` is not normalized, or whose `text` is not the anchor's own
+ * `text`, is refused with `entry_invalid` instead of being rewritten. A silent
+ * rewrite would let the displayed text and the anchor drift apart, and the entry
+ * could never be re-anchored later (residual risk 1 of `t1-06`).
  */
 export async function createEntryOnPage(
   port: StoragePort,
@@ -179,6 +186,10 @@ export async function createEntryOnPage(
   });
   if (block !== null) {
     return { ok: false, code: block };
+  }
+
+  if (!isStoredTextConsistent(input.text, input.anchor)) {
+    return { ok: false, code: 'entry_invalid' };
   }
 
   const draft: EntryDraft = {
@@ -498,6 +509,21 @@ async function commitRecords(
  */
 function canonicalRecord(draft: EntryDraft): Entry | null {
   return decodeEntry(createEntry(draft));
+}
+
+/**
+ * Ruling `A26` — the create half of "Decode on write": the selection text is
+ * normalized by the content layer at capture time, and the anchor carries the same
+ * string. A create that breaks either rule is refused rather than rewritten, so a
+ * stored entry always has one spelling of its text in both places. The save path
+ * never runs this check, because Flow 7 keeps the stored `text` and `anchor` and a
+ * record written before normalization existed must stay saveable.
+ */
+function isStoredTextConsistent(text: string, anchor: EntryAnchor | null): boolean {
+  if (anchor === null) {
+    return false;
+  }
+  return text === anchor.text && isNormalizedText(text);
 }
 
 /** Entries the guard could decode, in stored order: what the caps count. */
