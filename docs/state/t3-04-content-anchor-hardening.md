@@ -17,8 +17,12 @@ two" rule in `.pi/skills/delivery-planning/SKILL.md` allows on top of another ta
 3. `N2` false equality removed: spec `inline-comment-model.md` (the "equals `normalizeText` applied to the raw subtree
    text" clause), the module header in `text-stream.ts`, and the fixture that proves a different claim are replaced by
    the precise statement — normalized by construction, one U+0020 per `A20` boundary, trimmed at both ends.
-4. `N3` + `N5` + `t2-03` remark 7 hygiene: the `dist/` half of the jsdom scan fails when `dist/` is missing instead of
-   passing vacuously, and `docs/specs/INDEX.md` covered-paths for the model spec gains `src/content/anchor/`.
+4. Scan hygiene bundle (`N3`, `N5`, `t2-03` remark 7, `t2-04` remark 1 / ruling `A51`): the `dist/` half of the jsdom
+   scan fails when `dist/` is missing instead of passing vacuously; `docs/specs/INDEX.md` covered-paths for the model
+   spec gains `src/content/anchor/`; and the shared purity scan in `tests/core-storage-port.spec.ts` absorbs the
+   stronger non-ASCII rule of the local scan in `tests/core-entry-overlap.spec.ts`, whose duplicate `describe` is then
+   deleted. Prerequisite: verify `codeOnly()` strips comments (nine `src/core/` files contain em-dashes and arrows in
+   comments) — if not, the rule is Cyrillic-only (`[Ѐ-ӿ]`), which is what the architecture rule forbids.
 5. `N4` bounded cache: the module-scoped whitespace decision map in `text-stream.ts:269` is replaced by a constant
    whitespace set (it currently grows with every distinct code point of every page the content script visits); the
    stream stays uncached (`A29`) and a test pins that two calls over a mutated DOM differ.

@@ -66,6 +66,9 @@ interface ResolvedSpans  { candidate: CodePointRange; byEntryId: ResolvedEntryRa
   (`t2-03` remark 6), so the card is the only line of defence for empty/whitespace selections (residual risk 5).
 - `buildAnchor` now also returns `null` for an out-of-domain `fragments`/`contextWindow` (`A28`): treat that as
   "do not enable Save", never as `entry_invalid` (residual risk 4).
+- `A52` (`t2-04` review remark 4): **the pure gate is internal.** The card must not call `assertCreatable` for a
+  preview or a "would this collide?" check — its `spans` is optional there, so a preview would answer "allowed" and
+  re-open the exact failure class `t2-03` remark 3 closed. One spec sentence in `docs/specs/inline-comment-model.md`.
 - `duplicate` and `overlap` are distinct refusals with distinct Russian strings (`A47`:
   `Такая заметка на этом выделении уже есть`); do not let two codes collapse into one message (`t2-03` remark 5).
 

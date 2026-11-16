@@ -60,8 +60,29 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 +
 ## Verdicts
 
 - engineer report: attempt 1, commit `c2cc64c`; copied to `docs/state/t2-04-engineer.md`.
-- reviewer verdict: running (`7086c939`), range `c2cc64c^..c2cc64c`.
+- reviewer verdict: **accepted** on attempt 1, no blocking findings, remarks `1`–`5`; artifact copied to
+  `docs/state/t2-04-review.md`. Stage 2 close-out complete: 4 tasks, all accepted, two of them on attempt 2.
+
+## PM rulings on the review remarks
+
+- `A51` (remark 1, two purity lists now scan `entry-overlap.ts`): **folded, not left to drift.** The shared scan in
+  `tests/core-storage-port.spec.ts` gains the non-ASCII rule and the local duplicate `describe` in
+  `tests/core-entry-overlap.spec.ts` is deleted with it. Scheduled into `t3-04-content-anchor-hardening` → AC4 (it is
+  already the scan-hygiene AC: the vacuous `dist/` check and the `INDEX.md` row). Prerequisite the engineer must check
+  first: `codeOnly()` has to strip comments, because nine `src/core/` files contain em-dashes and arrows in comments and
+  a raw non-ASCII scan would fail on them — if comment stripping does not cover that, the rule becomes a Cyrillic-only
+  check (`[Ѐ-ӿ]`), which is what the architecture rule actually forbids.
+- `A52` (remark 4, `assertCreatable` keeps its optional-`spans` early return): **the pure gate is internal.** Shipped
+  facades call `createEntryOnPage` (where `spans` is required), never `assertCreatable` for a preview/"would this
+  collide?" check — a preview built on the pure gate would answer "allowed" and make spec AC24 observably false again.
+  Recorded as a spec sentence in `docs/state/t3-01-content-create-card.md` → AC5.
+- Remark 2 (a test uses a literal id where `ZERO_ID` exists) and remark 3 (the file's default `spansOf` leaves every
+  stored entry "stale", so no storage-contract case exercises a populated map) are **accepted debt**: they are fixed in
+  the next commit that touches `tests/core-entry-store-write.spec.ts`, and the next brief that names that file repeats
+  them verbatim.
+- Remark 5 (the report cites `creationAttemptOf` as `:543-550`, the function ends at `:549`): bookkeeping, no action.
+- `A46` stays a PM default (no user answer); reverting is one `?` and one spec sentence.
 
 ## Open questions
 
-- `A46` is a PM default applied without an answer from the user; it is one `?` and one spec sentence to revert.
+- none beyond the recorded defaults.
