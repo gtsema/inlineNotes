@@ -47,12 +47,16 @@ shipped caller here; wiring it is `t4-02`.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (attempt 1 timeout + attempt 2 in flight).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer ×2 attempts + reviewer ×1).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: attempt 2, commit `e654892` (4 files, +547/−1); copied to `docs/state/t3-01-settings-read-core-engineer.md`.
+  PM gates on the commit: `npm test` **429 passed / 22 files**, `npm run build` self-contained `dist/`, `npm run typecheck`
+  clean, checker `0 / 0 / 20 INFO` (the new INFO is a planned-path token for `t4-02-options-name-field`).
+- reviewer verdict: running (`36734c60`), range `c16966a..e654892`.
+- note for future briefs: this task's `output` was bound to the state-file name, so the engineer report and the PM state
+  file share a name in the managed artifact dir. Bind engineer output to `docs/state/<task-id>-engineer.md` instead.
 
 ## Open questions
 
