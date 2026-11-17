@@ -3,8 +3,9 @@
  *
  * Boots the page-side slices of Stage 3 that exist so far (`t3-01`, `t3-02`, `t3-03`):
  * the single shadow host, the selection capture, the create card, the load-time paint
- * pass, the hover tooltip and the editor of an existing entry. Not booted: the popup
- * (`t4-01`), SPA URL watching (`t4-03`).
+ * pass, the hover tooltip, the editor of an existing entry, the same-document URL
+ * watch and the storage-change watch of `t4-03`. Not booted: the popup and the options
+ * page, which are their own documents.
  *
  * The entry point owns exactly two things:
  * - the frame decision — `ensureOverlayHost` answers `null` outside the top frame,
@@ -29,7 +30,10 @@
  * event, after `boot()` has finished.
  */
 
-import { createChromeLocalStoragePort } from './store/chrome-storage-port';
+import {
+  createChromeLocalStorageChangeSource,
+  createChromeLocalStoragePort,
+} from './store/chrome-storage-port';
 import { ensureOverlayHost } from './overlay/host';
 import { attachCreateCardEvents } from './overlay/card-events';
 import { createCreateCardController } from './overlay/create-card-controller';
@@ -38,6 +42,8 @@ import { createTooltipController } from './overlay/tooltip-controller';
 import { attachTooltipEvents } from './overlay/tooltip-events';
 import { createEditorController } from './overlay/editor-controller';
 import { attachEditorEvents } from './overlay/editor-events';
+import { attachUrlChangeWatch } from './refresh/url-change-watch';
+import { attachStorageChangeWatch } from './refresh/storage-change-watch';
 
 function boot(): void {
   const overlay = ensureOverlayHost();
@@ -128,6 +134,39 @@ function boot(): void {
   });
 
   attachTooltipEvents(tooltip, document, window, overlay.host);
+
+  // Task `t4-03` AC1 and AC2/AC3: the page keeps telling the truth about itself after
+  // it changed under the notes. Both watches do one thing only — ask the same paint
+  // pass to run again — so neither can disagree with what is on the screen: the pass
+  // rebuilds the `page text stream`, re-resolves every anchor against it (`A29`) and
+  // tears down the `paint name`s of the page that is no longer shown (`A39`). No entry
+  // record is written by either path, so a note whose text the site deleted is
+  // unpainted and still stored, listed and deletable (`A24`, `A36`).
+  //
+  // `A59` is the polling default applied here: a content script cannot see the page
+  // calling `history.pushState`, so the address is compared on an interval as well as
+  // on `popstate`, `hashchange` and `visibilitychange`. One tick is one string compare,
+  // and `URL_POLL_MS` is the constant the overlay spec names.
+  attachUrlChangeWatch(window, document, {
+    url: pageUrl,
+    onUrlChange: (): void => {
+      void painter.refresh();
+    },
+  });
+
+  // `A60`: a cross-tab write is a repaint, not a merge. The key decision is core's
+  // (`storageChangeConcernsPage`), so a change to another page's slot or to the page
+  // index is not work for this page, and `painter.pageKeyOfPass` keeps the answer
+  // pointed at the page this document is showing after an SPA move. The settings key
+  // is in that set for AC3: the author name the last pass read is what the `ownership
+  // header` of a tooltip compares against, so a name change repaints the page instead
+  // of leaving the old author on screen (`A31`, `A25`).
+  attachStorageChangeWatch(createChromeLocalStorageChangeSource(), {
+    pageKey: painter.pageKeyOfPass,
+    onRepaint: (): void => {
+      void painter.refresh();
+    },
+  });
 
   void painter.refresh();
 }

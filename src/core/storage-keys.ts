@@ -45,3 +45,34 @@ export function slotKeyFromStorageKey(storageKey: string): string | null {
   }
   return storageKey.slice(ENTRY_KEY_PREFIX.length);
 }
+
+/**
+ * `true` when a change to `storageKey` can change what one page shows (task `t4-03`
+ * AC2 and AC3, ruling `A60`).
+ *
+ * This is key vocabulary, not page policy: the two keys that describe a page are that
+ * page's own entry slot and the single settings record, and what to do about a change
+ * is decided by the caller. The page index is deliberately absent — `pages:v1` names
+ * no page's records, and a write to another page's slot updates the index as well, so
+ * treating the index as the signal would make every open tab repaint for every note
+ * stored anywhere, which is the "a key belonging to a **different** page's slot
+ * triggers no work" half of ruling `A60`.
+ *
+ * `pageKey` is the page key the caller's last read resolved, or `null` when that read
+ * produced no page key; with no page key only the settings key can matter. The
+ * comparison composes the slot key through `entryStorageKey`, so no caller has to
+ * decode a slot back into a page key (`inline-comment-model.md` -> "Slot key decode
+ * invariant").
+ *
+ * Pure and total: an empty or whitespace-only `pageKey` answers `false` for entry keys
+ * instead of reaching the `slotKeyFor` guard that refuses one.
+ */
+export function storageChangeConcernsPage(storageKey: string, pageKey: string | null): boolean {
+  if (storageKey === SETTINGS_KEY) {
+    return true;
+  }
+  if (pageKey === null || pageKey.trim().length === 0) {
+    return false;
+  }
+  return storageKey === entryStorageKey(pageKey);
+}

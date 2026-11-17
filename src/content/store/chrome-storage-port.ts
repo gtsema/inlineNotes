@@ -14,6 +14,13 @@
  * rejection into a `StorageFailureError` carrying a machine code
  * (`quota` / `serialization` / `unavailable`) so the store layer can decide what
  * to report. Russian user-visible wording is mapped in the UI layer.
+ *
+ * Change notifications (task `t4-03` AC2, ruling `A60`) arrive through the same file:
+ * `chrome.storage.onChanged` is a `chrome.storage` surface, so the one-adapter rule of
+ * `docs/specs/inline-comment-model.md` -> "Storage seam" means the subscription lives
+ * here too. This half makes no call and reads no value: it filters the area name and
+ * hands out the keys that changed. What a change means for a page is decided in
+ * `src/content/refresh/storage-change-watch.ts` over the core key predicate.
  */
 
 import type { StorageFailureCode, StoragePort } from '../../core/storage-port';
@@ -68,6 +75,87 @@ export function createChromeLocalStoragePort(): StoragePort {
       return chrome.storage.local.remove(keys);
     },
   });
+}
+
+/**
+ * A change notification reduced to the keys that changed. The record shape
+ * `chrome.storage.onChanged` answers with (`{ key: { oldValue, newValue } }`) is
+ * reduced here, because the only question the page asks is *which key* moved
+ * (task `t4-03` AC2, ruling `A60`); what a change means is decided by
+ * `src/content/refresh/storage-change-watch.ts` over the core key predicate.
+ */
+export type StorageKeysChangeListener = (changedKeys: readonly string[]) => void;
+
+/**
+ * Subscribes to `chrome.storage.local` changes and returns the teardown.
+ *
+ * The area filter lives here and nowhere else: `chrome.storage.onChanged` is one
+ * event for every area, and this extension has exactly one area
+ * (`docs/specs/inline-comment-model.md` -> "Storage"), so a change reported for
+ * `sync`, `managed` or `session` is not this extension's data and reaches no
+ * listener at all. No `catch`: the subscription makes no call that can reject, and
+ * the listener it installs is a key read out of an event argument.
+ */
+export function watchChromeStorageLocalChanges(
+  zone: ChromeStorageChangeZoneLike,
+  onChange: StorageKeysChangeListener,
+): () => void {
+  const listener = (changes: Record<string, unknown>, areaName: string): void => {
+    if (areaName !== LOCAL_STORAGE_AREA) {
+      return;
+    }
+    onChange(Object.keys(changes));
+  };
+  zone.addListener(listener);
+  return (): void => {
+    zone.removeListener(listener);
+  };
+}
+
+/**
+ * The live `chrome.storage.onChanged` zone of this browser, reached nowhere else in
+ * shipped code — the same rule that keeps `chrome.storage.local` reads and writes
+ * inside this file, and the reason the page-side listener is testable against a
+ * hand-written zone object.
+ */
+export function createChromeLocalStorageChangeZone(): ChromeStorageChangeZoneLike {
+  return {
+    addListener(listener: StorageAreaChangeListenerLike): void {
+      chrome.storage.onChanged.addListener(listener);
+    },
+    removeListener(listener: StorageAreaChangeListenerLike): void {
+      chrome.storage.onChanged.removeListener(listener);
+    },
+  };
+}
+
+/**
+ * The subscription of one page: hand it a listener, get the teardown back. It is a
+ * function rather than a constant so importing this file never touches the `chrome`
+ * global outside an extension context.
+ */
+export type StorageChangeSource = (onChange: StorageKeysChangeListener) => () => void;
+
+/** The `chrome.storage.local` subscription a content page uses. */
+export function createChromeLocalStorageChangeSource(): StorageChangeSource {
+  const zone = createChromeLocalStorageChangeZone();
+  return (onChange: StorageKeysChangeListener): (() => void) =>
+    watchChromeStorageLocalChanges(zone, onChange);
+}
+
+/** The `chrome.storage.onChanged` callback shape, as this adapter needs it. */
+type StorageAreaChangeListenerLike = (
+  changes: Record<string, unknown>,
+  areaName: string,
+) => void;
+
+/** The area name `chrome.storage.onChanged` reports for `chrome.storage.local`. */
+const LOCAL_STORAGE_AREA = 'local';
+
+/** The slice of `chrome.storage.onChanged` this adapter needs, declared structurally. */
+export interface ChromeStorageChangeZoneLike {
+  addListener(listener: StorageAreaChangeListenerLike): void;
+  removeListener(listener: StorageAreaChangeListenerLike): void;
 }
 
 /** Runs one storage call and re-throws its failure as a `StorageFailureError`. */

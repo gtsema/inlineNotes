@@ -10,6 +10,7 @@ import {
   entryStorageKey,
   isEntryStorageKey,
   slotKeyFromStorageKey,
+  storageChangeConcernsPage,
 } from '../src/core/storage-keys';
 import { SLOT_KEY_ESCAPE_BUDGET, SLOT_KEY_MAX_LENGTH, slotKeyFor } from '../src/core/slot-key';
 
@@ -159,6 +160,46 @@ describe('core storage keys', () => {
     expect(slotKeyFromStorageKey(PAGE_INDEX_KEY)).toBeNull();
     expect(slotKeyFromStorageKey(ENTRY_KEY_PREFIX)).toBeNull();
     expect(slotKeyFromStorageKey('notes:v2:https://example.com/a')).toBeNull();
+  });
+});
+
+describe('which storage changes concern one page (task t4-03 AC2, AC3; ruling A60)', () => {
+  const PAGE = 'https://example.com/a';
+  const OTHER = 'https://example.com/b';
+
+  it('counts the settings record whatever the page is', () => {
+    expect(storageChangeConcernsPage(SETTINGS_KEY, PAGE)).toBe(true);
+    expect(storageChangeConcernsPage(SETTINGS_KEY, null)).toBe(true);
+    expect(storageChangeConcernsPage(SETTINGS_KEY, '')).toBe(true);
+  });
+
+  it('counts the entry slot of exactly that page key', () => {
+    expect(storageChangeConcernsPage(entryStorageKey(PAGE), PAGE)).toBe(true);
+    // The layout trims, so the key of the trimmed page key is the key of the page key.
+    expect(storageChangeConcernsPage(entryStorageKey(PAGE), `  ${PAGE}  `)).toBe(true);
+  });
+
+  it('ignores another page slot, the page index and a key this extension does not own', () => {
+    expect(storageChangeConcernsPage(entryStorageKey(OTHER), PAGE)).toBe(false);
+    // Every write elsewhere touches the index, so the index cannot be the signal.
+    expect(storageChangeConcernsPage(PAGE_INDEX_KEY, PAGE)).toBe(false);
+    expect(storageChangeConcernsPage('some-page-script-key', PAGE)).toBe(false);
+    expect(storageChangeConcernsPage(entryStorageKey(OTHER), null)).toBe(false);
+  });
+
+  it('refuses a near-miss slot instead of matching on a prefix', () => {
+    const own = entryStorageKey(PAGE);
+    expect(storageChangeConcernsPage(`${own}x`, PAGE)).toBe(false);
+    expect(storageChangeConcernsPage(own.slice(0, own.length - 1), PAGE)).toBe(false);
+    expect(storageChangeConcernsPage(ENTRY_KEY_PREFIX, PAGE)).toBe(false);
+  });
+
+  it('is total: an empty page key answers false for entry keys, without the slot guard', () => {
+    // `slotKeyFor` throws on an empty page key; the watch may be handed a pass that
+    // resolved no page key, and a listener must not be a throw path.
+    expect(storageChangeConcernsPage(entryStorageKey(PAGE), '')).toBe(false);
+    expect(storageChangeConcernsPage(entryStorageKey(PAGE), '   ')).toBe(false);
+    expect(storageChangeConcernsPage(entryStorageKey(PAGE), null)).toBe(false);
   });
 });
 

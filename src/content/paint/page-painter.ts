@@ -99,6 +99,22 @@ export interface PagePainter {
    * the comparison is core's `canEdit`, not a rule this layer invents.
    */
   authorNameOfPass(): string | null;
+  /**
+   * The `pageKey` the last pass read its entries under, `null` when that pass had no
+   * address at all.
+   *
+   * Added by task `t4-03` for the two watches of `src/content/refresh/`: a storage
+   * change and a same-document navigation have to know which page this document is
+   * showing *now*, and the only honest answer is the key the last pass resolved. It is
+   * the resolved key, not the key of the current URL: `loadEntries` may answer through
+   * the `origin + pathname` fallback of the page index, so the notes of this document
+   * live under the key the index chose (`inline-comment-model.md` -> "Page lookup"),
+   * and a watch that derived the key from the URL alone would ignore the very slot
+   * this page paints. This module states the key; it owns no rule about what to do
+   * with it, and the content layer still names no storage key
+   * (`tests/content-create-card-boundaries.spec.ts`).
+   */
+  pageKeyOfPass(): string | null;
 }
 
 /** Seams of one pass; a page supplies none of them, a test supplies all of them. */
@@ -161,6 +177,7 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
 
   let painted: PaintedEntry[] = [];
   let authorName: string | null = null;
+  let passPageKey: string | null = null;
 
   async function refresh(): Promise<PagePaintOutcome> {
     // `t3-05` AC2, ruling `A75`: every stage of a pass touches something the page owns
@@ -176,6 +193,7 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       // No address, so no page key, so no page to paint: core's own code for that
       // state is `url_unparsable`.
       clearPaint();
+      passPageKey = null;
       return { pageKey: null, painted: [], skipped: [], readCodes: ['url_unparsable'] };
     }
 
@@ -187,8 +205,11 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       // A read stage that threw is the same answer as a read that could not read: the
       // pass has no trustworthy page state, so it paints nothing from it.
       clearPaint();
+      passPageKey = null;
       return { pageKey: null, painted: [], skipped: [], readCodes: ['storage_unavailable'] };
     }
+
+    passPageKey = page.pageKey;
 
     if (isUntrustworthyRead(page.codes)) {
       // The store did not answer for this pass, so nothing is painted from a page
@@ -261,6 +282,9 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
     },
     authorNameOfPass(): string | null {
       return authorName;
+    },
+    pageKeyOfPass(): string | null {
+      return passPageKey;
     },
   };
 }
