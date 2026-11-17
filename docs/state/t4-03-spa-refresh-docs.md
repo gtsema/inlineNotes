@@ -63,15 +63,38 @@ the cross-tab race, Firefox/Edge.
 ## Attempts log
 
 - attempt 1: brief prepared; delegated last in Stage 4.
+- **2026-11-17: delegated as the code slice only** (README / spec surface / verification split to `t4-04`), with CF1 as its
+  single carried item and `A61` corrected to `A86` before delegation. Delivered four commits, all green:
+  `adfc8e9` (storage watch + url watch, shipped code), `79acb74` (SPA watch tests + the spec lines), `e0ae2ec` (CF1 render
+  pins), `c2d74ab` (a test-side cast so `tsconfig.spec` accepts a `delete` operand).
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the reviewer).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: delivered, copied to `docs/state/t4-03-engineer.md` — AC1–AC3 + CF1 answered by number, 7 deviations
+  declared (including the one `src/core/` addition), 5 residual risks, no blocking open question
 - reviewer verdict: not started
+- **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **778/778** over 41 files (+44),
+  `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 86 INFO, `npm run typecheck` exit 0, tree clean
+
+## PM rulings and acceptances on this task
+
+- `A87`: **the one `src/core/` addition is accepted as key vocabulary, not a rule change.**
+  `storageChangeConcernsPage(storageKey, pageKey)` in `src/core/storage-keys.ts` answers only "can this storage key change
+  what this page shows" — a pure total function next to the existing `slotKeyFromStorageKey`. The layer rules put storage-key
+  vocabulary in core, and letting the content layer decode slot keys itself would have been the actual violation. No existing
+  core rule, code path or error changed; the engineer named the deviation instead of hiding it.
+- `A88`: **`pages:v1` is not a repaint signal.** Every write anywhere updates the index, so watching it would make every open
+  tab repaint for every note stored anywhere — the opposite of `A60`. Consequence accepted: a write that touches only the
+  index is not noticed, and no shipped write does that.
+- Accepted as decisions, not oversights (all recorded in the spec): the watches are never torn down in a content script
+  (teardown exists for tests only); the permanent cost is one `setInterval` at 1000 ms whose body is a `location.href` read
+  and one string compare; `pagehide`/`pageshow` are not triggers because bfcache restore re-runs the pass at load; the url
+  watch is **address-based**, so a same-address re-render (infinite scroll) is not a trigger and the entry stays unpainted
+  until some other event repaints.
 
 ## Browser verification list owned by this task (smoke-only — jsdom cannot answer)
 

@@ -51,7 +51,7 @@ is confirmed on a real browser.
 |---|---|---|
 | `t4-01-popup-list` | **accepted** (`52afe39`+`ecf9a26`+`6a3b3d7`; run 1 died on a provider stream error, recovered by `resume` under `A80`/`A85`, 734 tests, 0 blocking findings) — Angular popup: rows, per-entry checkbox, empty/restricted/name-required states; `A81`–`A84` as ruled; CF1 handed to `t4-03` | overlay AC7, AC10 |
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
-| `t4-03-spa-refresh-docs` | **scope split by the PM (2026-11-17): code slice only** — SPA/history re-resolve, `storage.onChanged` repaint, options-name pickup on a loaded page, plus **CF1** from the `t4-01` review; keeps the browser-only verification list (6 items) | overlay AC8, model AC1 |
+| `t4-03-spa-refresh-docs` | **code slice delivered, review running** (`adfc8e9`+`79acb74`+`e0ae2ec`+`c2d74ab`, 778 tests) — SPA/history re-resolve, `storage.onChanged` repaint, options-name pickup, CF1 closed | overlay AC8, model AC1 |
 | `t4-04-readme-final-verification` | **opened by the same scope split, not started** — Russian README (build → load unpacked → permissions → limits → v1 limitations), spec surface clean (no dangling ids, R3 dedup), R2 empty-name wording, R4 the 40-code-point write; the PM runs the browser list with the user and quotes it | overlay AC9–AC10 surface, model docs |
 
 ## Harness decisions taken by the PM during Stage 1
@@ -249,6 +249,11 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A84`: a **refused** popup write (`setVisible` / `deleteEntry`) stays silent — the popup re-reads the page and shows what
   the store says. Recorded as `Assumption:` because no spec line covers the state and inventing a sentence for it is a larger
   observable change than silence; overturning it costs one string + one spec line + one test.
+- `A87`: an **additive pure helper in `src/core/storage-keys.ts`** (`storageChangeConcernsPage`) is key vocabulary, not a
+  business-rule change, and belongs in core — the real violation would have been the content layer decoding slot keys itself. A
+  brief that says "do not touch core" means "do not change a rule"; an additive helper must still be named as a deviation, as it was.
+- `A88`: **`pages:v1` is not a repaint signal** — every write touches the index, so watching it would repaint every open tab for
+  every note stored anywhere (`A60`). Consequence accepted: a change that touches only the index is unnoticed; no shipped write does that.
 - `A85` (process): a provider **stream error** kills a child mid-sentence with nothing committed, exactly like a timeout.
   Same recovery: `resume` the same session, hand the child the measured tree (`git status`, one-error typecheck summary) and
   order commits per checkpoint. Two such recoveries in two consecutive stages (`t3-03` timeout, `t4-01` stream error) — the mitigation is
