@@ -7,10 +7,13 @@ Run log lives in this file only. A `failed` item opens a fix task; it is never f
 
 ## Preflight (record once)
 
-- Chrome version: `not recorded`
+- Chrome version: **157.0.8103.38**
 - Extension loaded unpacked from `dist/`, freshly rebuilt: `2026-11-18 01:37`
-- `chrome://extensions` install-time warning seen (the `tabs` permission, «читает историю просмотров»): `not recorded`
-- Author name set **from the options UI**, not from the console: `not recorded`
+- `chrome://extensions` install-time warning seen (the `tabs` permission, «читает историю просмотров»): **not seen**. The
+  extension was added unpacked long before `tabs` existed and is only reloaded since; a reload shows no permission warning.
+  The user's word: «Да и не надо». The README clause that asserted Chrome shows it at install was softened to a may-claim the
+  same day — a Chrome-UI sentence needs an observation, and we have the opposite one.
+- Author name set **from the options UI**, not from the console: yes (`t4-02` browser confirmation, re-confirmed in this run)
 - Test pages: article page A (normal length), article page B (very long), one page with a re-rendering block: `not recorded`
 
 ---
@@ -62,8 +65,10 @@ Expected:
 - the card does not freeze: it can be closed and a new selection opens a fresh card;
 - nothing is written — the popup shows the same rows as before;
 - no red error appears in the **page** console (an extension-side caught refusal is not a page error).
-Result: `not verified`
-Notes:
+Result: **passed** — «Появилось, всё ок».
+Notes: the refusal «Выделение больше не найдено на странице» (`src/content/text.ts:99`) rendered on a real page after the text
+node was mutated between the selection and `Сохранить`; the card stayed usable and nothing was written. This is the defect class
+`A75`/`t3-05` exists for: a real engine throws where jsdom answers `false`, so no unit test could have shown this card freezing.
 
 ## 4. Selecting the text of your own note opens the editor, never a create card (`claimSelection` handover, Flow 6)
 
@@ -115,7 +120,7 @@ Notes:
 
 ## Outcome
 
-- Items passed: 1 / 6 — item 2 (hover cost, by observation, no ms recorded)
+- Items passed: 2 / 6 — item 2 (hover cost, by observation), item 3 (detached-node refusal + live card)
 - Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
 - Items failed: 0
 - Items not verified: 4
