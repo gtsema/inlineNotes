@@ -46,8 +46,11 @@ Expected:
 - no long task attributable to the extension (nothing over ~50 ms from a `pointermove` handler);
 - no forced layout storm (the tooltip measures its box at hover time, once per hover, not per event);
 - scrolling and text selection stay smooth; the page does not stutter while the mouse moves.
-Result: `not verified`
-Measured: (worst task ms / handler name)
+Result: **passed** (user observation on a real long article with a full load of notes: «лага нет»)
+Measured: no ms number recorded — the user judged by feel while moving the mouse, not from a trace reading. The handler that
+would show up is `onPointerMove` in `src/content/overlay/tooltip-events.ts:81` (a caret hit-test per move, unthrottled by
+design, ruling `A60` forbids a local throttle). Nothing stuttered, so the accepted cost is confirmed at the human scale; a
+trace number stays unrecorded and this is the weaker half of the verdict.
 
 ## 3. The page replaced the text node between selection and Save (`A75`, `selection_lost`)
 
@@ -112,9 +115,9 @@ Notes:
 
 ## Outcome
 
-- Items passed: 0 / 6
+- Items passed: 1 / 6 — item 2 (hover cost, by observation, no ms recorded)
 - Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
 - Items failed: 0
-- Items not verified: 5
+- Items not verified: 4
 - New tasks opened from this run: none
 - Debt added by this run: the keyboard path into the card is "tab through the rest of the page" (accepted by the user).
