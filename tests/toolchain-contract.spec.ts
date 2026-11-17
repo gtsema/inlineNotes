@@ -170,6 +170,76 @@ describe('layer boundaries', () => {
     }
   });
 
+  describe('the options page is the only writer of the settings record (t4-02 AC5)', () => {
+    const optionsFiles = (): SourceFile[] => sourceFiles('src/options');
+    const optionsCode = (): string => optionsFiles().map((file) => codeOnly(file.text)).join('\n');
+
+    it('names no storage key and calls no storage API of its own', () => {
+      const directStorage = optionsFiles()
+        .filter((file) => codeOnly(file.text).includes('chrome.storage'))
+        .map((file) => file.path);
+      expect(directStorage).toEqual([]);
+
+      const keyImporters = optionsFiles()
+        .filter((file) => importClauses(file.text).some((clause) => /\bSETTINGS_KEY\b/.test(clause)))
+        .map((file) => file.path);
+      expect(keyImporters).toEqual([]);
+
+      const keyLiterals = modulesHoldingLiteral('settings:v1');
+      expect(keyLiterals).toEqual(['src/core/storage-keys.ts']);
+    });
+
+    it('reaches chrome.storage.local only through the one port adapter factory', () => {
+      const factories = optionsFiles()
+        .filter((file) => codeOnly(file.text).includes('createChromeLocalStoragePort'))
+        .map((file) => file.path);
+      expect(factories).toEqual(['src/options/options.component.ts']);
+    });
+
+    it('is the only shipped caller of the settings save and of name generation (spec ":75")', () => {
+      // `inline-comment-model.md` -> "Author name": `t4-02-options-name` is the only
+      // shipped caller of the settings save and the only place a first-run name is
+      // wired. The claim needs a grep, not a comment: a second `generateAuthorName`
+      // call site would hand the reader two different authors.
+      expect(importersOf('saveSettings')).toEqual(['src/options/author-name-service.ts']);
+      expect(importersOf('generateAuthorName')).toEqual(['src/options/author-name-service.ts']);
+    });
+
+    it('measures the author cap in code points, never in UTF-16 units (ruling A55)', () => {
+      const code = optionsCode();
+      expect(code).toMatch(/\bsliceCodePoints\b/);
+      expect(code).toMatch(/\bcodePointLength\b/);
+      // The `t1-01` stub's `maxlength="40"` counted UTF-16 units and is gone: the
+      // input itself refuses the code point past the cap.
+      expect(code).not.toMatch(/maxlength/i);
+      expect(code).not.toMatch(/\.length\s*[<>]/);
+    });
+
+    it('holds one name-refusal wording on this surface and no third variant', () => {
+      const strings = readFileSync(join(projectRoot, 'src', 'options', 'text.ts'), 'utf8');
+      expect(strings).toContain("'Имя обязательно'");
+      // `Укажите имя в настройках` belongs to the card and the popup; a third
+      // sentence for the same state is the hand-over this task must not repeat.
+      // Comments may name the other surface; a string literal may not.
+      expect(codeOnly(strings)).not.toContain('Укажите имя');
+      expect(codeOnly(strings)).not.toContain('Задайте имя');
+      expect(codeOnly(strings)).not.toContain('Введите имя');
+    });
+
+    it('keeps the component a facade with no core rule of its own', () => {
+      const component = codeOnly(readFileSync(join(projectRoot, 'src', 'options', 'options.component.ts'), 'utf8'));
+      for (const rule of [
+        'loadSettings',
+        'saveSettings',
+        'generateAuthorName',
+        'validateAuthorName',
+        'MAX_AUTHOR_NAME_CODE_POINTS',
+      ]) {
+        expect(component).not.toMatch(new RegExp(`\\b${rule}\\b`));
+      }
+    });
+  });
+
   it('every UI layer keeps its strings in one constants module', () => {
     for (const constants of ['src/content/text.ts', 'src/popup/text.ts', 'src/options/text.ts']) {
       expect(sourceFiles('src').map((file) => file.path)).toContain(constants);

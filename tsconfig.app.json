@@ -2,7 +2,14 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["es2022", "dom"],
-    "types": []
+    // `chrome` is in scope here only because the popup and the options page share
+    // one program with `src/core/`, and the options page reaches storage through
+    // the single port adapter in `src/content/store/chrome-storage-port.ts`
+    // (`t4-02`). The boundary stays mechanical rather than conventional: the grep
+    // tests in `tests/toolchain-contract.spec.ts` pin that `chrome.storage` lives
+    // in exactly one shipped file and that the options page names no storage API
+    // and no storage key of its own.
+    "types": ["chrome"]
   },
   "files": ["src/popup/main.ts", "src/options/main.ts"],
   "include": ["src/popup/**/*.ts", "src/options/**/*.ts", "src/core/**/*.ts"]

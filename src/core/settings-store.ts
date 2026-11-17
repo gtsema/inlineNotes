@@ -23,6 +23,13 @@
  *
  * Codes are machine-readable only; the Russian wording is mapped in the UI layer.
  *
+ * Internal helpers (`A57`, same precedent as `assertCreatable` under `A52`):
+ * `settingsValueOf` and `settingsFromStorageValue` build and decode the record for
+ * `loadSettings` and `saveSettings` only. They are exported for the unit tests and
+ * no shipped module may import them — composing a settings record by hand would
+ * make that module a second reader or writer of `settings:v1`. The ban is pinned
+ * by a grep test, not by this sentence.
+ *
  * Purity: no DOM, no `chrome.*`, no clock, no randomness, no network. The only
  * impure collaborator is the injected `StoragePort`.
  */
