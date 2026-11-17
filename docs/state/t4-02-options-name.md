@@ -57,7 +57,16 @@ The popup list (`t4-01`), `storage.onChanged` and SPA refresh (`t4-03`), any pag
 
 ## Attempts log
 
-- attempt 1: brief prepared while `t3-01` was reviewed; delegated in Stage 4.
+- attempt 1: brief prepared while `t3-01` was reviewed.
+- **2026-11-17: this task is pulled forward, ahead of `t3-03-content-editor`**, out of the Stage 4 position. Reason: the
+  Stage 3 runtime loop is unreachable without it — the content layer refuses to open the card without a valid author name
+  (`src/content/create/create-note.ts:99-100`, `A31` / model AC9 / overlay AC10), and `src/options/options.component.ts` is
+  still the `t1-01` placeholder, so the user had to write `settings:v1` by hand from the extension console to test anything
+  at all. Recorded in `docs/state/plan-implementation.md`.
+- Gate order in this brief predates ruling `A62`: run them as `npm run build`, then `npm test`, then
+  `node scripts/check-agent-config.mjs` — one test fails when `dist/` is missing.
+- This task is the first shipped consumer of `loadSettings`/`saveSettings` in the options layer and the only writer of
+  `settings:v1` (`t3-01-settings-read-core` review handed the residual risks; AC5 of this task pins it).
 
 ## Delegation count
 

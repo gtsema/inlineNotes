@@ -67,6 +67,16 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 - engineer report: not started
 - reviewer verdict: not started
 
+## Browser verification list owned by this task (smoke-only — jsdom cannot answer)
+
+1. A real **`Tab` key walk** through an open card: textarea → `Сохранить` → `Отмена`. `t3-02b` AC1 pins rendered order,
+   focusability and the absence of `tabindex`, which is the jsdom form of the rule, not a key walk
+   (`docs/state/t3-02b-review.md` remark 4).
+2. An **unthrottled `pointermove`** over a painted range in a long article: cost is invisible on a short page
+   (`t3-02` review remark 5).
+3. **Select text, let the site replace the node, press `Сохранить`** — the browser case jsdom cannot produce
+   (`docs/state/t3-02b-review.md` remark 1, closed in code by `t3-05`, verified here).
+
 ## Open questions
 
 - `A59` is worth asking the user (a permanent timer on every page vs. a missed SPA navigation). Default applied.

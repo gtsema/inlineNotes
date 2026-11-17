@@ -40,8 +40,9 @@ is confirmed on a real browser.
 | `t3-01-content-create-card` | **accepted** (`43dd131`+`5f4b82d`, AC2 closed by `ec4ee45` in `t3-01b`) — shadow host, capture, create card, counter, message map | overlay AC1, AC9, AC11, model AC9 |
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
 | `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
-| `t3-02-content-highlight-tooltip` | **changes requested, card held open** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 and every boundary check pass, **two carried fixes vanished** → closure proposed as `t3-02b` | overlay AC2, AC3 |
+| `t3-02-content-highlight-tooltip` | **accepted** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 green, carried findings 1–3 closed by `t3-02b`, **confirmed on a real browser** | overlay AC2, AC3 |
 | `t3-02b-carried-test-fixes` | **delivered** (`a6997f9`+`3462d2a`, attempt 1, 626 tests, no `src/` file touched): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
+| `t3-05-page-boundary-throw-safety` | opened by `A75`: guard the page-boundary throws at the content call sites — a detached-node `intersectsNode` throw must answer `selection_lost` instead of freezing the card, `refresh()` must provably not reject, and the throw list moves into the spec | overlay Edge Cases, model `selection_lost` |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
@@ -219,3 +220,11 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   through `document.adoptedStyleSheets`, so `A41` **variant 1 is confirmed** and variant 2 is dropped; overlay AC3
   (hover tooltip, click → opaque, no editor) and the dismiss-on-scroll rule are confirmed; no console errors. Only
   `pointermove` cost on a very long article stays unverified and is carried to the `t4-03` verification list.
+- `A75` (**new task `t3-05-page-boundary-throw-safety`**): a page-boundary throw is caught at the **content call site**, never
+  in core, and converts into an existing refusal code instead of wedging a widget. Trigger: `range.intersectsNode` throws
+  `InvalidAccessError` in a real engine when the selected node was detached, jsdom answers `false`, and the pinned
+  `selection_lost` is therefore a jsdom-only answer — the card freezes `busy` with `Сохранить` disabled and no message.
+  Order after `t4-02`: the editor must not be built on a save path that can wedge.
+- `A76`: `extension-engineer` may edit `docs/specs/code-review-flow.md` **only** under a numbered PM ruling that names the
+  file, cited in the commit message (resolves the `docs/specs/INDEX.md` ownership row for that spec, which names
+  `project-manager`).

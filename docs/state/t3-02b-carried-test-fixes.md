@@ -77,20 +77,45 @@ fix it: the fix becomes its own task with its own budget. No editor work (`t3-03
   personally: `npm run build` green, `npm test` **626/626** over 33 files (+7 tests vs `t3-02`), checker
   **0 errors**, tree clean. The Carried-fix checklist was answered by number, all three `done` — the `A72`
   rule worked on its first use.
+- review `docs/state/t3-02b-review.md`: **accepted**, **no blocking findings**. All three carried numbers `closed`;
+  the reviewer also proved the `A29` test is load-bearing by reasoning about what it would assert if the DOM mutation
+  were removed (§4). **Parent verdict stated explicitly: `t3-02` can now be accepted** (§6).
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered).
-Remaining: 1 (the reviewer, who also performs the **parent-closure re-check** of `t3-02` findings 1–2 and must
-state the parent verdict explicitly — precedent: `docs/state/t3-01b-review.md`).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2 of 4** (engineer delivered, reviewer accepted).
+Task closed.
 The reviewer of this task also performs the **parent-closure re-check** of `t3-02` findings 1–2 and must
 state the parent verdict explicitly (precedent: `docs/state/t3-01b-review.md`).
 
 ## Verdicts
 
 - engineer report: attempt 1 delivered, copied to `docs/state/t3-02b-engineer.md`
-- reviewer verdict: not started
-- parent `t3-02` verdict: held open until this task's review re-checks findings 1–2
+- reviewer verdict: **accepted**, no blocking findings (`docs/state/t3-02b-review.md`); parent `t3-02` cleared for
+  acceptance by the same artifact
+- **task status: accepted** (`a6997f9`+`3462d2a`)
+
+## PM decisions on the review remarks
+
+1. **Detached-node throw at the save moment — real defect, its own task (`A75`).** `src/content/capture/selection-span.ts:150`
+   calls `range.intersectsNode(node)` unguarded; the DOM spec throws `InvalidAccessError` when the node's root differs from
+   the range's root — exactly the case the test simulates by detaching the text node. jsdom answers `false`, so the pinned
+   `selection_lost` is a jsdom-only answer: a real engine can throw through `create-note.ts:104` into
+   `create-card-controller.tsx:128-146`, which does not catch, leaving the card `busy` with `Сохранить` disabled and no
+   refusal line. Same family as `t3-02` remark 4 (`page-painter.ts:70` claims "never throws", `main.ts:57` runs it
+   unhandled). Opened as **`t3-05-page-boundary-throw-safety`**; not folded into `t3-03`, because building the editor on a
+   save path that can wedge is exactly what the layering rules forbid.
+2. **Spec ownership (`A76`)**: `docs/specs/INDEX.md` names `project-manager` the owner of `docs/specs/code-review-flow.md`,
+   and the edit was made by the engineer. Authorization recorded here and in the plan ledger: an engineer may edit that file
+   **only** under a numbered PM ruling that names it, and the ruling must be cited in the commit message.
+3. **Local history rewrite** (`git reset --soft HEAD~2` before the reviewed SHAs, disclosed at report §4.4): accepted —
+   nothing was pushed, the two-commit shape is what was briefed. Recorded, no action.
+4. **`Tab` traversal is smoke-only** (jsdom has no `Tab` key): added to the `t4-03` verification list together with the two
+   `t3-02` smoke-only items.
+5. **Spec one commit after the tests**: as briefed; no shipped behavior changed in this range, so the same-commit rule does not
+   engage. No action.
+- parent `t3-02` verdict: **accepted** — cleared by the parent-closure re-check in
+  `docs/state/t3-02b-review.md` §6 ("`t3-02` can now be accepted")
 
 ## Open questions
 

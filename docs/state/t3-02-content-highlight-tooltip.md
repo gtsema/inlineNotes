@@ -215,8 +215,13 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** — attempt
 
 - engineer report: attempt 1 crashed (no report, no commit); attempt 2 report in `docs/state/t3-02-engineer.md`
 - reviewer verdict: **changes requested** (copied to `docs/state/t3-02-review.md`)
-- parent status: **held open** — the painting and tooltip halves are verified good and stay committed; the card is not
-  accepted until carried fixes 1–2 are closed, exactly as `t3-01` was held open until `t3-01b` was accepted
+- parent status: **accepted** — the two carried findings were closed by `t3-02b` (`a6997f9`+`3462d2a`) and the reviewer of
+  that slice re-checked findings 1–3 and stated the parent verdict (`docs/state/t3-02b-review.md` §6). Its own AC1–AC5, the
+  browser smoke (§Runtime verification) and every boundary check are green.
+- remarks still open after acceptance, with the PM's placement: remark 1 (AC wording) **fixed in the task file**; remark 2
+  (mark spec AC4/AC5 and Flow 5/6 as not-yet-shipped) → **`t3-03`**; remark 3 (`PaintedEntry.tooltipBox` has no consumer) →
+  **`t3-03`**; remark 4 (`refresh()` claims "never throws", unguarded) → **`t3-05`**; remark 5 (unthrottled `pointermove`)
+  → **`t4-03` smoke list**; remark 6 (`STYLEABLE_NAME` guard) → accepted as designed, no action.
 
 ## Runtime verification on a real browser (Stage 3 smoke, user, 2026-11-17)
 
