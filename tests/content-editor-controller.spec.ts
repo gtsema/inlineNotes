@@ -744,7 +744,7 @@ describe('AC4: Удалить removes the entry and its paint at once', () => {
   });
 });
 
-describe('AC5: a re-selection inside the editor moves the span, and the overlap rule answers', () => {
+describe('AC5: a re-selection inside the editor answers the overlap rule, with the edited entry excluded', () => {
   it('refuses a move onto another entry with the overlap sentence and writes nothing', async () => {
     const fixture = await boot();
     openOwn(fixture);
