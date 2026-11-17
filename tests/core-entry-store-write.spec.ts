@@ -1002,4 +1002,85 @@ describe('the resolved-span steps of a create through the write API (t2-04, A46)
     expect(storedRecords(port, SLOT_A)).toHaveLength(MAX_ENTRIES_PER_PAGE);
     expect(writesOf(port)).toEqual([]);
   });
+
+  it('counts entries of every author toward the cap (A93 keeps step 4 whole-page)', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(
+      port,
+      PAGE_A,
+      many(PAGE_A, MAX_ENTRIES_PER_PAGE).map((record: unknown) => ({
+        ...(record as Record<string, unknown>),
+        authorName: 'someone-else',
+      })),
+    );
+
+    // Not one of the 20 entries is the reader's own, so steps 5 and 6 have nothing
+    // to refuse — and step 4 still refuses, because the cap is per `pageKey`.
+    expect(
+      await create(port, {
+        comment: 'my note',
+        spans: spansOf({ start: 0, end: 5 }, [['000000000000', { start: 0, end: 5 }]]),
+      }),
+    ).toEqual({ ok: false, code: 'page_limit' });
+    expect(storedRecords(port, SLOT_A)).toHaveLength(MAX_ENTRIES_PER_PAGE);
+    expect(writesOf(port)).toEqual([]);
+  });
+
+  it('refuses steps 5 and 6 only against entries of the current author (t5-01, A93, A99)', async () => {
+    const onOwnSpan: readonly (readonly [string, CodePointRange])[] = [[ID, { start: 10, end: 20 }]];
+
+    // A foreign entry on the very same range with the very same comment: the
+    // candidate is stored, and the page then holds two notes on one span.
+    const foreignPort = indexedPort([PAGE_A]);
+    seedSlot(foreignPort, PAGE_A, [
+      storedEntry({ id: ID, pageKey: PAGE_A, authorName: 'someone-else', comment: 'my note' }),
+    ]);
+
+    const created = await create(foreignPort, {
+      spans: spansOf({ start: 10, end: 20 }, onOwnSpan),
+    });
+    expect(created).toMatchObject({ ok: true, entry: { authorName: NAME, comment: 'my note' } });
+    expect(storedRecords(foreignPort, SLOT_A)).toHaveLength(2);
+    expect(storedRecords(foreignPort, SLOT_A)[1]).toMatchObject({
+      authorName: NAME,
+      comment: 'my note',
+    });
+
+    // An intersecting foreign range is refused no more than an identical one is.
+    const overlapPort = indexedPort([PAGE_A]);
+    seedSlot(overlapPort, PAGE_A, [
+      storedEntry({ id: ID, pageKey: PAGE_A, authorName: 'someone-else', comment: 'other note' }),
+    ]);
+    expect(
+      await create(overlapPort, { comment: 'my note', spans: spansOf({ start: 12, end: 24 }, onOwnSpan) }),
+    ).toMatchObject({ ok: true });
+
+    // The same two attempts against the same stored entry authored by the reader:
+    // only the author differs, and both codes come back.
+    const ownPort = indexedPort([PAGE_A]);
+    seedSlot(ownPort, PAGE_A, [
+      storedEntry({ id: ID, pageKey: PAGE_A, authorName: NAME, comment: 'my note' }),
+    ]);
+    expect(
+      await create(ownPort, { comment: 'other note', spans: spansOf({ start: 12, end: 24 }, onOwnSpan) }),
+    ).toEqual({ ok: false, code: 'overlap' });
+
+    const identicalOwnPort = indexedPort([PAGE_A]);
+    seedSlot(identicalOwnPort, PAGE_A, [
+      storedEntry({ id: ID, pageKey: PAGE_A, authorName: NAME, comment: 'my note' }),
+    ]);
+    expect(
+      await create(identicalOwnPort, { comment: 'my note', spans: spansOf({ start: 10, end: 20 }, onOwnSpan) }),
+    ).toEqual({ ok: false, code: 'duplicate' });
+
+    // A stored record whose author only differs by whitespace is the reader's own
+    // (`A99`), so it blocks exactly like a byte-identical one.
+    const paddedPort = indexedPort([PAGE_A]);
+    seedSlot(paddedPort, PAGE_A, [
+      storedEntry({ id: ID, pageKey: PAGE_A, authorName: '  reader-one  ', comment: 'my note' }),
+    ]);
+    expect(
+      await create(paddedPort, { comment: 'my note', spans: spansOf({ start: 10, end: 20 }, onOwnSpan) }),
+    ).toEqual({ ok: false, code: 'duplicate' });
+  });
 });

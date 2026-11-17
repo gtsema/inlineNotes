@@ -79,7 +79,9 @@ export interface CreateAttempt {
    * Ranges for the overlap and duplicate steps, from one re-resolve pass (`A37`):
    * the candidate plus every existing entry of this page. Absent means the caller
    * gave core no stream to resolve against, and steps 5 and 6 cannot run; the
-   * content layer always supplies them (`A22`, `A24`).
+   * content layer always supplies them (`A22`, `A24`). The map is keyed by `id`
+   * and is read only by `id`, so it may carry the ranges of entries the author
+   * filter of `A93` removes from the scanned list.
    */
   spans?: ResolvedSpans;
 }
@@ -136,6 +138,27 @@ export function canEdit(entry: Entry, currentName: string): boolean {
   return isSameAuthor(entry.authorName, currentName);
 }
 
+/**
+ * The `own entry` half of a page list: exactly the entries `isSameAuthor` accepts
+ * as `currentName`, in the order they were given (rulings `A93`, `A99`).
+ *
+ * Why a projection and not a predicate inside the overlap check: `A93` makes the
+ * `overlap` and `duplicate` refusals per author, while the entry cap stays
+ * whole-page and the popup stays whole-page, so the rule is "which entries does
+ * this question look at", not "how is a range compared". Both shipped call sites
+ * — the creation gate below and the editor's re-selection check in
+ * `src/content/editor/edit-entry.ts` (`A100`) — feed their finders from this one
+ * function, and `src/core/entry-overlap.ts` stays author-blind, so it can never
+ * grow a second idea of who the reader is.
+ *
+ * Identity is `isSameAuthor`, the same comparison `canEdit` and the `own entry`
+ * label use: trimmed, case-sensitive, an empty side matching nothing (`A99`). A
+ * stored record authored `"Я "` therefore belongs to the reader named `"Я"`.
+ */
+export function entriesOfAuthor(entries: readonly Entry[], currentName: string): Entry[] {
+  return entries.filter((entry: Entry) => isSameAuthor(entry.authorName, currentName));
+}
+
 /** Generates the first-run author name: 8 lowercase base36 characters. */
 export function generateAuthorName(rng: RandomSource): string {
   return randomBase36(rng, GENERATED_AUTHOR_NAME_LENGTH);
@@ -156,9 +179,12 @@ export function randomId(rng: RandomSource): string {
  * returns `null`, and an empty comment is refused by `comment_empty`.
  *
  * Steps 5 and 6 work on the resolved code-point ranges of the current stream, not
- * on stored anchor text (`A37`). Hidden entries block (`A22`), stale entries do
- * not (`A24`). When both match, the more specific code is reported: an identical
- * entry also overlaps, so `duplicate` wins over `overlap` (ruling `A23`).
+ * on stored anchor text (`A37`), and they scan only the entries of the current
+ * author (`entriesOfAuthor`, rulings `A93`, `A99`): an entry of another author
+ * intersects nothing here and duplicates nothing here, while step 4 still counts
+ * every entry of the page whatever its author. Hidden entries block (`A22`), stale
+ * entries do not (`A24`). When both match, the more specific code is reported: an
+ * identical entry also overlaps, so `duplicate` wins over `overlap` (ruling `A23`).
  */
 export function assertCreatable(attempt: CreateAttempt): CreateBlockCode | null {
   if (!validateAuthorName(attempt.currentName).ok) {
@@ -183,10 +209,11 @@ export function assertCreatable(attempt: CreateAttempt): CreateBlockCode | null 
   }
 
   const candidate: CandidateSpan = { range: spans.candidate, comment: comment.normalized };
-  if (findOverlappingEntry(candidate, attempt.entries, spans.byEntryId) === null) {
+  const ownEntries = entriesOfAuthor(attempt.entries, attempt.currentName);
+  if (findOverlappingEntry(candidate, ownEntries, spans.byEntryId) === null) {
     return null;
   }
-  return findDuplicateEntry(candidate, attempt.entries, spans.byEntryId) === null
+  return findDuplicateEntry(candidate, ownEntries, spans.byEntryId) === null
     ? 'overlap'
     : 'duplicate';
 }

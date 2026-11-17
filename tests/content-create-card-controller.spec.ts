@@ -18,7 +18,9 @@
  *   map statically; this file proves the runtime half of AC5: with no usable name
  *   in the settings the card never opens, and the two create refusals the user can
  *   actually hit (`overlap`, `duplicate`) reach the page as two different
- *   sentences (`A47`);
+ *   sentences (`A47`) — and since task `t5-01` it also proves that those two
+ *   sentences answer **only against entries of the current author**, so a span
+ *   another reader holds is free (`A93`, `A99`);
  * - the measurement rulings of `t3-01b` are proven in situ: a measurement that
  *   throws leaves no card and no write (`A64`), a span whose fragments all measure
  *   zero area is placed by the viewport rule (`A65`), and a page that carries an
@@ -76,6 +78,8 @@ import { MemoryStoragePort } from './support/memory-storage-port';
 
 const PAGE_URL = 'https://example.test/article';
 const AUTHOR = 'reader-one';
+/** Another reader's name, for the per-author pins of ruling `A93`. */
+const FOREIGN_AUTHOR = 'reader-two';
 const STAMP = '2026-01-02T03:04:05.006Z';
 const VIEWPORT = { width: 1280, height: 800 };
 /** The box the injected range factory reports for the selected fragment. */
@@ -313,9 +317,16 @@ async function seedAuthor(port: MemoryStoragePort): Promise<void> {
 /**
  * Stores one entry through the core write API, with the spans the page-side create
  * would hand it, so `overlap` and `duplicate` are tested against a real record
- * instead of a hand-made slot value.
+ * instead of a hand-made slot value. `authorName` defaults to the seeded settings
+ * author, because a seed of **another** author is what the per-author pins of
+ * ruling `A93` need.
  */
-async function seedEntry(port: MemoryStoragePort, range: Range, comment: string): Promise<void> {
+async function seedEntry(
+  port: MemoryStoragePort,
+  range: Range,
+  comment: string,
+  authorName: string = AUTHOR,
+): Promise<void> {
   const stream = buildTextStream(document.body);
   const span = captureSpan(stream, range);
   if (span === null) {
@@ -326,7 +337,7 @@ async function seedEntry(port: MemoryStoragePort, range: Range, comment: string)
     text: span.anchor.text,
     comment,
     anchor: span.anchor,
-    currentName: AUTHOR,
+    currentName: authorName,
     spans: { candidate: span.candidate, byEntryId: new Map() },
     now: STAMP,
     rng: () => 0.25,
@@ -657,6 +668,51 @@ describe('Сохранить goes through the core write path (AC4)', () => {
     expect(line).not.toBe(REFUSAL_TEXT.overlap);
     const page = await loadEntries(fixture.port, PAGE_URL);
     expect(page.entries).toHaveLength(1);
+  });
+
+  it('lets a create through over the span of another reader, identical comment and all (t5-01, A93)', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await seedEntry(fixture.port, rangeIn(textOf('p1'), 4, 15), 'same note', FOREIGN_AUTHOR);
+
+    await fixture.controller.capture();
+    await typeAndSave(fixture.overlay, 'same note');
+
+    // Equal resolved range AND equal normalized comment, but the stored entry
+    // belongs to another reader: neither `duplicate` nor `overlap` answers, and no
+    // refusal sentence appears (`A93`; the sentences themselves are unchanged, `A47`).
+    expect(refusalLineOf(fixture.overlay)).toBeNull();
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(2);
+    expect(page.entries.map((entry: Entry) => entry.authorName)).toEqual([FOREIGN_AUTHOR, AUTHOR]);
+    expect(page.entries.map((entry: Entry) => entry.comment)).toEqual(['same note', 'same note']);
+    expect(page.entries[0]?.text).toBe(page.entries[1]?.text);
+  });
+
+  it('lets a create through over an intersecting foreign span and still refuses an own one (t5-01, A93)', async () => {
+    const foreignFixture = mount(selection('p1', 4, 15));
+    await seedAuthor(foreignFixture.port);
+    await seedEntry(foreignFixture.port, rangeIn(textOf('p1'), 0, 10), 'foreign half', FOREIGN_AUTHOR);
+
+    await foreignFixture.controller.capture();
+    await typeAndSave(foreignFixture.overlay, 'my half');
+
+    const foreignPage = await loadEntries(foreignFixture.port, PAGE_URL);
+    expect(refusalLineOf(foreignFixture.overlay)).toBeNull();
+    expect(foreignPage.entries).toHaveLength(2);
+
+    // The control: the same overlapping candidate against an entry of the current
+    // author keeps the `overlap` sentence, so only the author changed.
+    const ownFixture = mount(selection('p1', 4, 15));
+    await seedAuthor(ownFixture.port);
+    await seedEntry(ownFixture.port, rangeIn(textOf('p1'), 0, 10), 'my other note');
+
+    await ownFixture.controller.capture();
+    await typeAndSave(ownFixture.overlay, 'my half');
+
+    expect(refusalLineOf(ownFixture.overlay)).toBe(REFUSAL_TEXT.overlap);
+    const ownPage = await loadEntries(ownFixture.port, PAGE_URL);
+    expect(ownPage.entries).toHaveLength(1);
   });
 
   it('lets a create through when the only existing entry of the page went stale (A24)', async () => {

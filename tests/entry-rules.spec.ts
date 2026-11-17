@@ -16,6 +16,7 @@ import {
   canEdit,
   clearPageEntries,
   codePointLength,
+  entriesOfAuthor,
   generateAuthorName,
   isSameAuthor,
   randomId,
@@ -387,6 +388,295 @@ describe('edit rights and creation gate (AC4)', () => {
     expect(assertCreatable({ entries: entriesForPage(0), comment: 'заметка', currentName: 'Анна' })).toBeNull();
     expect(assertCreatable({ entries: entriesForPage(19), comment: '😀'.repeat(256), currentName: ' Анна ' }))
       .toBeNull();
+  });
+});
+
+/**
+ * The per-author creation gate of task `t5-01` (model spec AC33; rulings `A93`,
+ * `A99`, `A100`). The nine acceptance criteria of the task card are numbered in the
+ * test names, so an acceptance review can walk them one by one.
+ *
+ * What changed and what did not: steps 5 and 6 of Flow 3 scan the `own entry` half
+ * of the page list, while step 4 (the 20-entry cap) and every other creation rule
+ * still see the whole list. `src/core/entry-overlap.ts` is untouched and stays
+ * author-blind — the filter is applied to the list handed to it.
+ */
+describe('the creation gate answers overlap and duplicate per author (t5-01 AC1-AC8)', () => {
+  const OWN = 'Анна';
+  const FOREIGN = 'Борис';
+
+  /** One span resolved onto both entries of a mixed page. */
+  function spansOn(
+    entries: readonly Entry[],
+    entrySpan: CodePointRange,
+    candidate: CodePointRange,
+  ): ResolvedSpans {
+    return { candidate, byEntryId: rangesOf(entries, entrySpan) };
+  }
+
+  function ownAndForeign(): Entry[] {
+    return [
+      entryWith({ id: 'own-note', authorName: OWN, comment: 'моя заметка' }),
+      entryWith({ id: 'foreign-note', authorName: FOREIGN, comment: 'чужая заметка' }),
+    ];
+  }
+
+  it('AC1 — the same author on the same words with the same comment is still a duplicate', () => {
+    const entries = ownAndForeign();
+
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: spansOn(entries, { start: 10, end: 20 }, { start: 10, end: 20 }),
+      }),
+    ).toBe('duplicate');
+  });
+
+  it('AC2 — the same author on an intersecting span is still an overlap', () => {
+    const entries = ownAndForeign();
+
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'другая заметка',
+        currentName: OWN,
+        spans: spansOn(entries, { start: 10, end: 20 }, { start: 12, end: 24 }),
+      }),
+    ).toBe('overlap');
+  });
+
+  it('AC3 — another author\'s identical note on the same words does not refuse a duplicate', () => {
+    const foreign = [entryWith({ id: 'foreign-note', authorName: FOREIGN, comment: 'моя заметка' })];
+
+    // Equal range and equal comment, different author: `duplicate` needs an own
+    // entry, so the candidate is created (ruling `A93`).
+    expect(
+      assertCreatable({
+        entries: foreign,
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: spansOn(foreign, { start: 10, end: 20 }, { start: 10, end: 20 }),
+      }),
+    ).toBeNull();
+  });
+
+  it('AC4 — another author\'s intersecting span does not refuse an overlap', () => {
+    const foreign = [entryWith({ id: 'foreign-note', authorName: FOREIGN })];
+
+    expect(
+      assertCreatable({
+        entries: foreign,
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: spansOn(foreign, { start: 10, end: 20 }, { start: 12, end: 24 }),
+      }),
+    ).toBeNull();
+
+    // Same candidate against the same stored entry, now authored by the reader:
+    // the only difference is the author, and the answer flips.
+    expect(
+      assertCreatable({
+        entries: [entryWith({ id: 'foreign-note', authorName: OWN })],
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: spansOn(foreign, { start: 10, end: 20 }, { start: 12, end: 24 }),
+      }),
+    ).toBe('overlap');
+  });
+
+  it('AC5 — a page mixing own and foreign entries answers from the own half only', () => {
+    const entries = ownAndForeign();
+    const byId = new Map<string, CodePointRange>([
+      ['own-note', { start: 60, end: 70 }],
+      ['foreign-note', { start: 30, end: 34 }],
+    ]);
+
+    // The candidate resolves onto the foreign entry's range only: created.
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate: { start: 30, end: 34 }, byEntryId: byId },
+      }),
+    ).toBeNull();
+
+    // Identical to the foreign entry in range AND comment: still created, because
+    // `duplicate` needs an own entry (`A23` + `A93`).
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'чужая заметка',
+        currentName: OWN,
+        spans: { candidate: { start: 30, end: 34 }, byEntryId: byId },
+      }),
+    ).toBeNull();
+
+    // The same candidate moved onto the own entry's range: refused again, and the
+    // comment decides which of the two codes (`A23` unchanged).
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'другая заметка',
+        currentName: OWN,
+        spans: { candidate: { start: 62, end: 66 }, byEntryId: byId },
+      }),
+    ).toBe('overlap');
+    expect(
+      assertCreatable({
+        entries,
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate: { start: 60, end: 70 }, byEntryId: byId },
+      }),
+    ).toBe('duplicate');
+  });
+
+  it('AC6 — the 20-entry cap still counts every entry of the page, whatever its author', () => {
+    const mixed = entriesForPage(MAX_ENTRIES_PER_PAGE).map((entry: Entry, index: number) =>
+      entryWith({ id: entry.id, authorName: index % 2 === 0 ? OWN : FOREIGN }),
+    );
+    const allForeign = entriesForPage(MAX_ENTRIES_PER_PAGE).map((entry: Entry) =>
+      entryWith({ id: entry.id, authorName: FOREIGN }),
+    );
+
+    expect(assertCreatable({ entries: mixed, comment: 'моя заметка', currentName: OWN })).toBe(
+      'page_limit',
+    );
+    expect(assertCreatable({ entries: allForeign, comment: 'моя заметка', currentName: OWN })).toBe(
+      'page_limit',
+    );
+    // One entry fewer, and the author mix changes nothing about the answer.
+    expect(
+      assertCreatable({
+        entries: allForeign.slice(1),
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate: { start: 0, end: 4 }, byEntryId: new Map<string, CodePointRange>() },
+      }),
+    ).toBeNull();
+  });
+
+  it('AC7 — a hidden own entry still blocks and a stale entry still does not (A22, A24)', () => {
+    const hiddenOwn = entryWith({ id: 'hidden-own', authorName: OWN, visible: false });
+    const hiddenForeign = entryWith({ id: 'hidden-foreign', authorName: FOREIGN, visible: false });
+    const span: CodePointRange = { start: 10, end: 20 };
+    const candidate: CodePointRange = { start: 12, end: 13 };
+
+    expect(
+      assertCreatable({
+        entries: [hiddenOwn],
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate, byEntryId: new Map<string, CodePointRange>([['hidden-own', span]]) },
+      }),
+    ).toBe('overlap');
+    expect(
+      assertCreatable({
+        entries: [hiddenForeign],
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate, byEntryId: new Map<string, CodePointRange>([['hidden-foreign', span]]) },
+      }),
+    ).toBeNull();
+
+    // Stale means absent from the map, and a stale OWN entry blocks nothing (`A24`).
+    expect(
+      assertCreatable({
+        entries: [hiddenOwn, hiddenForeign],
+        comment: 'моя заметка',
+        currentName: OWN,
+        spans: { candidate, byEntryId: new Map<string, CodePointRange>() },
+      }),
+    ).toBeNull();
+  });
+
+  it('AC8 — the gate uses the one author identity, trimmed and case-sensitive (A99)', () => {
+    const span: CodePointRange = { start: 10, end: 20 };
+    const trailingSpace = entryWith({ id: 'trailing', authorName: 'Я ' });
+    const trailingRanges = new Map<string, CodePointRange>([['trailing', span]]);
+
+    // A stored record authored `"Я "` belongs to the reader named `"Я"`, exactly as
+    // `canEdit` decides: it blocks, it does not silently become a foreign entry.
+    expect(
+      assertCreatable({
+        entries: [trailingSpace],
+        comment: 'заметка',
+        currentName: 'Я',
+        spans: { candidate: { start: 12, end: 13 }, byEntryId: trailingRanges },
+      }),
+    ).toBe('overlap');
+    expect(
+      assertCreatable({
+        entries: [trailingSpace],
+        comment: 'заметка',
+        currentName: '  Я  ',
+        spans: { candidate: span, byEntryId: trailingRanges },
+      }),
+    ).toBe('duplicate');
+
+    // Case is never folded: a `"я"` record is foreign to `"Я"` and blocks nothing.
+    expect(
+      assertCreatable({
+        entries: [entryWith({ id: 'lower', authorName: 'я' })],
+        comment: 'заметка',
+        currentName: 'Я',
+        spans: { candidate: { start: 12, end: 13 }, byEntryId: new Map<string, CodePointRange>([['lower', span]]) },
+      }),
+    ).toBeNull();
+  });
+
+});
+
+describe('entriesOfAuthor — the own half of a page list (t5-01, A93/A99)', () => {
+  it('keeps exactly the entries of the current author, in the order they were given', () => {
+    const mixed = [
+      entryWith({ id: 'f1', authorName: 'Борис' }),
+      entryWith({ id: 'o1', authorName: 'Анна' }),
+      entryWith({ id: 'f2', authorName: 'Пётр' }),
+      entryWith({ id: 'o2', authorName: ' Анна ' }),
+    ];
+
+    expect(entriesOfAuthor(mixed, 'Анна').map((entry: Entry) => entry.id)).toEqual(['o1', 'o2']);
+    expect(entriesOfAuthor(mixed, 'Пётр').map((entry: Entry) => entry.id)).toEqual(['f2']);
+    expect(entriesOfAuthor(mixed, 'Никто')).toEqual([]);
+    expect(mixed.map((entry: Entry) => entry.id)).toEqual(['f1', 'o1', 'f2', 'o2']);
+  });
+
+  it('is a pure projection: hidden and stale entries survive it (A22, A24)', () => {
+    const entries = [
+      entryWith({ id: 'hidden', authorName: 'Анна', visible: false }),
+      entryWith({ id: 'stale', authorName: 'Анна' }),
+    ];
+
+    // The projection reads `authorName` and nothing else, so the rules that key on
+    // `visible` or on the absence of a resolved range keep working downstream.
+    expect(entriesOfAuthor(entries, 'Анна').map((entry: Entry) => entry.id)).toEqual([
+      'hidden',
+      'stale',
+    ]);
+    expect(entriesOfAuthor(entries, 'Анна')[0]).toEqual(entries[0]);
+  });
+
+  it('uses the same identity as edit rights, so one pair of strings has one answer (A99)', () => {
+    const entries = [
+      entryWith({ id: 'trailing', authorName: 'Я ' }),
+      entryWith({ id: 'case', authorName: 'я' }),
+      entryWith({ id: 'blank', authorName: '   ' }),
+    ];
+
+    expect(entriesOfAuthor(entries, 'Я').map((entry: Entry) => entry.id)).toEqual(['trailing']);
+    for (const entry of entries) {
+      const inProjection = entriesOfAuthor([entry], 'Я').length === 1;
+      expect(inProjection).toBe(canEdit(entry, 'Я'));
+    }
+  });
+
+  it('returns nothing for a current name the author rule refuses, so no entry is own', () => {
+    expect(entriesOfAuthor([entryWith({ authorName: '' })], '')).toEqual([]);
+    expect(entriesOfAuthor([entryWith({ authorName: '   ' })], '   ')).toEqual([]);
   });
 });
 

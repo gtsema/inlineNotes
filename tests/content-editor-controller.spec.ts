@@ -28,10 +28,11 @@
  * - **AC4** — `Удалить` removes the entry at once, with no confirmation step
  *   (ruling `A44`), and the delete control is not rendered for a foreign entry
  *   (ruling `A25`);
- * - **AC5** — a `re-selection` inside the open editor that crosses another entry is
- *   refused with the `overlap` sentence, nothing is written, and the editor stays open
- *   with its draft; the entry being edited is excluded from the check by list
- *   exclusion, so it never collides with itself.
+ * - **AC5** — a `re-selection` inside the open editor that crosses another entry **of
+ *   the current author** is refused with the `overlap` sentence, nothing is written, and
+ *   the editor stays open with its draft; the entry being edited is excluded from the
+ *   check by list exclusion, so it never collides with itself, and a crossing of a
+ *   foreign entry's span saves, because the `overlap` rule is per author (`A93`, `A100`);
  *
  * `A68` is pinned at the end: closing an editor leaves the overlay host visible while
  * another widget still needs it.
@@ -178,6 +179,17 @@ function foreignRecord(): Record<string, unknown> {
   return recordFor('b2c3d4e5f6a1', 'fox jumps', {
     authorName: FOREIGN_NAME,
     comment: FOREIGN_COMMENT,
+  });
+}
+
+/**
+ * A second entry of the **same** author on other words (`'lazy dog'`), so the AC5
+ * overlap pin has something that is still a blocker after ruling `A93`.
+ */
+function ownSecondRecord(): Record<string, unknown> {
+  return recordFor('c3d4e5f6a1b2', 'lazy dog', {
+    authorName: OWN_NAME,
+    comment: 'another note of mine',
   });
 }
 
@@ -745,24 +757,51 @@ describe('AC4: Удалить removes the entry and its paint at once', () => {
 });
 
 describe('AC5: a re-selection inside the editor answers the overlap rule, with the edited entry excluded', () => {
-  it('refuses a move onto another entry with the overlap sentence and writes nothing', async () => {
-    const fixture = await boot();
+  it('refuses a move onto another entry of the current author with the overlap sentence and writes nothing', async () => {
+    const fixture = await boot({ records: [ownRecord(), ownSecondRecord(), foreignRecord()] });
     openOwn(fixture);
-    await typeDraft(overlay, 'moved onto foreign text');
-    // `'fox jumps'` is the other entry's span.
-    fixture.setPageSelection(selection('p1', 16, 25));
+    await typeDraft(overlay, 'moved onto my own other note');
+    // `'lazy dog'` is the span of a second entry **of the same author**. `'fox jumps'`
+    // belongs to the foreign entry and stopped being a blocker (rulings `A93`, `A100`);
+    // the pin below is the one that keeps the own half refused.
+    fixture.setPageSelection(selection('p1', 35, 43));
 
     await press(overlay, CONTENT_STRINGS.save);
 
     expect(refusalLineOf(overlay)).toBe(REFUSAL_TEXT.overlap);
     expect(fixture.editor.isOpen()).toBe(true);
-    expect(fieldOf(overlay).value).toBe('moved onto foreign text');
+    expect(fieldOf(overlay).value).toBe('moved onto my own other note');
     expect(fixture.port.calls.filter((call) => call.op === 'set' || call.op === 'remove')).toEqual(
       [],
     );
     const after = await stored(port);
-    expect(after[0]?.comment).toBe(OWN_COMMENT);
-    expect(after[0]?.anchor).toEqual(storedAnchorOf('quick brown'));
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe(OWN_COMMENT);
+    expect(edited?.anchor).toEqual(storedAnchorOf('quick brown'));
+  });
+
+  it('lets a move onto the span of a foreign entry save the comment, because the overlap rule is per author (A93, A100)', async () => {
+    const fixture = await boot();
+    openOwn(fixture);
+    await typeDraft(overlay, 'moved onto foreign text');
+    // `'fox jumps'` is the foreign entry's span: the re-selection answers `overlap`
+    // only against entries the author identity rule accepts (`A99`), so this saves.
+    fixture.setPageSelection(selection('p1', 16, 25));
+
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBeNull();
+    expect(fixture.editor.isOpen()).toBe(false);
+    const after = await stored(port);
+    expect(after).toHaveLength(2);
+    expect(after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6')?.comment).toBe(
+      'moved onto foreign text',
+    );
+    // The foreign entry is untouched: a move over its words neither rewrites nor
+    // removes it, and it stays read-only (`A25`).
+    const foreign = after.find((entry: Entry) => entry.id === 'b2c3d4e5f6a1');
+    expect(foreign?.comment).toBe(FOREIGN_COMMENT);
+    expect(foreign?.anchor).toEqual(storedAnchorOf('fox jumps'));
   });
 
   it('never collides with itself: a re-selection of the same span is a plain save (A45)', async () => {

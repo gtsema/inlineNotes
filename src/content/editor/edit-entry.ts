@@ -36,11 +36,14 @@
  * (`removeById` in `src/core/entry-rules.ts`), so its own resolved range is never in
  * the map the candidate is compared against and an entry cannot collide with itself
  * (`A45`, and the argument recorded in `docs/state/t2-03-review.md`). No `exceptId`
- * is invented, and no second overlap rule is written here.
+ * is invented, and no second overlap rule is written here. The same list is then
+ * narrowed to the entries of the current author by core `entriesOfAuthor` (rulings
+ * `A93`, `A100`): a `foreign entry` never blocks a move, and this module owns no
+ * author comparison of its own — the one identity rule of `A99` is core's.
  *
  * One pass, one stream (`A37`), exactly as in the create path: the re-selection and
- * every stored entry of the page are resolved against one string built in this
- * function. A range remembered from the moment the editor opened is never compared
+ * every stored entry of the page that the author filter keeps are resolved against
+ * one string built in this function. A range remembered from the moment the editor opened is never compared
  * with anything — it is a position the page may no longer have, and comparing it
  * would refuse a valid move and accept an invalid one.
  *
@@ -70,7 +73,7 @@ import { deleteEntry, updateEntryComment } from '../../core/entry-store-write';
 import type { EntryWriteCode, EntryWriteResult } from '../../core/entry-store-write';
 import { loadEntries } from '../../core/entry-store-read';
 import { findOverlappingEntry } from '../../core/entry-overlap';
-import { removeById } from '../../core/entry-rules';
+import { entriesOfAuthor, removeById } from '../../core/entry-rules';
 import type { Entry } from '../../core/entry';
 import type { StoragePort } from '../../core/storage-port';
 
@@ -149,11 +152,18 @@ export async function saveEntryComment(input: EditNoteInput): Promise<EditNoteRe
     // Self-exclusion (`A45`): the entry being edited leaves the list the core check
     // scans, so its own span can never be the intersecting one. `others` is what the
     // resolve walks too, so the edited entry is not even resolved twice.
+    //
+    // Per-author scoping (`A93`, `A100`): the check answers only against entries of
+    // the current author, so moving one's own note across words another author
+    // covered is allowed. The filter is core's `entriesOfAuthor` — the same identity
+    // `canEdit` and the popup row use (`A99`) — because this call site owns no author
+    // rule of its own, and `src/core/entry-overlap.ts` stays author-blind by design.
     const others = removeById(page.entries, input.id);
+    const ownOthers = entriesOfAuthor(others, input.currentName);
     const over = findOverlappingEntry(
       { range: span.candidate, comment: input.comment },
-      others,
-      resolvedEntryRanges(stream, input.root, others),
+      ownOthers,
+      resolvedEntryRanges(stream, input.root, ownOthers),
     );
     if (over !== null) {
       return { ok: false, code: 'overlap' };
