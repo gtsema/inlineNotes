@@ -42,6 +42,10 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 - Style-only remarks are non-blocking.
 - Spec vs code conflict is never resolved silently: the reviewer reports it as `blocked` and the PM decides (fix code, or edit spec and re-review).
 - A behavior change without a spec edit in the same commit is a blocking finding.
+- Exception (ruling `A69`, from `t3-01b` review remark 6): when the brief mandates the `A53` commit-early sequence, the
+  behavior commit and the spec commit are two commits, and the rule is satisfied **for the task as a whole** provided
+  both commits are inside the reviewed range and the brief names the spec file. The reviewer records the split as a
+  remark, not a finding; a spec edit that lands in a *later* range is still a blocking finding.
 - Budgets: at most 2 attempts per task; the second attempt must carry a changed brief. A third attempt is forbidden and the PM stops and asks the user. A runtime timeout of a run counts as a failed attempt; the unfinished work may stay in the working tree and the next brief is a completion brief.
 - Slice size is a review input: a `src/core/` slice carries at most 5 substantive acceptance criteria, so that one attempt fits inside the role's `timeoutMs`. The brief states the work order explicitly: run the gates first, then edit the spec, then commit.
 - The reviewer role declares `acceptance: { level: "none", reason: … }` (a bare `"none"` is rejected by the runtime). A read-only reviewer emits no structured acceptance report: its evidence is the review artifact, and the PM copies the verdict into the task state file. The engineer role keeps `acceptance: checked`, because its report must carry command evidence.

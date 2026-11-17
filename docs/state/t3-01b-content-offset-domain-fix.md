@@ -84,7 +84,40 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 +
 ## Verdicts
 
 - engineer report: copied to `docs/state/t3-01b-engineer.md`.
-- reviewer verdict: running (`edd47b33`), range `64274e4..e1f0f94`; the review must also answer whether the parent task's AC2 can be re-verified as `pass`.
+- reviewer verdict: **accepted** (`edd47b33`), AC1–AC5 all `pass`, no blocking finding, seven non-blocking remarks;
+  copied to `docs/state/t3-01b-review.md`. Test census delta `523 → 548` (+25) accounted file by file.
+
+## PM rulings on the review remarks
+
+- `A64` **reworded** (residual risk 2, the engineer's open question 1): the shipped behavior is **the card never opens**
+  (the anchor box is measured before anything is mounted), not "opens then closes". The spec already matches the code;
+  the ledger wording did not, and a future reader would have called compliant code non-compliant.
+- `A66` (remark 3): in the **paint pass** a measurement throw is per entry — no highlight, no frame, no tooltip, the same
+  observable state as `anchor_stale` (`A40`) — and the `catch` must wrap only that entry's measurement, never the whole
+  pass: it must not remove another entry's highlights and must never touch storage. The `catch {}` shape in
+  `create-card-controller.tsx:208-213` is not a template to copy.
+- `A67` (readiness, an assumption without an answer): a zero-area fragment box gives the tooltip nothing to anchor to.
+  The tooltip anchors to the **first fragment that has an area** (the walk `placementFragmentBox` already performs, to be
+  exported for that purpose); when no fragment has an area, **no tooltip** — the entry stays listed in the popup and stays
+  deletable. One sentence in the overlay spec, reversible.
+- `A68` (readiness, open item from the parent review): the paint pass owns `CSS.highlights` exclusively and card
+  visibility never clears it. `close()` hides the host, so without an aggregate visibility owner every card close would
+  flicker the highlights.
+- Remark 1 (`selection-span.ts:207-209`: "an inverted range stays inverted" — `Math.max` at `:213` makes it degenerate,
+  and `:85` answers `null`) is **accepted debt**: one clause, fixed in the next commit that touches that file. This
+  module's previous blocking finding was exactly a comment that asserted what the code did not do, so it is named here
+  rather than left in a remark list.
+- Remark 2 (the mechanical pin is name-based and vanishes if the parameter is renamed) and remark 7 (`hasArea` treats a
+  negative dimension as no area, untested) are **accepted**: the behavioral fixtures are the proof, the pin is a tripwire.
+- Remark 4 (the second `A63` case is wall-clock sensitive with a 40 ms margin) is **accepted debt**: fake timers in the
+  next commit that touches `tests/content-card-events.spec.ts`.
+- Remark 5 (the engineer report's per-file counts are internally inconsistent — `+30` by file vs the exact `+25` total,
+  and the handoff names `src/content/overlay/fragment-rect.ts` where the shipped path is `src/content/capture/fragment-
+  rect.ts`): transcription, the totals and after-figures are exact. Recorded here instead of editing the engineer's
+  artifact.
+- Remark 6 (behavior in `ec4ee45`, spec in `e1f0f94`) became rule `A69` in `docs/specs/code-review-flow.md`: the `A53`
+  two-commit sequence satisfies the same-commit rule for the task as a whole when both commits are inside the reviewed
+  range and the brief names the spec file.
 
 ## Open questions
 

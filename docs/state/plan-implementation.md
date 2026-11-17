@@ -37,9 +37,9 @@ is confirmed on a real browser.
 | Task | Slice | Owning spec AC |
 |---|---|---|
 | `t3-01-settings-read-core` | **accepted** (`e654892`, attempt 2, `A57`/`A58`) — `loadSettings`/`saveSettings`, decode guard, 429 tests | model AC27–AC28 |
-| `t3-01-content-create-card` | **in flight** (`63a63dbf`) — shadow host, capture, create card, counter, message map | overlay AC1, AC9, AC11, model AC9 |
+| `t3-01-content-create-card` | **accepted** (`43dd131`+`5f4b82d`, AC2 closed by `ec4ee45` in `t3-01b`) — shadow host, capture, create card, counter, message map | overlay AC1, AC9, AC11, model AC9 |
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
-| `t3-01b-content-offset-domain-fix` | **new (user-approved)** — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
+| `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
 | `t3-02-content-highlight-tooltip` | CSS Highlight painting, frame, hover tooltip, mine vs foreign header | overlay AC2, AC3 |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
@@ -166,8 +166,17 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   `node scripts/check-agent-config.mjs` — because one test fails when `dist/` is missing. Recorded in the profile.
 - `A63` (t3-01 card review remark 3): a user-visible timing may not live only in code — the `settle delay` value is
   pinned in the spec Terms and asserted against the constant.
-- `A64` (**user confirmed 2026-11-16**): if measuring the selection throws during the settle, the card closes; no card
-  without coordinates.
+- `A64` (**user confirmed 2026-11-16, reworded after `t3-01b` review**): if measuring the selection throws during the
+  settle, **the card never opens** (the box is measured before mounting); not "opens then closes".
+- `A66` (`t3-01b` review remark 3): in the paint pass a measurement throw is per entry — no highlight, no frame, no
+  tooltip, the same observable state as `anchor_stale` (`A40`); the `catch` wraps only that entry's measurement, never the
+  whole pass, and never touches storage.
+- `A67` (assumption, `t3-01b` readiness): a zero-area fragment gives the tooltip nothing to anchor to — the tooltip
+  anchors to the first fragment that has an area; if none has one, no tooltip. The entry stays listed and deletable.
+- `A68` (`t3-01b` readiness): the paint pass owns `CSS.highlights` exclusively; card visibility never clears it, or every
+  card close flickers the highlights.
+- `A69` (`t3-01b` review remark 6): the `A53` two-commit sequence satisfies the "spec in the same commit" rule for the
+  task as a whole when both commits are inside the reviewed range and the brief names the spec file.
 - `A65` (**user confirmed 2026-11-16**): zero-area fragment boxes do not participate in placement; all-zero falls back to
   the viewport rule.
 - The user chose a **separate fix slice `t3-01b`** instead of spending the parent task's last child on a third engineer

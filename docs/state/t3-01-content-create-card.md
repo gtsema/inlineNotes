@@ -173,3 +173,18 @@ doc-comment above the function asserts the opposite of what the code does.
   affordance for consistency). Recorded as an assumption.
 - Repeated text can make the card refuse a selection the user sees as empty of collisions, or accept one they expected
   to collide, with no UI signal (`t2-03` residual risk 6). Accepted v1 limitation, restated in the spec's Edge Cases.
+
+## Closure (after `t3-01b`)
+
+The user approved a separate fix slice instead of a third attempt here (`t3-01b-content-offset-domain-fix`), and its
+review (`docs/state/t3-01b-review.md` → Parent-task closure) re-verified **AC2 as `pass` on `e1f0f94`**, obligation by
+obligation: one stream per capture (`create-card-controller.tsx:228`, pinned by the import scans at
+`tests/content-create-card-boundaries.spec.ts:132,184`); `buildAnchor` receives the trimmed span's code-point offsets and
+the real fragment count (`selection-span.ts:80-99`, pinned by `tests/content-selection-capture.spec.ts:175,217,311,368,387`
+plus the count pins at `:147,163`); nothing is created for an empty or whitespace-only selection
+(`selection-span.ts:85` → `create-card-controller.tsx:229-231`, pinned by
+`tests/content-selection-capture.spec.ts:201` and `tests/content-create-card-controller.spec.ts:372`).
+
+**Task verdict: `accepted`.** The blocking finding was closed by `ec4ee45`; no further change to this slice's code is
+needed. Its two coverage remarks (keyboard reachability; mutate-the-DOM-between-open-and-save for `A29`) are carried to
+`t3-02-content-highlight-tooltip`.
