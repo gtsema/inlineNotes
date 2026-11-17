@@ -40,13 +40,24 @@ any change to a core rule; the popup, options, README; the browser verification 
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the narrow review).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2**. Card closed.
 
 ## Verdicts
 
 - engineer report: delivered, copied to `docs/state/t4-03b-engineer.md` — three items answered by number, the load-bearing
   proof for AC1 named, **no behavior change** (verified by the PM: the only `src/` diff is a comment block)
-- reviewer verdict: not started
+- reviewer verdict: **accepted**, 0 blocking findings (`docs/state/t4-03b-review.md`). AC1–AC3 `pass`; the reviewer walked
+  each mutation and named the failing assertion (an extra lifecycle listener fails three assertions at once; an extra interval
+  fails the runtime `intervals` count; a production teardown fails the comment-stripped `main.ts` scan). The trigger pin was
+  judged a **closed set**, not a subset: an exact `addEventListener` list plus a runtime ordered `attachments` equality.
+  Counts corroborated read-only (41 files, 789 declarations vs 778, no `.skip`/`.only`).
+- **task status: accepted** (`a35e46f`); 2 of 4 children used.
+- **accepted debt** from the four remarks: the pins cover `window`/`document` `addEventListener` and `window.setInterval`
+  only, so an `on<event> =` property handler under an unlisted name would slip through (the nine lifecycle names are still
+  caught by the silence test); the `main.ts` teardown scan is a text scan whose inherent ceiling is that a teardown stored in
+  a collection literal and called from an unlisted event survives it. A runtime pin of `main.ts` is impossible without
+  `chrome.*`, so this is the technique's ceiling, not an open defect. The core comment stays as written — both of its claims
+  are true; naming `escapePageKey` there is a nicety.
 - **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **789/789** over 41 files (+11),
   `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 86 INFO, `npm run typecheck` exit 0, tree clean
 
