@@ -22,13 +22,14 @@
  *
  * Two rules that are easy to get wrong, stated where they are implemented:
  *
- * - **the hover anchor is measured at hover time.** `PaintedEntry.tooltipBox` is the
- *   answer the *paint pass* gave for the same entry; a scroll moves every box in the
- *   document without telling this module, and placing a tooltip against a box from the
- *   last pass would put it next to text it does not describe. The walk to the first
- *   fragment that has an area is `placementFragmentBox` — the same function the create
- *   card places with, and the same rule ruling `A67` states — so the paint pass, the
- *   card and the tooltip agree about which fragment has a position;
+ * - **the hover anchor is measured at hover time.** The paint pass records no box for
+ *   a widget to place itself with (`paint-plan.ts` says why); a scroll moves every box
+ *   in the document without telling this module, and placing a tooltip against a box
+ *   from the last pass would put it next to text it does not describe. The walk to the
+ *   first fragment that has an area is `placementFragmentBox` — the same function the
+ *   create card and the editor place with, and the same rule ruling `A67` states — so
+ *   the paint pass, the card, the editor and the tooltip agree about which fragment has
+ *   a position;
  * - **a hover that cannot be measured shows nothing.** `Range.setStart` rejects when
  *   the page replaced the text node under the fragment between the paint pass and the
  *   hover. That is the per-entry answer of ruling `A66` applied to the hover: no

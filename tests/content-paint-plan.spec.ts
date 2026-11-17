@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
  * The load-time resolve and measure step of the paint pass (task `t3-02` AC1, AC5;
- * rulings `A29`, `A36`, `A40`, `A66`, `A67`, `A70`).
+ * rulings `A29`, `A36`, `A40`, `A65`, `A66`, `A67`, `A70`; the `tooltipBox` removal is
+ * `t3-02` review remark 3, closed by `t3-03`).
  *
  * Pinned behaviour, from `docs/specs/content-overlay-ui.md` -> Rules / Semantics
- * ("Highlight painting", "Paint-path measurement", "Tooltip anchor") and
+ * ("Highlight painting", "Paint-path measurement", "Tooltip placement") and
  * `docs/specs/inline-comment-model.md` -> Flow / Sequence 6:
  *
  * - one entry of the page becomes one named highlight, `inlinenotes-<entryId>`
@@ -20,8 +21,13 @@
  *   measure are absent from the page and still stored (rulings `A40`, `A24`, `A66`).
  *   The measurement `catch` sits inside the loop over entries, so one bad entry costs
  *   one highlight;
- * - the tooltip anchor is the first fragment box with an area, and no area at all
- *   means no tooltip (ruling `A67`);
+ * - the plan carries **no** widget box: every `text fragment` keeps the box this pass
+ *   measured, including a zero-area one, and the first-box-with-an-area walk belongs to
+ *   `placementFragmentBox`, the one function the card, the editor and the tooltip call
+ *   at the moment they need an anchor (rulings `A65`, `A67`). The entry-level
+ *   `tooltipBox` this file used to pin was produced by the pass and read by nobody, and
+ *   a box measured in a pass is stale after a scroll — `t3-02` review remark 3, closed
+ *   by `t3-03`;
  * - one stream per pass, rebuilt from the live subtree. The behavioural proof is the
  *   same-shape rewrite: same length, same whitespace shape, different characters. A
  *   cached stream would still resolve that anchor and paint it; a rebuilt one reports
@@ -38,8 +44,9 @@ import { buildTextStream } from '../src/content/anchor/text-stream';
 import { hasArea } from '../src/content/capture/fragment-rect';
 import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect';
 import { highlightNameOf, isPaintHighlightName } from '../src/content/paint/highlight-name';
-import { buildPaintPlan, tooltipAnchorOf } from '../src/content/paint/paint-plan';
+import { buildPaintPlan } from '../src/content/paint/paint-plan';
 import type { PaintedFragment } from '../src/content/paint/paint-plan';
+import { placementFragmentBox } from '../src/content/capture/fragment-rect';
 
 const ARTICLE =
   '<article><p id="p1">The quick brown fox jumps.</p><p id="p2">Second paragraph here.</p></article>';
@@ -341,8 +348,8 @@ describe('what stays off the page (A40, A24, A66)', () => {
   });
 });
 
-describe('the tooltip anchor (A67)', () => {
-  it('takes the first fragment box that has an area, not the first fragment', () => {
+describe('the plan carries no widget box (`t3-02` review remark 3, closed by `t3-03`)', () => {
+  it('keeps every fragment box, a zero-area one included, and no entry-level anchor box', () => {
     const anchor = anchorOf('jumps. Second', 2);
     const { rangeFor } = recorder([COLLAPSED_BOX, BOX_B]);
 
@@ -353,24 +360,36 @@ describe('the tooltip anchor (A67)', () => {
     });
 
     expect(plan.painted[0]?.fragments).toHaveLength(2);
-    expect(plan.painted[0]?.tooltipBox).toEqual(BOX_B);
+    // Every fragment keeps the box this pass measured — the hover hit-test and the
+    // `selection claim` of `t3-03` read the node and its offsets, and a zero box is a
+    // fact about the fragment, not a reason to drop it (rulings `A36`, `A65`).
+    expect(plan.painted[0]?.fragments[0]?.box).toEqual(COLLAPSED_BOX);
+    expect(plan.painted[0]?.fragments[1]?.box).toEqual(BOX_B);
+    // The entry-level snapshot of the placement rule is gone: no shipped module read
+    // it, and a box measured in a pass stops describing the text it was measured
+    // against as soon as the page scrolls, so a widget that placed itself against it
+    // would sit next to the wrong words (ruling `A67`).
+    expect(plan.painted[0]).not.toHaveProperty('tooltipBox');
   });
 
-  it('answers null when no fragment has an area, and the entry is still painted', () => {
-    const anchor = anchorOf('quick brown');
-    const { rangeFor } = recorder([COLLAPSED_BOX]);
-
+  it('leaves the first-box-with-an-area walk to the one function every widget uses (`A65`, `A67`)', () => {
+    const anchor = anchorOf('jumps. Second', 2);
+    const build = recorder([COLLAPSED_BOX, BOX_B]);
     const plan = buildPaintPlan({
       entries: [entryFor(anchor)],
       root: document.body,
-      rangeFor,
+      rangeFor: build.rangeFor,
     });
+    const fragments = plan.painted[0]?.fragments ?? [];
 
-    expect(plan.painted).toHaveLength(1);
-    expect(plan.painted[0]?.tooltipBox).toBeNull();
-    // The box of an unpaintable fragment is kept in the plan, because the hover
-    // hit-test decides "no tooltip" from it rather than from a second measurement.
-    expect(plan.painted[0]?.fragments[0]?.box).toEqual(COLLAPSED_BOX);
+    // Measured again, at the moment the widget needs it: the card, the editor and the
+    // tooltip all reach this one function, which is what keeps the three of them
+    // agreeing about which fragment has a position.
+    const placed = recorder([COLLAPSED_BOX, BOX_B]);
+    expect(placementFragmentBox(fragments, placed.rangeFor)).toEqual(BOX_B);
+    expect(placementFragmentBox([], placed.rangeFor)).toBeNull();
+    const allCollapsed = recorder([COLLAPSED_BOX, COLLAPSED_BOX]);
+    expect(placementFragmentBox(fragments, allCollapsed.rangeFor)).toBeNull();
   });
 
   it('shares one area predicate with placement, and re-derives nothing', () => {
@@ -379,7 +398,7 @@ describe('the tooltip anchor (A67)', () => {
     expect(hasArea(COLLAPSED_BOX)).toBe(false);
     expect(hasArea({ left: 0, top: 0, width: 10, height: 0 })).toBe(false);
     expect(hasArea({ left: 0, top: 0, width: 0, height: 10 })).toBe(false);
-    expect(tooltipAnchorOf([painted])).toEqual(BOX_A);
-    expect(tooltipAnchorOf([])).toBeNull();
+    const placed = recorder([BOX_A]);
+    expect(placementFragmentBox([painted], placed.rangeFor)).toEqual(BOX_A);
   });
 });

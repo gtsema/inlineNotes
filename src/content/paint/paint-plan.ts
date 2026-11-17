@@ -34,13 +34,25 @@
  * What the pass does with the plan — registering names in `CSS.highlights`, the paint
  * stylesheet, the teardown of ruling `A39` — is `paint-surface.ts`,
  * `paint-style.ts` and `page-painter.ts`.
+ *
+ * **No box measured here leaves the pass for a widget to place itself with.** The plan
+ * used to carry a `tooltipBox` per entry — the first fragment box with an area, the
+ * paint pass's own snapshot of the tooltip-anchor rule — and nothing read it: the
+ * tooltip measures its anchor again at hover time, because every box measured in a
+ * pass stops describing the text it was measured against as soon as the page scrolls
+ * (ruling `A67`), and the editor of `t3-03` measures at press time for the same
+ * reason. A measured value with no consumer is a maintenance cost and a fake signal
+ * in the plan type, so the field and its walk are gone (`t3-02` review remark 3,
+ * carried into `t3-03`); the per-fragment measurement stays, because it is the call
+ * that throws and therefore the place where the per-entry answer `measurement_failed`
+ * of ruling `A66` is produced.
  */
 
 import type { Entry } from '../../core/entry';
 import { locateAnchorInStream } from '../anchor/locate-anchor';
 import { buildTextStream } from '../anchor/text-stream';
 import type { TextFragment } from '../anchor/text-stream';
-import { fragmentBox, hasArea } from '../capture/fragment-rect';
+import { fragmentBox } from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
 import { highlightNameOf } from './highlight-name';
 
@@ -56,24 +68,24 @@ export interface PaintedFragment {
   readonly box: Box;
 }
 
-/** One entry that reached the page: its name, its fragments, its tooltip anchor. */
+/** One entry that reached the page: its record, its `paint name`, its fragments. */
 export interface PaintedEntry {
   /** The stored record, kept so the tooltip never has to read anything off the page. */
   readonly entry: Entry;
   /** The `CSS.highlights` name of this entry (ruling `A70`). */
   readonly name: string;
-  /** Every fragment of the span, in document order (ruling `A36`). */
-  readonly fragments: readonly PaintedFragment[];
   /**
-   * The paint pass's own answer to the tooltip-anchor rule: the first fragment box
-   * that has an area, or `null` when no fragment has one (ruling `A67`).
+   * Every fragment of the span, in document order (ruling `A36`).
    *
-   * It is a record of what this pass measured, not the box the visible tooltip is
-   * placed against: the tooltip of `t3-02` measures its anchor again at hover time,
-   * because every box measured here stops describing the text it was measured against
-   * as soon as the page scrolls.
+   * The node and the two node-local offsets are what the `caret hit-test` of
+   * `overlay/tooltip-hit-test.ts`, the Flow 6 selection claim of
+   * `editor/painted-selection.ts` and the placement measurement of
+   * `overlay/editor-controller.tsx` all work from. The `box` is this pass's own
+   * record of the measurement that produced the entry: it is the value a widget is
+   * **not** allowed to place itself against, because a scroll moves it silently —
+   * which is why every widget re-measures through `placementFragmentBox`.
    */
-  readonly tooltipBox: Box | null;
+  readonly fragments: readonly PaintedFragment[];
 }
 
 /** Why one entry of the page reached no highlight. */
@@ -147,7 +159,6 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
       entry,
       name: highlightNameOf(entry.id),
       fragments,
-      tooltipBox: tooltipAnchorOf(fragments),
     });
   }
 
@@ -183,27 +194,4 @@ function measureFragments(
     return null;
   }
   return measured;
-}
-
-/**
- * The tooltip anchor of one entry: the first fragment box with an area (ruling
- * `A67`).
- *
- * `null` means the entry has no position on the page, and the answer the ruling
- * gives is "no tooltip" — the entry is not moved to the corner of the viewport the
- * way the create card is (ruling `A65`), because a tooltip describes a span the
- * reader is pointing at, and there is nothing to point at. The entry stays stored,
- * stays in the popup list and stays deletable.
- *
- * The shipped tooltip reaches the same answer by the same walk at hover time
- * (`placementFragmentBox` in `capture/fragment-rect.ts`); this is the pass's snapshot
- * of that rule, and the place where `A67` is pinned for the plan itself.
- */
-export function tooltipAnchorOf(fragments: readonly PaintedFragment[]): Box | null {
-  for (const fragment of fragments) {
-    if (hasArea(fragment.box)) {
-      return fragment.box;
-    }
-  }
-  return null;
 }
