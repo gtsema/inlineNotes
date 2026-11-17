@@ -30,6 +30,11 @@ mutated for painting: the only element the extension owns is the single overlay 
   (it rebuilds the stream); `locateAnchorInStream` may be used only when the stream was built in the same pass from the
   same `root`, otherwise a same-shape in-place `node.data` rewrite passes the shape check.
 
+## Carried fix (one, from `docs/state/t3-04-review.md` remark 8)
+
+- Pin the **removed-and-re-added (adopted) node** case: such a node resolves as live and must paint, not go stale. The
+  behavior is correct today by walk-down/walk-up symmetry in `isInsideSubtree`; it is unpinned.
+
 ## Handover from `t3-04-content-anchor-hardening` (`docs/state/t3-04-content-anchor-hardening.md`)
 
 - `locateAnchor` is now **all-or-nothing** (`A36`): any detached mapped node ⇒ `anchor_stale`, never a partial range.

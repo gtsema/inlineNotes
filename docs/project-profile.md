@@ -63,7 +63,10 @@ Data flow (ASCII, must stay true in the constitution):
 ## Testing
 
 - Levels: unit tests only (Vitest). Framework-level E2E with a loaded extension is explicitly out of scope.
-- Green gate (must pass before a task is accepted): `npm test` (Vitest run), `npm run build`, `node scripts/check-agent-config.mjs`.
+- Green gate (must pass before a task is accepted), **in this order** (ruling `A62`): `npm run build`, then `npm test`
+  (Vitest run), then `node scripts/check-agent-config.mjs`. The order is not cosmetic: one test fails when `dist/` is
+  missing (the `t2-02` review remark `N3` fix), so testing a clean clone before the first build reports a red gate for
+  the wrong reason.
 - Gate activation: `npm test` and `npm run build` exist only after the first implementation task creates `package.json`. Until then the only green gate is `node scripts/check-agent-config.mjs`.
 - Gate ownership: those commands are run by `extension-engineer` and quoted in its report. The PM has no shell tool and only verifies that the quote exists; `code-reviewer` may re-run the read-only checker `node scripts/check-agent-config.mjs`. Every brief to the engineer requires a `Commands run` section, because the harness acceptance gate rejects a report without command evidence.
 - Known failing baseline: **none — 100% green is mandatory**.

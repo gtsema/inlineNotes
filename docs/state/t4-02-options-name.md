@@ -78,6 +78,8 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 - `saveSettings` and `generateAuthorName` may be wired **only** here (spec `:75`).
 - After a failed save, re-show the previously stored name — the byte-identical guarantee is real and asserted
   (`tests/core-settings-store.spec.ts:289-321`).
+- Declare `settingsValueOf` and `settingsFromStorageValue` **internal in the module header** (`t3-04` review remark 6,
+  following the `assertCreatable` precedent): they stay exported for tests but no shipped module may import them.
 - The stub's `maxlength="40"` in `src/options/options.component.ts:21` counts **UTF-16 units**, not code points: it must
   not be the only guard for astral names (`A55`).
 - Two Russian strings already describe a name refusal on two surfaces (`Имя обязательно` in the overlay spec,

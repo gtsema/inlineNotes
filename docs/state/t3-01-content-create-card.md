@@ -80,6 +80,13 @@ interface ResolvedSpans  { candidate: CodePointRange; byEntryId: ResolvedEntryRa
 - `duplicate` and `overlap` are distinct refusals with distinct Russian strings (`A47`:
   `Такая заметка на этом выделении уже есть`); do not let two codes collapse into one message (`t2-03` remark 5).
 
+## Carried fixes (two, from `docs/state/t3-04-review.md`)
+
+- Remark 2: one stream fixture for a nested table inside a cell — `<td>a<table><tr><td>b</td></tr></table>c</td>` must
+  stream as `a b c` (the behavior is already correct by the `pendingSpace` invariant; the fixture is what is missing).
+- Remark 7: `docs/specs/inline-comment-model.md:95` claims the anchor module holds only two tag lists and a separator
+  set; it also holds three constant `Set`s derived from them. Fix the enumeration so the claim is true.
+
 ## AC (5 substantive + gates)
 
 1. Exactly **one** host element exists per document, appended once, with an `open` shadow root; every style lives

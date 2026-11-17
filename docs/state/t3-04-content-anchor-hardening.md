@@ -37,8 +37,10 @@ two" rule in `.pi/skills/delivery-planning/SKILL.md` allows on top of another ta
 
 Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
 
-Work order (mandatory): `npm test` first → code+tests per AC in the order above → spec lines in the same commit → all
-three gates → commit `fix(t3-04): anchor liveness, table boundaries and scan hygiene`. Commit as soon as green.
+Work order (mandatory, `A53`): `npm test` first → AC1–AC3 + spec wording → **commit 1**
+`fix(t3-04): anchor liveness and table-cell boundaries` → AC4–AC5 → all three gates → **commit 2**
+`test(t3-04): derived purity scan and storage-key ownership` (two commits, as ruled; the earlier single-commit wording
+was stale, `t3-04` review remark 9).
 
 ## Inputs the engineer reads
 
@@ -61,12 +63,29 @@ The create card, the shadow host, painting, popup/options, any `src/core/` chang
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 + reviewer ×1 in flight).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 + reviewer ×1).
 
 ## Verdicts
 
 - engineer report: copied to `docs/state/t3-04-engineer.md`.
-- reviewer verdict: running (`b49c1727`), path-limited range `4047102..5aaa777 -- src tests docs/specs`.
+- reviewer verdict: **accepted**, no blocking findings, remarks `1`–`9`; copied to `docs/state/t3-04-review.md`.
+
+## PM rulings on the review remarks
+
+- `A62` (remark 1): **gate order is now part of the profile.** `npm test` hard-depends on `dist/` existing (the `N3`
+  fix), so a clean clone that tests before building gets a red gate for the wrong reason. `docs/project-profile.md`
+  lists the gates as an ordered sequence: `npm run build` → `npm test` → `node scripts/check-agent-config.mjs`.
+- Remark 2 (nested `<table>` inside a cell unpinned) and remark 7 (the spec claims the anchor module holds only two tag
+  lists and a separator set, while it also holds three derived `Set`s) are carried into `t3-01-content-create-card` —
+  one fixture and one sentence, both in files that task already edits.
+- Remark 6 (`settingsValueOf` / `settingsFromStorageValue` are still `export`ed, guarded only by the no-import grep):
+  carried into `t4-02-options-name` as a declaration in the module header, following the `assertCreatable` precedent.
+- Remark 8 (a node removed and re-added resolves as **live**, and that is unpinned): carried into
+  `t3-02-content-highlight-tooltip`, where staleness becomes user-visible.
+- Remarks 3, 4, 5 (a non-ASCII rule that cannot catch `П…` escapes or `String.fromCharCode` laundering; `codeOnly`'s
+  `//` rule eating the tail of `page-key.ts:108`; `importersOf` seeing only `import … from`) are **accepted
+  limitations** of a grep-based rule. Closing them would mean writing a parser, which is not worth it for a project
+  that already runs a typechecker. Recorded, not scheduled.
 
 ## Open questions
 
