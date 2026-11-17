@@ -7,9 +7,11 @@
  * which is what makes the close-on-scroll rule of ruling `A32` the honest answer
  * to "where is the card when the page moved".
  *
- * The rule in one line: below the first fragment of the selection when there is
- * room, above it otherwise, and always inside the viewport with a gutter, so a
- * selection at the very top or bottom of the window still gets a reachable card.
+ * The rule in one line: below the first fragment of the selection that has a box,
+ * above it when there is no room, and always inside the viewport with a gutter, so a
+ * selection at the very top or bottom of the window still gets a reachable card. A
+ * span with no box at all is placed by the same rule against the viewport
+ * (ruling `A65`).
  *
  * Pure arithmetic over two boxes and the viewport: no DOM, no global, so the
  * placement of every case below is unit-testable with numbers.
@@ -64,6 +66,35 @@ export function placeCard(
     top: clampAxis(preferredTop, cardBox.height, viewport.height, viewportGutter),
     placement,
   };
+}
+
+/**
+ * Places the card with no selection box to place it against (ruling `A65`).
+ *
+ * A span whose every fragment measures zero area has no anchor point, and leaving
+ * the card where the shadow host happens to start is not the rule: that corner is
+ * `(0, 0)`, inside the `card gutter`, and it is where a hidden paragraph would put
+ * the widget. The answer is the same placement rule with the viewport itself as the
+ * anchor box, so the card is clamped into the gutter exactly like any other case:
+ * no room below a viewport-tall anchor, so it is pinned to the top gutter, and its
+ * left edge starts at the gutter.
+ *
+ * One rule, one clamp: this is `placeCard` with a viewport-sized anchor, not a second
+ * placement model, so the two cases can never disagree about the gutter.
+ */
+export function placeCardInViewport(
+  cardBox: Box,
+  viewport: Viewport,
+  anchorGutter: number = CARD_ANCHOR_GUTTER_PX,
+  viewportGutter: number = CARD_VIEWPORT_GUTTER_PX,
+): CardPosition {
+  return placeCard(
+    { left: 0, top: 0, width: viewport.width, height: viewport.height },
+    cardBox,
+    viewport,
+    anchorGutter,
+    viewportGutter,
+  );
 }
 
 /** One axis of the clamp: prefer the requested spot, never leave the gutter. */

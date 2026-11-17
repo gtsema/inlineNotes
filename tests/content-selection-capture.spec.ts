@@ -13,7 +13,15 @@
  *   note, so `anchor.fragments` counts the pieces whose text is really in it;
  * - a `Range` is only ever handed node-local UTF-16 offsets: the capture keeps the
  *   two domains apart, and the test measures a fragment through an injected range
- *   factory so an accidental stream offset would be visible in the recorded pair.
+ *   factory so an accidental stream offset would be visible in the recorded pair;
+ * - the boundary trim is computed in the **code-point** domain (`t3-01b` finding 1):
+ *   an astral character anywhere before the selection used to make the trim probe a
+ *   separator that is not there, so the stored text lost its first character, a
+ *   one-word selection degenerated the range, and a re-selection was refused as
+ *   `overlap` instead of `duplicate`;
+ * - a fragment box with no area does not place anything (ruling `A65`), so the
+ *   placement helper measures on to the next fragment and answers `null` only when
+ *   no fragment of the span has a box at all.
  *
  * jsdom has no usable `document.getSelection()` for this purpose, so the ranges are
  * built with `document.createRange()` exactly as the page-side reader builds them.
@@ -21,11 +29,11 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildTextStream } from '../src/content/anchor/text-stream';
-import { sliceCodePoints } from '../src/core/text-normalize';
+import { normalizeText, sliceCodePoints } from '../src/core/text-normalize';
 import { codePointLength } from '../src/core/entry-rules';
 import { captureSpan } from '../src/content/capture/selection-span';
-import { firstFragmentBox } from '../src/content/capture/fragment-rect';
-import type { RangeForFragment } from '../src/content/capture/fragment-rect';
+import { placementFragmentBox } from '../src/content/capture/fragment-rect';
+import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect';
 
 const ARTICLE = [
   '<article id="art">',
@@ -69,6 +77,36 @@ function recorder(): { rangeFor: RangeForFragment; seen: Array<{ start: number; 
   };
   return { rangeFor, seen };
 }
+
+/**
+ * A range factory that answers with `rects` in call order and records every rect it
+ * returned. A zero-area rect is what a fragment in a hidden subtree measures as
+ * (ruling `A1` keeps hidden text in the stream), which is the case ruling `A65`
+ * settles for placement.
+ */
+function rectFactory(rects: readonly Box[]): {
+  rangeFor: RangeForFragment;
+  answers: Box[];
+} {
+  const answers: Box[] = [];
+  const rangeFor: RangeForFragment = () => {
+    const box = rects[answers.length] ?? rects[rects.length - 1];
+    if (box === undefined) {
+      throw new Error('rectFactory was given no rects');
+    }
+    answers.push(box);
+    return { getBoundingClientRect: () => box };
+  };
+  return { rangeFor, answers };
+}
+
+/**
+ * A box with no area but with a position: what a fragment of a collapsed or hidden
+ * subtree measures as. Its coordinates are deliberately far from the viewport
+ * gutter, so a test that expects the gutter cannot pass by coincidence through the
+ * collapsed box's own numbers (ruling `A65`).
+ */
+const COLLAPSED_BOX: Box = { left: 500, top: 400, width: 0, height: 0 };
 
 beforeEach(() => {
   document.body.innerHTML = ARTICLE;
@@ -226,7 +264,7 @@ describe('the anchor-options domain of a selection with astral text', () => {
     expect(fragment.streamEnd - fragment.streamStart).toBe(7);
 
     const { rangeFor, seen } = recorder();
-    const box = firstFragmentBox(span.fragments, rangeFor);
+    const box = placementFragmentBox(span.fragments, rangeFor);
     expect(box).not.toBeNull();
     expect(seen.length).toBe(1);
     const measured = seen[0];
@@ -252,5 +290,172 @@ describe('the anchor-options domain of a selection with astral text', () => {
     expect(fragment.start).toBe(6);
     expect(fragment.end).toBe(10);
     expect(span.anchor.text).toBe('beta');
+  });
+});
+
+describe('an astral character somewhere before the selection (t3-01b finding 1)', () => {
+  /**
+   * The regression fixtures. `trimStreamRange` used to probe the stream with
+   * `streamText.charAt(codePointOffset)`, which is a UTF-16 read: one astral code
+   * point anywhere earlier in the same stream makes that probe answer the character
+   * *before* the boundary, so the trim cut a separator that is not there. Three
+   * observable consequences, and each has a test here: the stored text lost its
+   * first character, a one-word selection degenerated the range (no span at all, so
+   * no card), and a span that kept a stream separator was no longer equal to the
+   * range of the entry stored from it, so `A23` answered `overlap` instead of
+   * `duplicate`.
+   *
+   * Every case asserts the end-to-end identity `AC1` names:
+   * `sliceCodePoints(stream.text, candidate) === anchor.text === normalizeText(selectedText)`.
+   */
+  it('keeps the first character of a multi-word selection in a later paragraph', () => {
+    document.body.innerHTML = [
+      '<article id="art">',
+      '  <p id="p1">\u{1F600} heading of the article</p>',
+      '  <p id="p2">The quick brown fox</p>',
+      '</article>',
+    ].join('\n');
+    const stream = buildTextStream(document.body);
+    const range = rangeIn(textOf('p2'), 4, 15);
+    const span = captureSpan(stream, range);
+    if (span === null) {
+      throw new Error('expected a span for a two-word selection');
+    }
+    expect(span.anchor.text).toBe('quick brown');
+    expect(span.anchor.text).toBe(normalizeText(range.toString()));
+    expect(sliceCodePoints(stream.text, span.candidate.start, span.candidate.end)).toBe(
+      normalizeText(range.toString()),
+    );
+    expect(span.candidate.end - span.candidate.start).toBe(codePointLength(span.anchor.text));
+  });
+
+  it('keeps a one-word selection whole', () => {
+    document.body.innerHTML = '<p id="p1">\u{1F600} alpha</p>';
+    const stream = buildTextStream(document.body);
+    // The word starts at UTF-16 offset 3 because the emoji costs two units.
+    const range = rangeIn(textOf('p1'), 3, 8);
+    const span = captureSpan(stream, range);
+    if (span === null) {
+      throw new Error('expected a span for a one-word selection');
+    }
+    expect(span.anchor.text).toBe('alpha');
+    expect(span.anchor.text).toBe(normalizeText(range.toString()));
+    expect(sliceCodePoints(stream.text, span.candidate.start, span.candidate.end)).toBe('alpha');
+    const fragment = span.fragments[0];
+    if (fragment === undefined) {
+      throw new Error('expected a fragment to place a card against');
+    }
+    expect(fragment.node.data.slice(fragment.start, fragment.end)).toBe('alpha');
+  });
+
+  it('keeps a short one-word selection from degenerating the range', () => {
+    // The shortest selection this can break: one code point preceded by one astral
+    // code point and one separator. The mis-probe used to walk `end` back over the
+    // separator as well, which made the range inverted and `captureSpan` answered
+    // `null` — no card, and a save that could only answer `selection_lost`.
+    document.body.innerHTML = '<p id="p1">\u{1F600} a</p>';
+    const stream = buildTextStream(document.body);
+    const range = rangeIn(textOf('p1'), 3, 4);
+    const span = captureSpan(stream, range);
+    if (span === null) {
+      throw new Error('expected a span for the one-character word');
+    }
+    expect(span.anchor.text).toBe('a');
+    expect(span.candidate.end - span.candidate.start).toBe(1);
+    expect(sliceCodePoints(stream.text, span.candidate.start, span.candidate.end)).toBe('a');
+  });
+
+  it('leaves no stream separator inside the span when the click caught a space', () => {
+    // The trim half of the finding: with an astral character earlier in the stream,
+    // the separator at the start of the span is not where `charAt` looked for it, so
+    // the span used to keep it and describe a range the entry does not cover (A27).
+    document.body.innerHTML = '<p id="p1">\u{1F600} The quick brown fox jumps</p>';
+    const stream = buildTextStream(document.body);
+    const range = rangeIn(textOf('p1'), 6, 18);
+    expect(range.toString()).toBe(' quick brown');
+    const span = captureSpan(stream, range);
+    if (span === null) {
+      throw new Error('expected a span');
+    }
+    expect(span.anchor.text).toBe('quick brown');
+    expect(sliceCodePoints(stream.text, span.candidate.start, span.candidate.end)).toBe(
+      'quick brown',
+    );
+    expect(span.candidate.end - span.candidate.start).toBe(codePointLength('quick brown'));
+  });
+
+  it('trims both ends when an astral character sits inside the selection', () => {
+    // The other direction of the same rule: the shift is not only about what comes
+    // before the selection, it is about the number of astral code points before the
+    // boundary being probed.
+    document.body.innerHTML = '<p id="p1">one \u{1F600} two three \u{1F600} four</p>';
+    const stream = buildTextStream(document.body);
+    const data = textOf('p1').data;
+    const from = data.indexOf('two') - 1;
+    const to = data.indexOf('four');
+    const range = rangeIn(textOf('p1'), from, to);
+    expect(range.toString()).toBe(' two three \u{1F600} ');
+    const span = captureSpan(stream, range);
+    if (span === null) {
+      throw new Error('expected a span');
+    }
+    expect(span.anchor.text).toBe('two three \u{1F600}');
+    expect(sliceCodePoints(stream.text, span.candidate.start, span.candidate.end)).toBe(
+      'two three \u{1F600}',
+    );
+  });
+});
+
+describe('a fragment box with no area does not place the card (ruling A65)', () => {
+  it('measures on to the next fragment whose box has an area', () => {
+    const stream = buildTextStream(document.body);
+    const span = captureSpan(stream, rangeAcross(textOf('p1'), 4, textOf('p3'), 5));
+    if (span === null) {
+      throw new Error('expected a span over three paragraphs');
+    }
+    expect(span.fragments).toHaveLength(3);
+
+    const placed = { left: 300, top: 400, width: 40, height: 16 };
+    const { rangeFor, answers } = rectFactory([COLLAPSED_BOX, COLLAPSED_BOX, placed]);
+    const box = placementFragmentBox(span.fragments, rangeFor);
+    expect(box).toEqual(placed);
+    // Every fragment without an area was measured and skipped; the walk stops at the
+    // first one that has a box, so a long selection is not measured to its end.
+    expect(answers).toHaveLength(3);
+  });
+
+  it('answers null when every fragment box has zero area', () => {
+    const stream = buildTextStream(document.body);
+    const span = captureSpan(stream, rangeAcross(textOf('p1'), 4, textOf('p3'), 5));
+    if (span === null) {
+      throw new Error('expected a span');
+    }
+    const { rangeFor, answers } = rectFactory([COLLAPSED_BOX]);
+    expect(placementFragmentBox(span.fragments, rangeFor)).toBeNull();
+    expect(answers).toHaveLength(span.fragments.length);
+  });
+
+  it('answers null for no fragment at all, without asking for a measurement', () => {
+    const { rangeFor, answers } = rectFactory([COLLAPSED_BOX]);
+    expect(placementFragmentBox([], rangeFor)).toBeNull();
+    expect(answers).toHaveLength(0);
+  });
+
+  it('keeps measuring the fragment the range made, not the whole text node', () => {
+    // The box of a placement must come from the clipped fragment, so the card goes
+    // against the selected words (ruling A30) and not against the paragraph.
+    const stream = buildTextStream(document.body);
+    const span = captureSpan(stream, rangeIn(textOf('p1'), 4, 15));
+    if (span === null) {
+      throw new Error('expected a span');
+    }
+    const { rangeFor, answers } = rectFactory([{ left: 12, top: 34, width: 56, height: 18 }]);
+    expect(placementFragmentBox(span.fragments, rangeFor)).toEqual({
+      left: 12,
+      top: 34,
+      width: 56,
+      height: 18,
+    });
+    expect(answers).toHaveLength(1);
   });
 });

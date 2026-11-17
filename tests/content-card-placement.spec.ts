@@ -3,8 +3,9 @@
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Rules / Semantics ->
  * "Card placement": the card is placed against the first fragment of the resolved
- * selection span, below it when there is room and above it otherwise, and it is
- * kept inside the viewport with a gutter.
+ * selection span that has a box, below it when there is room and above it otherwise,
+ * and it is kept inside the viewport with a gutter. A span with no box at all uses
+ * the same rule against the viewport (ruling `A65`).
  *
  * The card is a `position: fixed` box inside the shadow root, so every number here
  * is a viewport coordinate and the card does not scroll with the page — which is
@@ -21,6 +22,7 @@ import {
   CARD_ANCHOR_GUTTER_PX,
   CARD_VIEWPORT_GUTTER_PX,
   placeCard,
+  placeCardInViewport,
 } from '../src/content/overlay/card-placement';
 
 const SELECTION = { left: 100, top: 100, width: 200, height: 18 };
@@ -93,5 +95,52 @@ describe('the gutters ruling A30 names', () => {
   it('honours a caller-supplied distance without changing the rule', () => {
     const position = placeCard(SELECTION, CARD, DESKTOP, 20, 4);
     expect(position.top).toBe(SELECTION.top + SELECTION.height + 20);
+  });
+});
+
+describe('no fragment of the span has a box (ruling A65)', () => {
+  /**
+   * A span whose every fragment measures zero area has no anchor point — the
+   * fragments are in the stream because ruling `A1` keeps hidden text in it, and a
+   * zero box has no place next to it. The card is then placed by the viewport rule,
+   * which is `placeCard` with the viewport itself as the anchor box: the same
+   * clamp, the same gutter, no second model. Leaving the card where the shadow host
+   * starts would put it at `(0, 0)`, inside the gutter and over the page's own text.
+   */
+  it('places the card at the viewport gutter instead of the host corner', () => {
+    const position = placeCardInViewport(CARD, DESKTOP);
+    expect(position.left).toBe(CARD_VIEWPORT_GUTTER_PX);
+    expect(position.top).toBe(CARD_VIEWPORT_GUTTER_PX);
+    expect(position.placement).toBe('above');
+  });
+
+  it('keeps the whole card inside the viewport', () => {
+    const position = placeCardInViewport(CARD, DESKTOP);
+    expect(position.left + CARD.width).toBeLessThanOrEqual(
+      DESKTOP.width - CARD_VIEWPORT_GUTTER_PX,
+    );
+    expect(position.top + CARD.height).toBeLessThanOrEqual(
+      DESKTOP.height - CARD_VIEWPORT_GUTTER_PX,
+    );
+  });
+
+  it('keeps a card taller than the viewport reachable', () => {
+    const position = placeCardInViewport({ ...CARD, height: 1000 }, DESKTOP);
+    expect(position.top).toBe(CARD_VIEWPORT_GUTTER_PX);
+  });
+
+  it('pulls a card wider than the viewport back to the gutter', () => {
+    const position = placeCardInViewport({ ...CARD, width: 1400 }, DESKTOP);
+    expect(position.left).toBe(CARD_VIEWPORT_GUTTER_PX);
+  });
+
+  it('obeys the same gutter as a placement that has an anchor box', () => {
+    // The two cases must not disagree about the distance they keep: the only
+    // difference is the anchor box, not the clamp.
+    const anchored = placeCard(SELECTION, CARD, DESKTOP);
+    const unanchored = placeCardInViewport(CARD, DESKTOP);
+    expect(anchored.top).toBeGreaterThanOrEqual(CARD_VIEWPORT_GUTTER_PX);
+    expect(unanchored.top).toBe(CARD_VIEWPORT_GUTTER_PX);
+    expect(unanchored.left).toBe(CARD_VIEWPORT_GUTTER_PX);
   });
 });

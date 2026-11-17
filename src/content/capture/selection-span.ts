@@ -21,7 +21,13 @@
  *   separators are dropped, because `buildAnchor` leaves them out of `anchor.text`
  *   anyway and an untrimmed range would report a span the entry does not cover
  *   (`A27`). A whitespace-only selection has nothing left after the trim, so it
- *   produces no span at all and `buildAnchor` is never reached with it;
+ *   produces no span at all and `buildAnchor` is never reached with it. The trim
+ *   works in the code-point domain like every other number here: it converts the
+ *   two boundary numbers to UTF-16 indices with the core helpers, steps over the
+ *   separators there, and converts them back. Probing the stream with
+ *   `charAt(codePointOffset)` would be a UTF-16 read, and one astral character
+ *   anywhere earlier in the stream would then cut a separator that is not there and
+ *   take the first character off the stored note (`t3-01` review finding 1);
  * - `options.fragments` is the real fragment count of that trimmed span, taken
  *   from the same stream, never a guess and never the count of nodes the range
  *   merely touches (`A28` refuses an out-of-domain hint instead of coercing it).
@@ -39,6 +45,7 @@
 import { buildAnchor } from '../../core/anchor-build';
 import type { CodePointRange } from '../../core/entry-overlap';
 import type { EntryAnchor } from '../../core/entry';
+import { codePointOffsetAt, utf16IndexAt } from '../../core/text-normalize';
 import { fragmentsForRange } from '../anchor/locate-anchor';
 import type { TextFragment, TextStream } from '../anchor/text-stream';
 import { nodeCodePointIndex } from '../anchor/text-stream';
@@ -180,22 +187,42 @@ function streamOffsetOfBoundary(
 /**
  * Drops the stream separators at both ends of `[start, end)`.
  *
- * Every separator in the stream is exactly one U+0020 (`inline-comment-model.md`
- * -> "Block boundary", "Normalized text"), so a one-unit step per separator is
- * correct here and keeps the two offset domains apart.
+ * `start` and `end` are **stream code-point offsets** — the domain of every number
+ * in this module (`inline-comment-model.md` -> "Anchor domains") — and
+ * `streamText` is indexed in UTF-16 units, so the two must be converted before a
+ * character is looked at. Probing with `streamText.charAt(start)` reads the unit at
+ * UTF-16 index `start`, which is the code point `start` minus the number of astral
+ * code points before it: one emoji anywhere earlier in the article answers "no
+ * separator here" when there is one and "separator here" when there is none, so the
+ * trim cuts into the selection, `anchor.text` loses its first character, a short
+ * selection degenerates into an empty range, and a span that keeps a separator is no
+ * longer equal to the range of the entry stored from it, which turns the `duplicate`
+ * answer of ruling `A23` into `overlap` (`t3-01` review finding 1).
+ *
+ * The fix is one crossing in each direction, through the core helpers and nowhere
+ * else: `utf16IndexAt` turns the two code-point offsets into UTF-16 indices, the
+ * separators are stepped over there — every separator in the stream is exactly one
+ * U+0020 (`inline-comment-model.md` -> "Block boundary", "Normalized text"), one
+ * UTF-16 unit, so a one-unit step never splits a surrogate pair — and
+ * `codePointOffsetAt` turns the result back into code points. Offsets past the end
+ * of the stream clamp through `utf16IndexAt`, and an inverted range stays inverted
+ * in the code-point domain, which `captureSpan` answers with `null`.
  */
 function trimStreamRange(streamText: string, start: number, end: number): CodePointRange {
-  const from = Math.max(0, Math.min(start, streamText.length));
-  const to = Math.max(from, Math.min(end, streamText.length));
-  let begin = from;
-  let finish = to;
-  while (begin < finish && streamText.charAt(begin) === STREAM_SEPARATOR) {
-    begin += 1;
+  const fromUnits = utf16IndexAt(streamText, start);
+  const toUnits = Math.max(fromUnits, utf16IndexAt(streamText, end));
+  let beginUnits = fromUnits;
+  let finishUnits = toUnits;
+  while (beginUnits < finishUnits && streamText.charAt(beginUnits) === STREAM_SEPARATOR) {
+    beginUnits += 1;
   }
-  while (finish > begin && streamText.charAt(finish - 1) === STREAM_SEPARATOR) {
-    finish -= 1;
+  while (finishUnits > beginUnits && streamText.charAt(finishUnits - 1) === STREAM_SEPARATOR) {
+    finishUnits -= 1;
   }
-  return { start: begin, end: finish };
+  return {
+    start: codePointOffsetAt(streamText, beginUnits),
+    end: codePointOffsetAt(streamText, finishUnits),
+  };
 }
 
 /** The one separator character the stream ever emits. */

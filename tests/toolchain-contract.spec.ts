@@ -177,6 +177,42 @@ describe('layer boundaries', () => {
   });
 });
 
+describe('the capture module crosses the offset domain only through core helpers (t3-01b finding 1)', () => {
+  /**
+   * `trimStreamRange` holds **stream code-point** offsets and has to look at
+   * characters, which live at UTF-16 indices. The shipped code probed
+   * `streamText.charAt(offset)` directly and clamped those offsets with
+   * `streamText.length`: the same class of mistake the `t2-02` hand-over warns about
+   * in `fragment-rect.ts`, in the opposite direction, and invisible in the types
+   * because every number in that module is `number`. One astral character anywhere
+   * earlier in the stream answered "no separator here" where there was one, so the
+   * stored note lost its first character, a short selection lost its range, and a
+   * re-selection was refused as `overlap` instead of `duplicate`. The helpers that
+   * make the crossing already exist in `src/core/text-normalize.ts`.
+   */
+  const source = codeOnly(
+    readFileSync(join(projectRoot, 'src/content/capture/selection-span.ts'), 'utf8'),
+  );
+
+  it('converts the two boundary offsets with the core helpers', () => {
+    expect(source).toMatch(/\butf16IndexAt\b/);
+    expect(source).toMatch(/\bcodePointOffsetAt\b/);
+    expect(source).toMatch(
+      /from '\.\.\/\.\.\/core\/text-normalize'/,
+    );
+  });
+
+  it('never probes the stream with an unconverted code-point offset', () => {
+    // Every character probe of the stream addresses a `*Units` index, which is this
+    // module's name for a value produced by `utf16IndexAt`.
+    expect(source).not.toMatch(/streamText\.charAt\((?!beginUnits|finishUnits)/);
+  });
+
+  it('never measures a code-point offset against the UTF-16 length of the stream', () => {
+    expect(source).not.toMatch(/streamText\.length/);
+  });
+});
+
 describe('no network in shipped source', () => {
   it('src contains no fetch, XMLHttpRequest or WebSocket', () => {
     const pattern = /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b/;

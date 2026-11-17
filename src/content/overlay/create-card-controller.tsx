@@ -16,7 +16,13 @@
  *   no span — empty, collapsed, whitespace-only — never opens a card, so the user
  *   is never invited to type into a note that cannot exist (`t2-03` residual
  *   risk 5: core allows a degenerate candidate, so the card is the only line of
- *   defence);
+ *   defence). The box is measured **before anything is mounted**, because a card
+ *   whose position is unknown is a card the user cannot reach: a measurement that
+ *   throws — the page shrank the selected text node during the settle delay, so
+ *   `setStart` rejects — closes the card instead of leaving it mounted without
+ *   coordinates, and it writes nothing (ruling `A64`). A span whose every fragment
+ *   measures zero area is not a failure: it has no anchor point, and the card is
+ *   placed by the viewport rule instead (ruling `A65`);
  * - **saving** re-derives everything from the boundaries it kept, against a stream
  *   built at that moment (`create-note.ts`). Nothing measured while opening is
  *   reused for the write: a page that re-rendered the article between the two
@@ -35,7 +41,7 @@
 import { render } from 'preact';
 import { buildTextStream } from '../anchor/text-stream';
 import { captureSpan } from '../capture/selection-span';
-import { documentRangeForFragment, firstFragmentBox } from '../capture/fragment-rect';
+import { documentRangeForFragment, placementFragmentBox } from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
 import {
   capturePageSelection,
@@ -45,7 +51,7 @@ import {
 import type { SelectionBoundaries, CapturedSelection } from '../capture/page-selection';
 import { currentAuthorName, createNote } from '../create/create-note';
 import type { CreateNoteResult } from '../create/create-note';
-import { placeCard } from './card-placement';
+import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
 import { CARD_ROOT_CLASS, ensureCardStyle } from './card-style';
 import { CreateCard } from './create-card';
@@ -139,7 +145,11 @@ export function createCreateCardController(
     return result;
   }
 
-  function open(selection: CapturedSelection, authorName: string, fragments: readonly TextFragment[]): void {
+  function open(
+    selection: CapturedSelection,
+    authorName: string,
+    anchorBox: Box | null,
+  ): void {
     session = {
       range: selection.range,
       root: selection.root,
@@ -148,7 +158,7 @@ export function createCreateCardController(
     };
     render(<CreateCard onSubmit={submit} onCancel={close} />, wrapper);
     setOverlayHostHidden(overlay, false);
-    positionCard(fragments);
+    positionCard(anchorBox);
   }
 
   function close(): void {
@@ -163,18 +173,44 @@ export function createCreateCardController(
   }
 
   /**
-   * Places the card against the first resolved fragment of the selection
-   * (ruling `A30`). The card's own box is measured after the mount, because the
-   * stylesheet — not this module — decides its size.
+   * Writes the placement of the card (ruling `A30`). The card's own box is measured
+   * after the mount, because the stylesheet — not this module — decides its size.
+   *
+   * `null` anchor box means "this span has no box to place against": every fragment
+   * of the selection measures zero area (a hidden subtree is in the stream by ruling
+   * `A1`). The card is then placed by the viewport rule, not left at the corner of
+   * the shadow host, which is inside the `card gutter` (ruling `A65`).
    */
-  function positionCard(fragments: readonly TextFragment[]): void {
-    const anchorBox = firstFragmentBox(fragments, rangeFor);
-    if (anchorBox === null) {
-      return;
-    }
-    const position = placeCard(anchorBox, boxOf(wrapper), viewport());
+  function positionCard(anchorBox: Box | null): void {
+    const cardBox = boxOf(wrapper);
+    const position =
+      anchorBox === null
+        ? placeCardInViewport(cardBox, viewport())
+        : placeCard(anchorBox, cardBox, viewport());
     wrapper.style.left = `${String(position.left)}px`;
     wrapper.style.top = `${String(position.top)}px`;
+  }
+
+  /**
+   * The box the card will be placed against.
+   *
+   * Two different answers, and they must not collapse into one:
+   * - `{ ok: false }` — the measurement **threw**. `setStart` / `setEnd` reject
+   *   exactly when the page shrank the text node under the fragment list during the
+   *   settle delay, and this is the only place that knows what to do about it: the
+   *   card closes (ruling `A64`). The measurement runs before `open` mounts anything,
+   *   so a failed measurement leaves no mounted card without coordinates, the host
+   *   stays hidden, and no write is attempted; the next settled selection is a fresh
+   *   capture.
+   * - `{ ok: true, box: null }` — the span is fine but has **no box**: every fragment
+   *   measures zero area, and the card is placed by the viewport rule (`A65`).
+   */
+  function measureAnchorBox(fragments: readonly TextFragment[]): AnchorMeasurement {
+    try {
+      return { ok: true, box: placementFragmentBox(fragments, rangeFor) };
+    } catch {
+      return { ok: false };
+    }
   }
 
   async function capture(): Promise<void> {
@@ -193,7 +229,12 @@ export function createCreateCardController(
     if (span === null) {
       return;
     }
-    open(selection, authorName, span.fragments);
+    const measured = measureAnchorBox(span.fragments);
+    if (!measured.ok) {
+      // `A64`: no coordinates, so no card. Nothing was mounted and nothing is written.
+      return;
+    }
+    open(selection, authorName, measured.box);
   }
 
   function selectionMovedElsewhere(range: Range | null): boolean {
@@ -224,6 +265,9 @@ function ensureCardWrapper(doc: Document, root: ShadowRoot): HTMLElement {
   root.append(wrapper);
   return wrapper;
 }
+
+/** The outcome of one measurement attempt (`A64` versus `A65`). */
+type AnchorMeasurement = { ok: true; box: Box | null } | { ok: false };
 
 /** The box of an element in viewport coordinates. */
 function boxOf(element: HTMLElement): Box {

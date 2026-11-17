@@ -18,7 +18,9 @@
  *   `pointerdown` inside the host is not "outside": the user typing in the card
  *   holds a page selection and must not lose the draft;
  * - detaching the binding stops the capture path, which is what a teardown of a
- *   later task (`t4-03` SPA refresh) relies on.
+ *   later task (`t4-03` SPA refresh) relies on;
+ * - the `settle delay` is a constant pinned by the spec (ruling `A63`), asserted
+ *   against the value the spec names and observed as the default of the wiring.
  *
  * jsdom retargets a composed event fired inside a shadow tree to the host, which
  * is exactly the browser behavior `isInsideOverlayHost` is written against, and the
@@ -50,6 +52,13 @@ const AUTHOR = 'reader-one';
 const PAGE_URL = 'https://example.test/article';
 /** Short enough for a test, large enough that a pending timer is observable. */
 const SETTLE_MS = 15;
+/**
+ * The `settle delay` value as the spec pins it (`docs/specs/content-overlay-ui.md`
+ * -> Terms / Aliases). Ruling `A63`: a constant the spec names is asserted against
+ * that value, the way the 8 px `card gutter` and the 240-code-point warning
+ * threshold already are, because `> 0` pins nothing an article could not break.
+ */
+const SPEC_SETTLE_MS = 150;
 /** jsdom measures nothing, so the fragment box arrives through the shipped seam. */
 const FRAGMENT_BOX = { left: 40, top: 120, width: 200, height: 16 };
 
@@ -160,7 +169,6 @@ describe('a settled selection opens one card', () => {
     await wait(1);
     expect(wiring.isOpen()).toBe(false);
     await openCard(wiring);
-    expect(SELECTION_SETTLE_MS).toBeGreaterThan(0);
   });
 
   it('performs one capture for a selection that moved several times', async () => {
@@ -294,5 +302,46 @@ describe('detaching the binding stops the capture path', () => {
     await wait(SETTLE_MS + 40);
     expect(wiring.isOpen()).toBe(false);
     expect(wiring.cardCount()).toBe(0);
+  });
+});
+
+describe('the settle delay is a constant the spec pins (ruling A63)', () => {
+  it('keeps the shipped delay at the value the spec names', () => {
+    expect(SELECTION_SETTLE_MS).toBe(SPEC_SETTLE_MS);
+  });
+
+  it('uses the pinned delay at the production call site, where no delay is passed', async () => {
+    // The wiring takes the delay as an argument only so a test can observe a pending
+    // timer without waiting for the real one. The production call site passes nothing,
+    // so the pinned constant is what a page actually waits: a shorter default would
+    // already have captured, and a longer one would not have captured yet.
+    const overlay = ensureOverlayHost();
+    if (overlay === null) {
+      throw new Error('jsdom is the top frame, so the host must exist');
+    }
+    let captures = 0;
+    const dispose = attachCreateCardEvents(
+      {
+        capture: async (): Promise<void> => {
+          captures += 1;
+        },
+        close: (): void => undefined,
+        isOpen: (): boolean => false,
+        selectionMovedElsewhere: (): boolean => false,
+      },
+      document,
+      window,
+      overlay.host,
+    );
+    try {
+      selectPageText('p1', 4, 15);
+      fireSelectionChange();
+      await wait(SELECTION_SETTLE_MS - 40);
+      expect(captures).toBe(0);
+      await wait(80);
+      expect(captures).toBe(1);
+    } finally {
+      dispose();
+    }
   });
 });

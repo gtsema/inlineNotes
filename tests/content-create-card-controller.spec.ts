@@ -18,7 +18,12 @@
  *   map statically; this file proves the runtime half of AC5: with no usable name
  *   in the settings the card never opens, and the two create refusals the user can
  *   actually hit (`overlap`, `duplicate`) reach the page as two different
- *   sentences (`A47`).
+ *   sentences (`A47`);
+ * - the measurement rulings of `t3-01b` are proven in situ: a measurement that
+ *   throws leaves no card and no write (`A64`), a span whose fragments all measure
+ *   zero area is placed by the viewport rule (`A65`), and a page that carries an
+ *   astral character before the selection still opens a card, stores the whole word
+ *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1).
  *
  * The environment is jsdom, but only the page side of the boundary is faked: the
  * storage seam is the hand-written `MemoryStoragePort`, and the entry that a save
@@ -30,7 +35,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { buildTextStream } from '../src/content/anchor/text-stream';
 import { captureSpan } from '../src/content/capture/selection-span';
-import type { RangeForFragment } from '../src/content/capture/fragment-rect';
+import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect';
 import type { CapturedSelection } from '../src/content/capture/page-selection';
 import { createNote } from '../src/content/create/create-note';
 import { ensureOverlayHost, OVERLAY_HOST_ID } from '../src/content/overlay/host';
@@ -49,6 +54,7 @@ import {
   type CreateCardController,
 } from '../src/content/overlay/create-card-controller';
 import { CONTENT_STRINGS, REFUSAL_TEXT, refusalText } from '../src/content/text';
+import { CARD_VIEWPORT_GUTTER_PX } from '../src/content/overlay/card-placement';
 import { createEntryOnPage } from '../src/core/entry-store-write';
 import { loadEntries } from '../src/core/entry-store-read';
 import { saveSettings } from '../src/core/settings-store';
@@ -81,6 +87,9 @@ interface Fixture {
   readonly measured: Array<{ node: Node; start: number; end: number }>;
 }
 
+/** What a measuring seam answers for one fragment, or a throw (`A64`). */
+type RectOf = (node: Node, start: number, end: number) => Box;
+
 /** Preact flushes on a microtask and the write chain awaits the port a few times. */
 async function settle(rounds: number = 10): Promise<void> {
   for (let round = 0; round < rounds; round += 1) {
@@ -108,12 +117,37 @@ function selection(id: string, from: number, to: number): CapturedSelection {
   return { range: rangeIn(textOf(id), from, to), root: document.body };
 }
 
+/** A selection that starts in one paragraph and ends in another. */
+function selectionAcross(
+  fromId: string,
+  from: number,
+  toId: string,
+  to: number,
+): CapturedSelection {
+  const range = document.createRange();
+  range.setStart(textOf(fromId), from);
+  range.setEnd(textOf(toId), to);
+  return { range, root: document.body };
+}
+
+/**
+ * A box with no area but with a position: what a fragment in a collapsed or hidden
+ * subtree measures as. The coordinates are far from the viewport gutter on purpose,
+ * so the viewport-rule expectation below cannot pass through these numbers by
+ * accident (ruling `A65`).
+ */
+const COLLAPSED_BOX: Box = { left: 500, top: 400, width: 0, height: 0 };
+
 /**
  * Builds the controller for one host. `readSelection` is the shipped seam, so the
  * card is opened for exactly the boundaries the test controls, while the host, the
  * stylesheet, the mount, the placement write and the whole create path stay real.
+ *
+ * `rectOf` replaces only the box the fragment measurement reports, which is how a
+ * test drives the two rulings about measurement: a zero-area box (`A65`) and a
+ * measurement that throws because the page shrank the text node (`A64`).
  */
-function mount(captured: CapturedSelection | null): Fixture {
+function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
   const overlay = ensureOverlayHost();
   if (overlay === null) {
     throw new Error('jsdom is the top frame, so the host must exist');
@@ -123,7 +157,8 @@ function mount(captured: CapturedSelection | null): Fixture {
   const measured: Array<{ node: Node; start: number; end: number }> = [];
   const rangeFor: RangeForFragment = (node, start, end) => {
     measured.push({ node, start, end });
-    return { getBoundingClientRect: () => FRAGMENT_BOX };
+    const rect = rectOf === undefined ? FRAGMENT_BOX : rectOf(node, start, end);
+    return { getBoundingClientRect: () => rect };
   };
   const controller = createCreateCardController(document, overlay, {
     port,
@@ -181,6 +216,12 @@ async function typeAndSave(overlay: OverlayHost, comment: string): Promise<void>
   await settle(2);
   saveButtonOf(overlay).click();
   await settle();
+}
+
+/** The wrapper element of the card, or `null` when it was never positioned. */
+function wrapperOf(overlay: OverlayHost): HTMLElement | null {
+  const wrapper = overlay.root.querySelector(`.${CARD_ROOT_CLASS}`);
+  return wrapper instanceof HTMLElement ? wrapper : null;
 }
 
 /** Every port write except the author-name write the fixture itself performs. */
@@ -518,5 +559,154 @@ describe('the card keeps the user draft through a refusal (AC3, AC5)', () => {
     expect(refusalLineOf(fixture.overlay)).toBeNull();
     expect(saveButtonOf(fixture.overlay).disabled).toBe(false);
     expect(needCard(fixture.overlay).contains(field)).toBe(true);
+  });
+});
+
+describe('a page whose text carries an astral character before the selection (t3-01b AC2)', () => {
+  /**
+   * `t3-01` review finding 1: the span was trimmed with a UTF-16 probe of a
+   * code-point range, so one astral character earlier in the stream took the first
+   * character off the stored note, could degenerate the range of a short selection
+   * (no card at all, or `selection_lost` at save), and left a stream separator
+   * inside a span so that the same re-selection was refused as `overlap` instead of
+   * `duplicate` (`A23`). These are the end-to-end forms of the three consequences;
+   * `tests/content-selection-capture.spec.ts` pins the number domain itself.
+   */
+  it('opens the card for a one-word selection and stores the whole word', async () => {
+    document.body.innerHTML = '<article id="art"><p id="p1">\u{1F600} alpha</p></article>';
+    const fixture = mount(selection('p1', 3, 8));
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+
+    await typeAndSave(fixture.overlay, 'first note');
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0].text).toBe('alpha');
+    expect(page.entries[0].anchor.text).toBe('alpha');
+  });
+
+  it('opens the card for a one-character word after an astral character', async () => {
+    // The shortest selection the old trim could destroy: its range became empty, so
+    // no card opened and a save could only answer `selection_lost`.
+    document.body.innerHTML = '<article id="art"><p id="p1">\u{1F600} a</p></article>';
+    const fixture = mount(selection('p1', 3, 4));
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(cardOf(fixture.overlay)).not.toBeNull();
+
+    await typeAndSave(fixture.overlay, 'short note');
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries[0].text).toBe('a');
+  });
+
+  it('refuses a re-selection of the same text as a duplicate, not an overlap (A23)', async () => {
+    // The click caught the space before the words, which is the case the old trim
+    // left un-trimmed on such a page: the candidate then covered one code point more
+    // than the range of the stored entry, so `sameRange` answered false and the user
+    // was told about an intersection instead of about the note they repeated.
+    document.body.innerHTML =
+      '<article id="art"><p id="p1">\u{1F600} The quick brown fox jumps</p></article>';
+    const sameSelection = () => selection('p1', 6, 18);
+    expect(sameSelection().range.toString()).toBe(' quick brown');
+
+    const fixture = mount(sameSelection());
+    await seedAuthor(fixture.port);
+    await seedEntry(fixture.port, rangeIn(textOf('p1'), 6, 18), 'same note');
+
+    await fixture.controller.capture();
+    await typeAndSave(fixture.overlay, 'same note');
+
+    const line = refusalLineOf(fixture.overlay);
+    expect(line).toBe(REFUSAL_TEXT.duplicate);
+    expect(line).not.toBe(REFUSAL_TEXT.overlap);
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0].text).toBe('quick brown');
+  });
+});
+
+describe('a measurement that throws leaves the card closed (ruling A64)', () => {
+  it('mounts nothing, positions nothing and writes nothing when the node shrank', async () => {
+    // `Range.setStart` rejects when the page shortened the text node between the
+    // settle delay and the measurement. The card must not end up mounted without
+    // coordinates, and no write may be attempted for a selection that is gone.
+    const fixture = mount(selection('p1', 4, 15), (): Box => {
+      throw new Error("Failed to execute 'setStart' on 'Range': IndexSizeError");
+    });
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+
+    expect(fixture.controller.isOpen()).toBe(false);
+    expect(cardOf(fixture.overlay)).toBeNull();
+    expect(fixture.overlay.host.hidden).toBe(true);
+    // The wrapper element exists, but it was never given a position: the card was
+    // never revealed at the corner of the host.
+    const wrapper = wrapperOf(fixture.overlay);
+    if (wrapper === null) {
+      throw new Error('expected the card wrapper to exist');
+    }
+    expect(wrapper.style.left).toBe('');
+    expect(wrapper.style.top).toBe('');
+    // The measurement was attempted once, and nothing after it happened.
+    expect(fixture.measured).toHaveLength(1);
+    expect(writesOtherThanSettings(fixture.port)).toHaveLength(0);
+    expect(fixture.port.storedKeys()).toEqual([SETTINGS_KEY]);
+  });
+});
+
+describe('a zero-area fragment box does not place the card (ruling A65)', () => {
+  it('places by the viewport rule when every fragment of the span has no box', async () => {
+    // A fragment in a hidden subtree is in the stream (ruling `A1`) and measures as a
+    // zero box, here at (500, 400). The answer is not "no card" and not a card at the
+    // collapsed box's coordinates or at the corner of the shadow host: it is the same
+    // placement rule against the viewport, so the card starts inside the `card
+    // gutter`.
+    const fixture = mount(selection('p1', 4, 15), (): Box => COLLAPSED_BOX);
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+
+    const wrapper = wrapperOf(fixture.overlay);
+    if (wrapper === null) {
+      throw new Error('expected the positioned wrapper inside the shadow root');
+    }
+    expect(wrapper.style.left).toBe(`${String(CARD_VIEWPORT_GUTTER_PX)}px`);
+    expect(wrapper.style.top).toBe(`${String(CARD_VIEWPORT_GUTTER_PX)}px`);
+  });
+
+  it('places against the first fragment that has a box', async () => {
+    // The first fragment of the span is hidden, the second is visible: the card goes
+    // against the words the reader can see, at the box of that second fragment
+    // (200 + 18 + 8 below it), and the hidden fragment is still measured and skipped.
+    document.body.innerHTML = [
+      '<article id="art">',
+      '  <p id="p1">one two three</p>',
+      '  <p id="p2">four five six</p>',
+      '</article>',
+    ].join('\n');
+    const boxes: Box[] = [COLLAPSED_BOX, { left: 300, top: 200, width: 60, height: 18 }];
+    let calls = 0;
+    const fixture = mount(selectionAcross('p1', 0, 'p2', 13), (): Box => {
+      const box = boxes[calls];
+      calls += 1;
+      return box ?? COLLAPSED_BOX;
+    });
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(fixture.measured).toHaveLength(2);
+    const wrapper = wrapperOf(fixture.overlay);
+    if (wrapper === null) {
+      throw new Error('expected the positioned wrapper inside the shadow root');
+    }
+    expect(wrapper.style.left).toBe('300px');
+    expect(wrapper.style.top).toBe('226px');
   });
 });
