@@ -322,7 +322,9 @@ function setVisibility(state: 'visible' | 'hidden'): () => void {
   });
   return (): void => {
     if (descriptor === undefined) {
-      delete (document as Document & { visibilityState?: unknown }).visibilityState;
+      // jsdom keeps `visibilityState` on `Document.prototype`, so the own property this
+      // helper added is the whole change: dropping it restores the prototype answer.
+      delete (document as { visibilityState?: unknown }).visibilityState;
       return;
     }
     Object.defineProperty(document, 'visibilityState', descriptor);
