@@ -84,8 +84,11 @@ Expected:
 - partial overlap with your own note → the editor (self-exclusion applies), and overlapping a *different* own note gives the
   visible refusal message instead of creating;
 - saving from the editor keeps the note on the same words (no anchor move, `A78`).
-Result: `not verified`
-Notes:
+Result: **passed** — «тут всё ок».
+Notes: own note → the editor with the stored comment and the three controls; foreign note → nothing opened; partial overlap of
+an own note → the editor as well; saving from the editor left the note on the same words (`A78` confirmed on a real page). This
+is the `claimSelection` handover of Flow 6 whose `main.ts` wiring is deliberately unpinned in jsdom — the browser was its only
+verification, and it holds.
 
 ## 5. The popup against a real page (rows, ownership, delete, the `tabs` permission)
 
@@ -120,7 +123,7 @@ Notes:
 
 ## Outcome
 
-- Items passed: 2 / 6 — item 2 (hover cost, by observation), item 3 (detached-node refusal + live card)
+- Items passed: 3 / 6 — items 2, 3, 4
 - Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
 - Items failed: 0
 - Items not verified: 4
