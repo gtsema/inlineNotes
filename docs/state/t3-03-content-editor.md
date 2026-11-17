@@ -92,7 +92,30 @@ a child, not a new attempt, `A80`). Remaining: 1 (the reviewer).
 
 - engineer report: delivered by the resumed run, copied to `docs/state/t3-03-engineer.md` (AC1–AC5 self-check shipped,
   both carried fixes answered, one open question escalated, §7 lists what was deliberately not done, §8 residual risks)
-- reviewer verdict: not started
+- reviewer verdict: **changes requested** (`docs/state/t3-03-review.md`) — 1 blocking finding, 6 non-blocking remarks;
+  AC2–AC5 `pass`, both carried fixes `done`, `A74`/`A75`/`A78` and the boundary-pin widening confirmed honest, all four
+  gates re-run green by the reviewer
+- **blocking finding 1**: the Flow 6 handover has no pin — `create-card-controller.tsx:266` honours `claimSelection` and
+  `main.ts:78-79` wires it, but `grep -rn "claimSelection" tests` → 0 hits, so deleting the hook would keep the suite green
+  and break AC1/overlay AC5 on a real page
+- **task status: attempt 2 opened** for that finding plus two doc/pin remarks (the card's ceiling allows exactly 4 children;
+  3 used after the fix, the re-review is the 4th and last)
+
+## Attempt 2 brief (narrow, three items only)
+
+1. **Blocking finding 1** — two cases in `tests/content-create-card-controller.spec.ts`: the hook answers `true` → no card
+   wrapper mounted, no span capture, no core read or write; the hook answers `false` → the card opens normally.
+2. **Review remark 2** — `src/content/editor/edit-entry.ts:130` names `tests/content-editor-edit-path.spec.ts`, which does
+   not exist (one stale reference survives in shipped source); and the throw-table row for `edit-entry.ts:136`
+   (`content-overlay-ui.md:191`) must say **"named, not driven by a throw"** with the jsdom-injection reason, exactly like
+   the `paint-style.ts` row, because the AC5 fixture hits the sibling `span === null` branch.
+3. **Review remark 3 (PM-caused)** — the `A78` rewrite renamed the spec section, leaving two dead pointers: fix
+   `src/content/editor/edit-entry.ts:29-30` and `tests/content-editor-controller.spec.ts:786-788` to name
+   "Ruling `A78`: what a successful `re-selection` stores". Comment text only, no behavior change.
+
+Deferred by the PM, not carried into attempt 2: remark 4 (`main.ts` delete glue pinned at the boundary — same accepted
+shape as `onCreated`), remark 5 (a `buildTextStream` count pin — shipped code is compliant today), remark 6 (AC3 wording
+about the tooltip half), remark 7 (`A74` assertion style — the rule is covered).
 
 ## PM rulings and decisions on this task
 
