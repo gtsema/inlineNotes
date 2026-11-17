@@ -67,12 +67,32 @@ mutated for painting: the only element the extension owns is the single overlay 
 5. Teardown honesty: `clearPaint()` removes every range and the highlight name; a second paint pass does not accumulate
    ranges; re-resolve after a DOM change rebuilds rather than reuses positions (ruling `A29`).
 
-Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
+Gates green and quoted, in the `A62` order: `npm run build`, `npm test`, `node scripts/check-agent-config.mjs`.
 
-Work order (mandatory): paint module + tooltip module + tests → `npm test` early → spec lines
-(`docs/specs/content-overlay-ui.md`: one highlight name, teardown, tooltip content source) → gates →
-commit `feat(t3-02): CSS Highlight painting and tooltip`. Commit as soon as green; a committed green state with a short
-report is accepted, an uncommitted perfect one is not.
+Work order (`A53`, two commits): paint module + tooltip module + tests → `npm test` early → **commit 1**
+`feat(t3-02): CSS Highlight painting and tooltip` → spec lines (`docs/specs/content-overlay-ui.md`: one named highlight
+per entry (`A70`), teardown (`A39`), tooltip content source, the paint-path measurement rule (`A66`), the tooltip anchor
+for zero-area boxes (`A67`)) → gates → **commit 2** `docs(t3-02): painting, teardown and tooltip rules`.
+
+## Contracts from `t3-01b` (`docs/state/t3-01b-review.md` → Stage 3 readiness) — binding
+
+- **The measurement seam is `src/content/capture/fragment-rect.ts`**: use `documentRangeForFragment` + `fragmentBox` over
+  **every** fragment of an all-or-nothing locate (`A36`). Do **not** paint with `placementFragmentBox` — it skips
+  fragments and would paint half a selection. Export `hasArea` for the tooltip instead of re-deriving
+  `width > 0 && height > 0` in a second module.
+- `A66`: a measurement throw in the paint pass is **per entry** — no highlight, no frame, no tooltip, the same observable
+  state as `anchor_stale` (`A40`). The `catch` wraps only that entry's measurement, never the whole pass; it must not
+  remove another entry's highlights and must never touch storage. Do not copy the bare `catch {}` from
+  `create-card-controller.tsx:208-213` into a paint module.
+- `A67` (assumption, one sentence in the spec): a zero-area fragment box anchors the tooltip to the **first fragment that
+  has an area**; if no fragment has one, **no tooltip** — the entry stays listed in the popup and stays deletable.
+- `A68`: the paint pass owns `CSS.highlights` exclusively and card visibility never clears it — `close()` hides the host,
+  so an aggregate visibility owner is required or every card close flickers the highlights.
+- The **load-time pass does not exist yet**: nothing in `src/content/` reads the page or the entries at load. Building
+  that pass (entries → stream once → resolve all → paint) is part of this task, and it is the code path the overlay
+  spec's Flow 2/8 assumes.
+- The two importer-count pins in `tests/content-create-card-boundaries.spec.ts:120-130` must be widened **deliberately in
+  the commit that adds the second reader**, not silently.
 
 ## Inputs the engineer reads
 

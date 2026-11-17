@@ -182,3 +182,6 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - The user chose a **separate fix slice `t3-01b`** instead of spending the parent task's last child on a third engineer
   attempt, which the delivery rule forbids. Stage 3 is 6 tasks; `t3-01-content-create-card` stays `changes requested`
   until `t3-01b` is accepted.
+- `A70` (PM correction, before delegating `t3-02`): painting uses **one named highlight per entry**
+  (`inlinenotes-<entryId>`), as `content-overlay-ui.md` line 47 and rulings `A38`/`A39` already say. The `t3-02` brief
+  had been written with "a single highlight name", which contradicted the spec; the spec wins, the brief was fixed.
