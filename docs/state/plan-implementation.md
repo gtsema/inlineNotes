@@ -42,7 +42,7 @@ is confirmed on a real browser.
 | `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
 | `t3-02-content-highlight-tooltip` | **accepted** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 green, carried findings 1–3 closed by `t3-02b`, **confirmed on a real browser** | overlay AC2, AC3 |
 | `t3-02b-carried-test-fixes` | **delivered** (`a6997f9`+`3462d2a`, attempt 1, 626 tests, no `src/` file touched): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
-| `t3-05-page-boundary-throw-safety` | opened by `A75`: guard the page-boundary throws at the content call sites — a detached-node `intersectsNode` throw must answer `selection_lost` instead of freezing the card, `refresh()` must provably not reject, and the throw list moves into the spec | overlay Edge Cases, model `selection_lost` |
+| `t3-05-page-boundary-throw-safety` | **accepted** (`14995da`+`6865db2`, attempt 1, 672 tests, 0 blocking findings) — page-boundary throws guarded at the content call sites: a detached-node save answers `selection_lost` instead of freezing the card, `refresh()` cannot reject, throw list in the spec | overlay AC21, model `selection_lost` |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
@@ -228,6 +228,13 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A76`: `extension-engineer` may edit `docs/specs/code-review-flow.md` **only** under a numbered PM ruling that names the
   file, cited in the commit message (resolves the `docs/specs/INDEX.md` ownership row for that spec, which names
   `project-manager`).
+- **Ruling `A77` (reviewer gate duty)**: a reviewer always re-runs `node scripts/check-agent-config.mjs`; the brief may
+  additionally order `npm run build` and `npm test` when the task shipped code, and then the brief wins and the extra runs
+  are disclosed in the review artifact. Resolves the `t3-05` remark-5 conflict between a brief and
+  `docs/project-profile.md:71`; the PM re-runs all three gates personally on every delivered task regardless.
+- `A75`/`A76` and the `t3-05` closure also fixed one false sentence in the throw table (jsdom does support constructed
+  stylesheets; the real limit is that `adoptPaintSheet` is module-private and cached) — a single-sentence spec correction
+  made by the PM under the single-spec-slice authority, checker green.
 - **The full page loop now works for the user (2026-11-17): name set from the options UI, then selection → card → save →
   highlight → tooltip on a real article, no console workaround.** Stage 3's runtime blocker is closed; what remains
   observable is the editor (`t3-03`), the popup list and checkboxes (`t4-01`), SPA refresh (`t4-03`), and the stuck-card fix

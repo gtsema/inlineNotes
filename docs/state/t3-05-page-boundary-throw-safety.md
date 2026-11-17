@@ -68,13 +68,35 @@ a refusal code or a Russian wording (the vocabulary is fixed by `text.ts` and th
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered; one mid-run steer,
-not a child). Remaining: 1 (reviewer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2 of 4** (engineer delivered, reviewer **accepted**, 0
+blocking findings; the mid-run steer is not a child). Task closed.
 
 ## Verdicts
 
 - engineer report: attempt 1 delivered, copied to `docs/state/t3-05-engineer.md`
-- reviewer verdict: not started
+- reviewer verdict: **accepted**, 0 blocking findings (`docs/state/t3-05-review.md`); the reviewer independently accounted
+  for the +22 test delta and reproduced the red-state chain by reading the code
+- **task status: accepted** (`14995da`+`6865db2`)
+
+## PM decisions on the review remarks
+
+1. **Spec sentence about jsdom — fixed by the PM in this slice** (`content-overlay-ui.md`, the `adoptPaintSheet` row): the
+   old wording blamed jsdom, which is false (jsdom supports constructed sheets — `tests/content-paint-style.spec.ts`).
+   The true reason is an injection limit: `adoptPaintSheet` is module-private and cached per document. PM authority: a
+   single-sentence spec correction, no behavior change, checker re-run green (58 INFO).
+2. **Stale `authorName` after an early failure return (`page-painter.ts:178,:189`) — accepted v1 debt.** Nothing shipped
+   reads `authorNameOfPass()` on a failed pass (nothing is painted, so no tooltip asks for a name), so it is not
+   observable today. One line to reset it when a consumer appears.
+3. **Bare `catch {}` mapping any throw onto a page-state code — accepted trade-off, recorded**: it is what the spec's
+   "Where the guard sits" rule orders, and the cost is diagnostic — a defect of our own code will look like a page state.
+   If a future bug is hard to find for exactly that reason, the fix is a debug-only log, not a new code.
+4. **Report numbering (`A72`)**: the engineer answered every number but relabelled them (its `1` = `t3-02` remark 4, its
+   `2` = `t3-02b` remark 1, its `3` = `A75`) instead of echoing the brief's numbers. Mapping: brief 1 ↔ report 2,
+   brief 2 ↔ report 1, brief 3 ↔ report 3. Nothing unanswered; the rule (echo the brief's numbers) stands.
+5. **Brief-vs-profile conflict on reviewer gates → ruling `A77`**: the reviewer's default duty is the checker only
+   (`code-review-flow.md`, `project-profile.md`); a PM brief may order all three green gates when the task shipped code,
+   and when it does, the brief is followed and the extra runs are disclosed. Here the brief won, `dist/` is gitignored, so
+   the reviewed tree stayed clean.
 
 ## Open questions
 

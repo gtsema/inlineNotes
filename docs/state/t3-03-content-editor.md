@@ -53,9 +53,26 @@ entry from its own overlap check), `docs/specs/content-overlay-ui.md` (Flow 5, A
 Popup and options (Stage 4), SPA URL watching and `storage.onChanged` (`t4-03`), per-entry highlight names (owned by
 `t3-02`), any storage call that is not a core API call.
 
+## Carried fixes (2 — the budget limit for one task, per `delivery-planning`)
+
+1. **Mark the not-yet-shipped half of the spec** (`t3-02` review remark 2): AC4/AC5 and Flow 5/6 of
+   `docs/specs/content-overlay-ui.md` describe the editor this task ships, and nothing else in the repo says which parts
+   existed before it. In the same commit that ships the editor, mark those AC/Flow lines as shipped by `t3-03` so the
+   spec reads as a history a new reader can follow.
+2. **Decide the fate of `PaintedEntry.tooltipBox`** (`src/content/paint/paint-plan.ts:69-77`, `t3-02` review remark 3):
+   the field is measured and carried but no shipped code reads it. Either the editor consumes it (a click target bigger
+   than the text fragments) or the field and its measurement die. "Keep it because it might be useful" is not an answer:
+   a measured value with no consumer is a maintenance cost and a fake signal in the plan type.
+
+The third item from that review (the jsdom wording in the throw table) was corrected by the PM inside the `t3-05`
+closure, so it is not carried here.
+
 ## Attempts log
 
 - attempt 1: brief prepared; delegated after `t3-02` acceptance.
+- **2026-11-17: delegated after `t4-02` (name unblocked the runtime) and after `t3-05` (the save path is no longer
+  wedgeable), ahead of `t4-01`.** Gate order in this brief predates `A62`: `npm run build`, then `npm test`, then
+  `node scripts/check-agent-config.mjs`.
 
 ## Delegation count
 
