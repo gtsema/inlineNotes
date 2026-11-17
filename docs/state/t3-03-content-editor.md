@@ -85,9 +85,9 @@ closure, so it is not carried here.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** (`resume`-delivered attempt 1 = 2, attempt 2 engineer = 3).
-Remaining: **1** — the narrow re-review, which is also the parent-closure check for blocking finding 1. After it the card is
-at its ceiling: no fifth child without the user's explicit ruling.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **4 of 4** (`resume`-delivered attempt 1 = 2, attempt 2
+engineer = 3, narrow re-review = 4). Card closed by the re-review verdict; a fifth child would need the user's explicit
+ruling.
 
 ## Verdicts
 
@@ -105,6 +105,16 @@ at its ceiling: no fifth child without the user's explicit ruling.
   number, with the load-bearing proof for item 1. PM re-ran the gates: build green, **697/697** over 38 files (+2),
   checker 0 errors (67 INFO), typecheck exit 0, tree clean. Greps the engineer claims and the PM re-confirms:
   `content-editor-edit-path` → 0 hits, `Open question: what a successful` → 0 hits.
+
+- re-review verdict (attempt 2, 4th and last child): **accepted** — all four checklist numbers closed, no new blocking
+  finding (`docs/state/t3-03-review-attempt2.md`). The re-review proved the new pin load-bearing by reasoning over three
+  mutations (hook call deleted → `expect(fixture.claims).toHaveLength(1)` fails in both cases; the early `return` deleted →
+  case A fails at `isOpen()`; the hook moved before the settings gate → the `A31` order assertion fails) and corroborated
+  the test count read-only (38 spec files, 697 declarations at HEAD vs 695 at `baaacd0`, no `.skip`/`.only`).
+- **task status: accepted** (`8861e6f`+`e25ef91`+`14c58a7`+`4b674ae`); the card budget is spent (4 of 4).
+- one **new** remark from the re-review, accepted as debt: the `main.ts:78-79` wiring line itself stays unpinned — the same
+  accepted shape as the `onCreated`/`onDeleted` glue (remark 4). Its observable half moves to the browser verification list
+  in `t4-03`: selecting the text of your own note must open the editor and never a create card.
 
 ## Attempt 2 brief (narrow, three items only)
 

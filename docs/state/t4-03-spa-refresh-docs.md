@@ -92,6 +92,10 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
    saved**"; acceptance and refusal are pinned, but nothing writes a 40-code-point name through `saveSettings`. Either add
    that write (the astral case is the interesting one) or drop "and saved" from the sentence.
 
+4. **Selecting the text of your own note opens the editor, never a create card** — the `main.ts:78-79` wiring of the
+   `claimSelection` hook is deliberately unpinned in jsdom (accepted debt: `docs/state/t3-03-review-attempt2.md` new
+   remark 1), so the browser is where this handover is verified.
+
 ## Open questions
 
 - `A59` is worth asking the user (a permanent timer on every page vs. a missed SPA navigation). Default applied.

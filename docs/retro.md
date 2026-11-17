@@ -102,3 +102,27 @@
   Size was not the cause — AC1–AC5 and every boundary check passed. Fix encoded (`A72`): briefs carry a numbered
   carried-fix checklist, the report answers each number `done`/`skipped`, and the reviewer lists carried fixes one line
   per number; a missing named deliverable is blocking regardless of the AC verdict.
+
+## Stage 3 — closed (2026-11-17)
+
+Accepted: `t3-01-settings-read-core`, `t3-01b`, the `t3-01` card, `t3-02`, `t3-02b`, `t3-03`, `t3-04`, `t3-05`.
+697 unit tests over 38 files; the paint/tooltip/editor loop is confirmed by the user in a real Chrome, not only in jsdom.
+
+- What failed: **sequencing, not code.** Stage 3's done-criterion (select → card → save → highlight → tooltip) was
+  unreachable for a whole stage because the author-name gate lives in the content layer and the options page that satisfies
+  it sat in Stage 4. The user's first smoke attempt produced "nothing happens on selection" and it looked like a defect.
+  Fix: `t4-02` was pulled forward ahead of `t3-03`. A stage is ordered by the observable loop it must produce, not by layer.
+- What failed: `t3-03` attempt 1 **hit the 60-minute ceiling with the entire editor uncommitted** — 5 substantive AC plus
+  new modules plus spec edits in one slice, on a slow quantized runtime. Recovered by `resume` (`A80`) into three green
+  commits. The same run then died on a failed `edit` into a file its brief had excluded by directory (`docs/state/*`) while
+  its role writes its report into that directory — a brief-wording bug of the PM, now a rule: exclude the task state file
+  by name.
+- What failed: a rule **implemented in code and pinned nowhere** — the Flow 6 `claimSelection` handover
+  (`create-card-controller.tsx:266`, wired in `main.ts:78-79`) passed a whole AC-by-AC review and was caught only by the
+  reviewer's grep (`claimSelection` → 0 hits in tests). Deleting the hook would keep the suite green and break the editor
+  handover on a real page. Search shape for future reviews: a hook/handover wired in one module and consumed in another.
+- What failed: the **PM's own spec rename** (rewriting the `A78` open question into a ruling) left two dead pointers in
+  shipped comments. After renaming a spec section, grep its title repo-wide in the same commit.
+- What went right: the numbered carried-fix checklist (`A72`) worked on every task it was applied to; the fix-slice +
+  parent-closure re-check pattern closed `t3-02` without a forbidden third attempt; and `A75` turned a review remark into a
+  fix for a defect **jsdom could not reproduce** (a real engine throws where jsdom answers `false`).

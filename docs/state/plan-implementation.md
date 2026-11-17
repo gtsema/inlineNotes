@@ -43,7 +43,7 @@ is confirmed on a real browser.
 | `t3-02-content-highlight-tooltip` | **accepted** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 green, carried findings 1–3 closed by `t3-02b`, **confirmed on a real browser** | overlay AC2, AC3 |
 | `t3-02b-carried-test-fixes` | **delivered** (`a6997f9`+`3462d2a`, attempt 1, 626 tests, no `src/` file touched): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
 | `t3-05-page-boundary-throw-safety` | **accepted** (`14995da`+`6865db2`, attempt 1, 672 tests, 0 blocking findings) — page-boundary throws guarded at the content call sites: a detached-node save answers `selection_lost` instead of freezing the card, `refresh()` cannot reject, throw list in the spec | overlay AC21, model `selection_lost` |
-| `t3-03-content-editor` | **changes requested, attempt 2 opened** (`8861e6f`+`e25ef91`+`14c58a7`, 695 green; AC2–AC5 pass, both carried fixes done, `A74`/`A75`/`A78` verified) — the Flow 6 `claimSelection` handover has **no test at all**, so removing the hook would keep the suite green and break AC1 on a real page | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
+| `t3-03-content-editor` | **accepted** (`8861e6f`+`e25ef91`+`14c58a7`+`4b674ae`; attempt 1 timed out at the ceiling and was recovered by `resume` under `A80`, attempt 2 closed the one blocking finding, 697 tests green) — editor for your own entry prefilled, save/cancel/delete, overlap on re-selection with self-exclusion, foreign entries open no widget | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
 
@@ -236,10 +236,12 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   counter; a fresh attempt is only for a brief whose approach changed. Related wording rule: a brief excludes the **task
   state file** by name, never `docs/state/*`, because the role's `output:` path lives there — the `t3-03` resumed run died
   exactly on that contradiction, after all its work was committed.
-- **Ruling `A77` (reviewer gate duty)**: a reviewer always re-runs `node scripts/check-agent-config.mjs`; the brief may
-  additionally order `npm run build` and `npm test` when the task shipped code, and then the brief wins and the extra runs
-  are disclosed in the review artifact. Resolves the `t3-05` remark-5 conflict between a brief and
-  `docs/project-profile.md:71`; the PM re-runs all three gates personally on every delivered task regardless.
+- **Ruling `A77` (corrected after the `t3-03` re-review)**: the reviewer re-runs **only** `node scripts/check-agent-config.mjs`
+  — the role is read-only and `code-review-flow.md` → Edge Cases plus `docs/project-profile.md:71` forbid it from running a
+  build; briefs must not order a reviewer to build or test. A reviewer instead corroborates read-only (declaration counts,
+  greps, `.skip`/`.only` absence) and quotes the engineer's gate output. **The three green gates are the PM's duty**, run
+  personally on every delivered task before a review is started. (Earlier briefs ordered full gates and some reviewers ran
+  them — that variance is now closed.)
 - `A75`/`A76` and the `t3-05` closure also fixed one false sentence in the throw table (jsdom does support constructed
   stylesheets; the real limit is that `adoptPaintSheet` is module-private and cached) — a single-sentence spec correction
   made by the PM under the single-spec-slice authority, checker green.
