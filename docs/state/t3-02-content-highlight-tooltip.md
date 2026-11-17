@@ -30,6 +30,13 @@ mutated for painting: the only element the extension owns is the single overlay 
   (it rebuilds the stream); `locateAnchorInStream` may be used only when the stream was built in the same pass from the
   same `root`, otherwise a same-shape in-place `node.data` rewrite passes the shape check.
 
+## Carried fixes (three, all test-or-spec only — the budget limit is reached)
+
+- `t3-01-content-create-card` review remark 4: keyboard reachability of the card has no test and nothing moves focus
+  into the card on open.
+- `t3-01-content-create-card` review remark 5: the `A29` re-derive-at-save property has no test that **mutates the DOM
+  between open and save**; the paint pass reuses the same measurement, so it belongs here.
+
 ## Carried fix (one, from `docs/state/t3-04-review.md` remark 8)
 
 - Pin the **removed-and-re-added (adopted) node** case: such a node resolves as live and must paint, not go stale. The

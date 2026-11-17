@@ -39,6 +39,7 @@ is confirmed on a real browser.
 | `t3-01-settings-read-core` | **accepted** (`e654892`, attempt 2, `A57`/`A58`) — `loadSettings`/`saveSettings`, decode guard, 429 tests | model AC27–AC28 |
 | `t3-01-content-create-card` | **in flight** (`63a63dbf`) — shadow host, capture, create card, counter, message map | overlay AC1, AC9, AC11, model AC9 |
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
+| `t3-01b-content-offset-domain-fix` | **new (user-approved)** — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
 | `t3-02-content-highlight-tooltip` | CSS Highlight painting, frame, hover tooltip, mine vs foreign header | overlay AC2, AC3 |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
