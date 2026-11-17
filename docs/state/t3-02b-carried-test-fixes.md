@@ -72,16 +72,23 @@ fix it: the fix becomes its own task with its own budget. No editor work (`t3-03
 ## Attempts log
 
 - attempt 1: brief prepared after the user approved the fix slice (2026-11-17).
+- attempt 1 **delivered** (`a6997f9` tests, `3462d2a` spec; report copied to `docs/state/t3-02b-engineer.md`).
+  The engineer touched no file under `src/` — verified by the file list of both commits. PM re-ran the gates
+  personally: `npm run build` green, `npm test` **626/626** over 33 files (+7 tests vs `t3-02`), checker
+  **0 errors**, tree clean. The Carried-fix checklist was answered by number, all three `done` — the `A72`
+  rule worked on its first use.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered).
+Remaining: 1 (the reviewer, who also performs the **parent-closure re-check** of `t3-02` findings 1–2 and must
+state the parent verdict explicitly — precedent: `docs/state/t3-01b-review.md`).
 The reviewer of this task also performs the **parent-closure re-check** of `t3-02` findings 1–2 and must
 state the parent verdict explicitly (precedent: `docs/state/t3-01b-review.md`).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: attempt 1 delivered, copied to `docs/state/t3-02b-engineer.md`
 - reviewer verdict: not started
 - parent `t3-02` verdict: held open until this task's review re-checks findings 1–2
 

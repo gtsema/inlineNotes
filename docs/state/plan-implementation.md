@@ -41,7 +41,7 @@ is confirmed on a real browser.
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
 | `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
 | `t3-02-content-highlight-tooltip` | **changes requested, card held open** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 and every boundary check pass, **two carried fixes vanished** → closure proposed as `t3-02b` | overlay AC2, AC3 |
-| `t3-02b-carried-test-fixes` | tests/spec-only fix slice (`A48`/`A72`, user approved): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
+| `t3-02b-carried-test-fixes` | **delivered** (`a6997f9`+`3462d2a`, attempt 1, 626 tests, no `src/` file touched): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
@@ -214,3 +214,8 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   before `t3-03`**, because Stage 3's done-criterion (select → card → save → highlight → tooltip → edit) is unreachable
   without it and the `A41` smoke observation cannot be made. Until `t4-02` ships, the only way to unblock a manual run is
   writing the record from the extension page console: `chrome.storage.local.set({"settings:v1":{name:"Я"}})`.
+- **Stage 3 smoke observations (user, 2026-11-17, recorded in `docs/state/t3-02-content-highlight-tooltip.md`):** the user
+  loaded `dist/` unpacked and the painting and tooltip path works on a live page — `::highlight()` rules **do** apply
+  through `document.adoptedStyleSheets`, so `A41` **variant 1 is confirmed** and variant 2 is dropped; overlay AC3
+  (hover tooltip, click → opaque, no editor) and the dismiss-on-scroll rule are confirmed; no console errors. Only
+  `pointermove` cost on a very long article stays unverified and is carried to the `t4-03` verification list.

@@ -218,6 +218,25 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** — attempt
 - parent status: **held open** — the painting and tooltip halves are verified good and stay committed; the card is not
   accepted until carried fixes 1–2 are closed, exactly as `t3-01` was held open until `t3-01b` was accepted
 
+## Runtime verification on a real browser (Stage 3 smoke, user, 2026-11-17)
+
+The user loaded the built `dist/` unpacked and ran the painting and tooltip path by hand. Confirmed on a live page:
+
+- **`A41` variant 1 is correct in Chrome**: the paint style registered through `document.adoptedStyleSheets` does apply
+  `::highlight(…)` rules — the saved note gets its translucent highlight and frame. Variant 2 (a
+  `<style id="inlinenotes-paint">` element) is therefore **not needed**, and overlay AC2 stays literally
+  "no page element other than the overlay host". This was the open risk that could have invalidated the whole slice.
+- **overlay AC3 confirmed live**: hovering the painted text shows the tooltip with the comment and the author name; a click
+  makes it opaque; no editor affordance (correct — `t3-03`).
+- **`A32`/`A67` on hover confirmed live**: scrolling dismisses the tooltip instead of leaving it floating over other words;
+  no errors or warnings in the page console during selection, save or hover.
+- Still smoke-open, moved to the `t4-03` verification list: an **unthrottled `pointermove`** that re-measures every fragment
+  of the hovered entry — invisible on a short page, only observable on a long article (`t3-02` review remark 5).
+- How the run was possible at all: the author-name gate made selection a no-op until the record was written by hand from the
+  extension console (`chrome.storage.local.set({"settings:v1":{name:"Я"}})`). That is the Stage 3 sequencing blocker
+  recorded in `docs/state/plan-implementation.md` — the options page is still the `t1-01` placeholder, so
+  `t4-02-options-name` was pulled forward ahead of `t3-03`.
+
 ## Open questions
 
 - `A38`–`A40` are PM defaults; each is one module to change.
