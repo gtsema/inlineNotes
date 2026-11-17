@@ -121,7 +121,7 @@ export function CreateCard(props: CreateCardProps) {
 }
 
 /** The typed value, cut at `MAX_COMMENT_CODE_POINTS` code points. */
-function cutToCodePointCap(value: string): string {
+export function cutToCodePointCap(value: string): string {
   const characters = Array.from(value);
   return characters.length <= MAX_COMMENT_CODE_POINTS
     ? value

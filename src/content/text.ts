@@ -21,17 +21,20 @@
  */
 
 import type { CreateNoteCode } from './create/create-note';
+import type { EditNoteCode } from './editor/edit-entry';
 import { MAX_COMMENT_CODE_POINTS, MAX_ENTRIES_PER_PAGE } from '../core/entry-rules';
 
 /**
- * Every refusal the create card can be shown: each code the core write path
- * answers with, plus the one failure the content layer reports itself — the
- * selection the card was opened for no longer resolves to a span. The union is
- * declared in `src/content/create/create-note.ts`, where the codes come from; the
- * wording is keyed here and the map is total over it, so no code can be left
- * without an answer and no string can live at a call site.
+ * Every refusal either card can be shown: each code the core write path answers
+ * with, plus the one failure the content layer reports itself — the selection the
+ * card was opened for no longer resolves to a span. The two halves are declared in
+ * `src/content/create/create-note.ts` and `src/content/editor/edit-entry.ts`, where
+ * the codes come from, and they are the same set: the editor shows the create
+ * card's sentences for the states the two paths share, because the editor adds no
+ * refusal of its own. The wording is keyed here and the map is total over it, so no
+ * code can be left without an answer and no string can live at a call site.
  */
-export type ContentRefusalCode = CreateNoteCode;
+export type ContentRefusalCode = CreateNoteCode | EditNoteCode;
 
 export const CONTENT_STRINGS = {
   /** Accessible name and placeholder of the comment input. */
@@ -40,6 +43,13 @@ export const CONTENT_STRINGS = {
   save: 'Сохранить',
   /** Cancel button of the create card and of the editor. */
   cancel: 'Отмена',
+  /**
+   * Delete button of the editor (`content-overlay-ui.md` -> Flow / Sequence 5).
+   * It is rendered for the reader's own entry only: `A25` rules that core does not
+   * gate `deleteEntry` by authorship, so this button — and the editor that holds it
+   * — is the affordance a foreign entry never gets.
+   */
+  delete: 'Удалить',
   /**
    * Header of a tooltip or editor over the reader's own entry (`content-overlay-ui.md`
    * -> Rules -> "Own entries and foreign entries are visually distinguished only in

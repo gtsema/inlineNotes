@@ -33,6 +33,17 @@
  * name the author rule refuses means no card at all — not a card with a disabled
  * button, because the user would have no way to see why.
  *
+ * The handover of Flow 6 (`t3-03`): the `claimSelection` hook is asked after the
+ * settings gate and before anything is measured. It answers "this selection lies
+ * inside an existing entry's range", and the answer is given by the editor
+ * controller of `editor-controller.tsx`, because that is the module that knows what
+ * lies on the page. A claimed selection opens no card: the reader who selects the
+ * text of an existing note gets that note's editor, or — for somebody else's note —
+ * nothing but the tooltip, and a card there would only be refused by core as an
+ * overlap. The hook is asked **after** the author gate on purpose: with no usable
+ * name every entry of the page is foreign, no editor can open, and `A31` already
+ * answers with no widget at all.
+ *
  * Everything the controller reads from the environment arrives either through the
  * injected options or through the `Document` it is given, so the whole machine runs
  * in a unit test with an in-memory storage port.
@@ -54,7 +65,7 @@ import { currentAuthorName, createNote } from '../create/create-note';
 import type { CreateNoteResult } from '../create/create-note';
 import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
-import { CARD_ROOT_CLASS, ensureCardStyle } from './card-style';
+import { CARD_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
 import { CreateCard } from './create-card';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
@@ -81,6 +92,13 @@ export interface CreateCardOptions {
   viewport?: () => Viewport;
   /** Handover to the painting stage (`t3-02`): the entry that was just stored. */
   onCreated?: (entry: Entry) => void;
+  /**
+   * Flow 6 handover (`t3-03`): `true` when another widget owns this selection — the
+   * editor of an existing entry — so no create card opens. The hook may open that
+   * other widget as a side effect, and it is asked only after the `settings gate`
+   * answered with a usable name.
+   */
+  claimSelection?: (selection: CapturedSelection, authorName: string) => boolean;
 }
 
 /** The open card, or nothing. */
@@ -245,6 +263,11 @@ export function createCreateCardController(
     if (authorName === null) {
       return;
     }
+    if (options.claimSelection?.(selection, authorName) === true) {
+      // Flow 6: the selection is an existing entry's, and the editor controller took
+      // it — or refused to open anything for a foreign entry. Either way, no card.
+      return;
+    }
     const span = captureFromPage(selection);
     if (span === null) {
       return;
@@ -281,7 +304,7 @@ function ensureCardWrapper(doc: Document, root: ShadowRoot): HTMLElement {
   }
   ensureCardStyle(doc, root);
   const wrapper = doc.createElement('div');
-  wrapper.className = CARD_ROOT_CLASS;
+  wrapper.className = `${WIDGET_ROOT_CLASS} ${CARD_ROOT_CLASS}`;
   root.append(wrapper);
   return wrapper;
 }

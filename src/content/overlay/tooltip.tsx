@@ -23,8 +23,10 @@
  *   cancel button, no delete control (the three Russian labels of this layer are in
  *   `src/content/text.ts`, and none of them belongs to a tooltip): a click on the
  *   tooltip makes it opaque and nothing else
- *   (task `t3-02` brief), and the editor that those controls belong to is task
- *   `t3-03`. An entry the reader did not write is read-only in the editor too
+ *   (task `t3-02` brief). The editor those controls belong to is shipped by `t3-03`
+ *   and is opened by **selecting the entry's text** (overlay Flow 6), never from this
+ *   component: the tooltip-to-editor hand-over the old sentence of Flow 4 described is
+ *   still not shipped. An entry the reader did not write is read-only in the editor too
  *   (`inline-comment-model.md` -> edit rights), and `visible` is not part of that
  *   rule (ruling `A1`), so nothing in this component depends on visibility: a hidden
  *   entry is not painted and therefore has nothing to hover.

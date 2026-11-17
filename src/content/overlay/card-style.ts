@@ -23,8 +23,18 @@
 /** Attribute marking the one style element this module owns. */
 export const CARD_STYLE_ATTRIBUTE = 'data-inlinenotes-card-style';
 
-/** Class of the positioned wrapper the card is rendered into. */
+/**
+ * Class every wrapper of the card widget carries, and the scope the stylesheet below
+ * is written against. The spec's Terms table calls the editor "the same widget used
+ * for create and for edit", so one stylesheet styles both wrappers and the two
+ * cannot drift apart; each wrapper adds its own class below for identity, so a
+ * controller can find its own element and a test can count one widget at a time.
+ */
+export const WIDGET_ROOT_CLASS = 'inlinenotes-widget-root';
+/** Class of the positioned wrapper the create card is rendered into. */
 export const CARD_ROOT_CLASS = 'inlinenotes-card-root';
+/** Class of the positioned wrapper the editor of an existing entry is rendered into. */
+export const EDITOR_ROOT_CLASS = 'inlinenotes-editor-root';
 export const CARD_CLASS = 'card';
 export const CARD_INPUT_CLASS = 'comment';
 export const CARD_COUNTER_CLASS = 'counter';
@@ -32,18 +42,26 @@ export const CARD_ACTIONS_CLASS = 'actions';
 export const CARD_REFUSAL_CLASS = 'refusal';
 export const CARD_PRIMARY_CLASS = 'is-primary';
 export const CARD_WARNING_CLASS = 'is-warning';
+/**
+ * Class of the delete button of the editor. It is the one control of this widget
+ * that is not a
+ * neutral action, so it is the one button with its own colour: the reader has to see
+ * that the press removes the entry and its `highlight` (ruling `A44` says there is no
+ * confirmation step in v1, so the button itself carries the warning).
+ */
+export const CARD_DELETE_CLASS = 'is-delete';
 
 /** The card stylesheet, inserted once per shadow root. */
 export const CARD_CSS: string = [
-  `.${CARD_ROOT_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} {`,
   '  position: fixed;',
   '  box-sizing: border-box;',
   '  z-index: 1;',
   '}',
-  `.${CARD_ROOT_CLASS} * {`,
+  `.${WIDGET_ROOT_CLASS} * {`,
   '  box-sizing: border-box;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_CLASS} {`,
   '  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;',
   '  font-size: 13px;',
   '  line-height: 1.45;',
@@ -58,7 +76,7 @@ export const CARD_CSS: string = [
   '  pointer-events: auto;',
   '  text-align: start;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_INPUT_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_INPUT_CLASS} {`,
   '  display: block;',
   '  width: 100%;',
   '  min-height: 68px;',
@@ -73,21 +91,21 @@ export const CARD_CSS: string = [
   '  padding: 6px 8px;',
   '  margin: 0;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_COUNTER_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_COUNTER_CLASS} {`,
   '  display: block;',
   '  margin-top: 6px;',
   '  color: #5b6470;',
   '  font-variant-numeric: tabular-nums;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_COUNTER_CLASS}.${CARD_WARNING_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_COUNTER_CLASS}.${CARD_WARNING_CLASS} {`,
   '  color: #8a4b08;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_ACTIONS_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} {`,
   '  display: flex;',
   '  gap: 8px;',
   '  margin-top: 8px;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button {`,
   '  font-family: inherit;',
   '  font-size: inherit;',
   '  line-height: inherit;',
@@ -99,18 +117,22 @@ export const CARD_CSS: string = [
   '  margin: 0;',
   '  cursor: pointer;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button.${CARD_PRIMARY_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button.${CARD_PRIMARY_CLASS} {`,
   '  color: #ffffff;',
   '  background: #1f6feb;',
   '  border-color: #1f6feb;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button:disabled {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button.${CARD_DELETE_CLASS} {`,
+  '  color: #a4262c;',
+  '  border-color: #d08085;',
+  '}',
+  `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button:disabled {`,
   '  color: #6b7280;',
   '  background: #e9ecef;',
   '  border-color: #c8cdd2;',
   '  cursor: default;',
   '}',
-  `.${CARD_ROOT_CLASS} .${CARD_REFUSAL_CLASS} {`,
+  `.${WIDGET_ROOT_CLASS} .${CARD_REFUSAL_CLASS} {`,
   '  margin: 8px 0 0;',
   '  color: #a4262c;',
   '}',

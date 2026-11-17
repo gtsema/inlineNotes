@@ -3,9 +3,11 @@
  *
  * Proves:
  * - AC4 of `docs/specs/content-overlay-ui.md` for this task: the content layer owns
- *   no persistence of its own — the only shipped content module that talks to the
- *   core write path, the core read path, the settings reader or the anchor builder
- *   is `src/content/create/create-note.ts` and `src/content/capture/selection-span.ts`;
+ *   no persistence of its own — the only shipped content modules that talk to the
+ *   core write path, the core read path, the settings reader or the anchor builder are
+ *   the one module per flow (`create/create-note.ts` for Flow 2-3, `editor/edit-entry.ts`
+ *   for Flow 5, `paint/page-painter.ts` for the read behind Flow 6's painting) plus
+ *   `src/content/capture/selection-span.ts` for the anchor builder;
  * - the `t2-03` and `t3-01-settings-read` hand-over contracts: no page policy
  *   (`writeSlotThenIndex`, `readPageIndex`, `entrySlotValue`, `entryStorageKey`) and
  *   no settings internals (`SETTINGS_KEY`, `settingsValueOf`, `settingsFromStorageValue`,
@@ -111,21 +113,34 @@ function excludeLocatorDefinition(file: string): boolean {
 }
 
 describe('the content layer owns no persistence of its own (AC4)', () => {
-  it('asks core for a write in exactly one module', () => {
+  it('asks core for a write in exactly two modules, one per write flow', () => {
+    // `t3-03` widens this pin deliberately: Flow 5 of the overlay spec is a second
+    // write flow, and a page-side editor that did not go through core would be a
+    // second owner of the caps, the authorship rule and the write policy. The widening
+    // is one module per flow, not a second module per flow. The two widget files in the
+    // list name the module **for its result type only** — the `refusal line` of the
+    // editor is keyed by that type — and the call-level pin below is the one with teeth.
     expect(contentFilesImporting('src/core/entry-store-write.ts')).toEqual([
       'src/content/create/create-note.ts',
+      'src/content/editor/edit-entry.ts',
+      'src/content/overlay/editor-controller.tsx',
+      'src/content/overlay/editor.tsx',
     ]);
+    expect(
+      contentFilesMatching(/\b(createEntryOnPage|updateEntryComment|deleteEntry|setVisible|clearPage)\s*\(/),
+    ).toEqual(['src/content/create/create-note.ts', 'src/content/editor/edit-entry.ts']);
   });
 
-  it('asks core for a page read in exactly one module', () => {
-    // Task `t3-02` widens this pin deliberately: the load-time paint pass
-    // (`docs/specs/inline-comment-model.md` -> Flow / Sequence 6) is the second
-    // legitimate reader of a page, because painting has to know which entries the
-    // page holds. Widening is the honest answer here, not a second reader that
-    // invents its own storage keys: both readers go through core `loadEntries`, and
-    // `tests/content-page-painter.spec.ts` pins that the paint pass performs no write.
+  it('asks core for a page read in one module per flow that needs the page', () => {
+    // Task `t3-02` widens this pin for the paint pass (painting has to know which
+    // entries the page holds), and `t3-03` widens it again for the edit path, which
+    // reads the page only to hand the core overlap check the entry list it must scan.
+    // Every reader goes through core `loadEntries`; `tests/content-page-painter.spec.ts`
+    // pins that the paint pass performs no write, and
+    // `tests/content-editor-controller.spec.ts` pins that a refused edit performs none.
     expect(contentFilesImporting('src/core/entry-store-read.ts')).toEqual([
       'src/content/create/create-note.ts',
+      'src/content/editor/edit-entry.ts',
       'src/content/paint/page-painter.ts',
     ]);
   });
@@ -173,7 +188,25 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
   });
 
   it('does not build a second gate from the core rules (A52)', () => {
-    for (const pattern of [/assertCreatable/, /canCreateEntry/, /findOverlap/]) {
+    // `assertCreatable` stays out of the page layer entirely: a preview built without
+    // `spans` would answer "allowed". The overlap question is the one core rule the
+    // page layer does ask — it has to, because the answer decides what the widget
+    // shows — and it asks it through the core function, never through a local rule. So
+    // the pin is "the core function, in the one module that has to ask it, and no
+    // overlap rule of our own", which is the same shape `A52` describes for the create
+    // path. The create path is not in the list because it never asks: it hands core the
+    // `spans` and core answers inside `createEntryOnPage` (ruling `A46`). The edit path
+    // is the single caller because core `updateEntryComment` takes no `spans` — a
+    // comment edit has no span to check — so the moved-span half of the model spec's
+    // "Overlap" rule is asked here, with the entry being edited removed from the list
+    // the check scans.
+    for (const pattern of [/assertCreatable/, /canCreateEntry/]) {
+      expect(contentFilesMatching(pattern), pattern.source).toEqual([]);
+    }
+    expect(contentFilesMatching(/\bfindOverlappingEntry\s*\(/)).toEqual([
+      'src/content/editor/edit-entry.ts',
+    ]);
+    for (const pattern of [/function findOverlap/, /const findOverlap/, /isOverlapping/]) {
       expect(contentFilesMatching(pattern), pattern.source).toEqual([]);
     }
   });
@@ -202,12 +235,19 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
     // property lives in `tests/content-paint-plan.spec.ts` (the same-shape rewrite).
     const streamReusers = contentFilesMatching(/\blocateAnchorInStream\(/).filter(excludeLocatorDefinition);
     expect(streamReusers).toEqual([
-      'src/content/create/create-note.ts',
+      'src/content/anchor/entry-ranges.ts',
       'src/content/paint/paint-plan.ts',
     ]);
     for (const file of streamReusers) {
       const builds = (codeOnly(path.join(ROOT, file)).match(/\bbuildTextStream\(/g) ?? []).length;
-      expect(builds, file).toBe(1);
+      // At most one build per module (`A37`). `paint-plan.ts` is at the limit: one
+      // stream for every anchor of the page. `entry-ranges.ts` is under it because it
+      // takes the caller's stream as a parameter and so cannot build a second one —
+      // the strictest form of the rule, and the reason the create path and the edit
+      // path resolve stored entries against the same string they measured the
+      // candidate on. The behavioural proof of the rebuild stays in
+      // `tests/content-paint-plan.spec.ts` (the same-shape rewrite).
+      expect(builds, file).toBeLessThanOrEqual(1);
     }
     const rebuilds = contentFilesMatching(/\blocateAnchor\(/).filter(excludeLocatorDefinition);
     expect(rebuilds).toEqual([]);

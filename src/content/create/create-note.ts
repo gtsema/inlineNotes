@@ -6,12 +6,14 @@
  * entry" (`A22`), "Author name"; task `t3-01` AC2, AC4, AC5 and the hand-over
  * contracts of `docs/state/t2-03-review.md` and `docs/state/t3-01-settings-read-core-review.md`.
  *
- * This is the only shipped content module that asks core for a page, for the
- * author name, or for a write, and the only one that calls `createEntryOnPage`.
- * It owns no storage knowledge of its own: no key, no slot value, no
- * `writeSlotThenIndex`, no `chrome.storage` — the write policy, the caps and the
- * refusal codes belong to core, and the port adapter is the only module allowed to
- * touch the area (`docs/specs/inline-comment-model.md` -> "Storage layout").
+ * This is the only shipped content module that asks core for the author name, and the
+ * only one that calls `createEntryOnPage`; the edit path of `editor/edit-entry.ts` is
+ * the only other module that reads a page or asks core for a write, and it goes through
+ * `updateEntryComment` and `deleteEntry`. Neither owns any storage knowledge of its
+ * own: no key, no slot value, no `writeSlotThenIndex`, no `chrome.storage` — the write
+ * policy, the caps and the refusal codes belong to core, and the port adapter is the
+ * only module allowed to touch the area
+ * (`docs/specs/inline-comment-model.md` -> "Storage layout").
  *
  * One pass, one stream (`A37`, `N7`, ruling `A29`): the page read is awaited
  * first, and from the moment `buildTextStream` runs nothing asynchronous happens
@@ -20,7 +22,10 @@
  * which is the only way the overlap and duplicate answers mean anything. The
  * stream is never remembered between passes: a save re-builds it, because the page
  * may have moved the text since the card was opened, and a remembered span would
- * be a position the page no longer has.
+ * be a position the page no longer has. The walk that resolves the stored entries
+ * against that stream is `anchor/entry-ranges.ts` — the same walk the edit path of
+ * `editor/edit-entry.ts` runs, so the two paths cannot disagree about what a
+ * stored entry's span is.
  *
  * Stale entries are absent from `byEntryId` (`A24`) — never mapped to a zero range,
  * which core would read as "no span" anyway but which would hide the difference
@@ -52,14 +57,14 @@
 import type { EntryWriteCode } from '../../core/entry-store-write';
 import { buildTextStream } from '../anchor/text-stream';
 import type { TextStream } from '../anchor/text-stream';
-import { locateAnchorInStream } from '../anchor/locate-anchor';
+import { resolvedEntryRanges } from '../anchor/entry-ranges';
 import { captureSpan } from '../capture/selection-span';
 import type { CapturedSpan } from '../capture/selection-span';
 import { createEntryOnPage } from '../../core/entry-store-write';
 import { loadEntries } from '../../core/entry-store-read';
 import { loadSettings } from '../../core/settings-store';
 import { validateAuthorName } from '../../core/entry-rules';
-import type { CodePointRange, ResolvedEntryRanges, ResolvedSpans } from '../../core/entry-overlap';
+import type { ResolvedSpans } from '../../core/entry-overlap';
 import type { Entry } from '../../core/entry';
 import type { RandomSource } from '../../core/entry-rules';
 import type { StoragePort } from '../../core/storage-port';
@@ -163,32 +168,4 @@ export async function createNote(input: CreateNoteInput): Promise<CreateNoteResu
   });
 
   return write.ok ? { ok: true, entry: write.entry } : { ok: false, code: write.code };
-}
-
-/**
- * One resolve per stored entry of the page, against the stream the candidate came
- * from (`A37`): the range each entry would be painted over. A locate that reports
- * `anchor_not_found` or `anchor_stale` leaves the entry out of the map, which is
- * how a stale entry stops blocking a create (`A24`).
- *
- * `locateAnchorInStream` is used instead of `locateAnchor` on purpose: the
- * one-stream-per-create rule of `A37` and `N7` is what "one pass" means, and
- * re-entering `locateAnchor` would build a new stream per entry.
- */
-function resolvedEntryRanges(
-  stream: TextStream,
-  root: Node,
-  entries: readonly Entry[],
-): ResolvedEntryRanges {
-  const ranges = new Map<string, CodePointRange>();
-  for (const entry of entries) {
-    const located = locateAnchorInStream(stream, root, entry.anchor);
-    if (!located.ok) {
-      continue;
-    }
-    const first = located.fragments[0];
-    const last = located.fragments[located.fragments.length - 1];
-    ranges.set(entry.id, { start: first.streamStart, end: last.streamEnd });
-  }
-  return ranges;
 }

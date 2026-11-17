@@ -110,10 +110,12 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
   });
 
-  it('is exactly the pinned set of twelve sites, so a new catch breaks the build', () => {
+  it('is exactly the pinned set of fourteen sites, so a new catch breaks the build', () => {
     const pinned: Record<string, number> = {
       'create/create-note.ts': 1,
+      'editor/edit-entry.ts': 1,
       'overlay/create-card-controller.tsx': 2,
+      'overlay/editor-controller.tsx': 1,
       'overlay/tooltip-controller.tsx': 1,
       'paint/page-painter.ts': 4,
       'paint/paint-plan.ts': 1,
@@ -127,7 +129,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(12);
+    expect(total).toBe(14);
   });
 });
 
@@ -152,6 +154,23 @@ describe('the guard stays at the call site (ruling A75)', () => {
     expect(submit).not.toBe('');
     // The card has one input for a refusal: the `CreateNoteResult`. A `catch` here would
     // turn a real defect into a silent state, which is the failure mode `t3-05` closed.
+    expect(submit).not.toMatch(/\bcatch\s*[({]/);
+  });
+
+  it('keeps the editor free of a catch around the edit path, for the same reason', () => {
+    // The rule of `t3-05` AC3 applied to the widget `t3-03` adds: the editor's save and
+    // delete paths take their refusal from the `EditNoteResult` and the
+    // `EntryWriteResult` only, so the busy / `refusal line` machine has one input and a
+    // defect cannot hide as a silent `busy` state with a disabled button.
+    const controller = readFileSync(
+      path.join(CONTENT_DIR, 'overlay', 'editor-controller.tsx'),
+      'utf8',
+    );
+    const submit = controller.slice(
+      controller.indexOf('async function submit('),
+      controller.indexOf('function close('),
+    );
+    expect(submit).not.toBe('');
     expect(submit).not.toMatch(/\bcatch\s*[({]/);
   });
 });
