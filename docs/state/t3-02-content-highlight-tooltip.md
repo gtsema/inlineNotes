@@ -110,14 +110,96 @@ The editor (save/cancel/delete, `t3-03`), popup and options (Stage 4), SPA URL w
 ## Attempts log
 
 - attempt 1: brief prepared; delegated after `t3-01-content-create-card` acceptance.
+- attempt 1 **died mid-task (host crash, 2026-11-17 ~12:45)**: the parent session became
+  uncompactable and took the child with it (see `docs/retro.md`, Stage 3 crash entry). No report
+  was written, **no commit was made**. The tree still carries the whole attempt-1 slice.
+- attempt 2: completion brief below; the attempt-1 code is kept, not rewritten.
+
+## Attempt 1 delivered state (uncommitted, 2026-11-17 12:36)
+
+- new source: `src/content/paint/highlight-name.ts`, `paint-plan.ts`, `paint-style.ts`,
+  `paint-surface.ts`, `page-painter.ts`;
+- modified source: `src/content/capture/fragment-rect.ts` (new `DocumentRangeForFragment` alias,
+  `documentRangeForFragment` now returns a real `Range`, `hasArea` exported for `A67`),
+  `src/content/main.ts` (load-time `createPagePainter(document, { port, url }).refresh()`);
+- new tests: `tests/content-paint-plan.spec.ts`, `content-paint-style.spec.ts`,
+  `content-paint-surface.spec.ts`, `content-page-painter.spec.ts`;
+- gates as measured by the PM: `tsc -p tsconfig.content.json --noEmit` **green**;
+  `node scripts/check-agent-config.mjs` **0 errors**; `npm test` **587 green / 5 red**;
+  `npm run build` not re-run by the PM (the tree builds, `dist/content.js` is from 12:41).
+- **not started at all**: the tooltip (AC3, AC4), the ownership header, the spec lines.
+
+The five red tests, with the PM's diagnosis (the engineer verifies it, does not trust it):
+
+1. `tests/content-anchor-boundaries.spec.ts:205` — “jsdom discipline > is never referenced by
+   shipped source”. That pin scans the **whole file text including comments**, and
+   `src/content/paint/paint-style.ts:25,30` plus `src/content/paint/paint-surface.ts:25,108`
+   name the banned tool in prose. Fix by rewording the prose; **do not relax the pin** (ruling `A2`).
+2. `tests/content-create-card-boundaries.spec.ts:118` — “asks core for a page read in exactly one
+   module”. The paint pass is legitimately the second reader of `src/core/entry-store-read.ts`;
+   this brief is the commit that widens the pin **deliberately**, as `t3-01` readiness demanded.
+3. `tests/content-create-card-boundaries.spec.ts` — “uses the fresh-stream locate, never the
+   per-entry stream rebuild (`A37`, `N7`)”. Either the paint call site uses the wrong locate entry
+   point or the pin has to learn the new caller; the behavior required is one stream per pass.
+4. `tests/content-page-painter.spec.ts:441` — “paints nothing when the store cannot be read, and
+   reports the code”. A failed read must leave the surface empty: `painted` is the previous pass
+   surviving instead of being dropped. Nothing may be painted from data older than this pass.
+5. `tests/content-page-painter.spec.ts:503` — “keeps every highlight when the create card opens
+   and closes” (`A68`). `controller.isOpen()` is `false`, so the fixture never opened a card and
+   the `A68` property is not actually being tested. Fix the fixture wiring (a real selection in the
+   jsdom document), not the paint module.
+
+## Attempt 2 completion brief (PM)
+
+Scope is **unchanged**: the 5 AC above, nothing re-scoped, nothing added.
+
+1. Read the attempt-1 modules and their tests before touching anything; finish them in place.
+   Do not rewrite a module that already satisfies its test.
+2. Make the five red tests green per the diagnosis. Pins change only where this brief says so, and
+   the reason goes into the test as a comment naming this task and ruling.
+3. Build what attempt 1 never reached: **AC3 hover tooltip** and **AC4 ownership header**.
+   - The tooltip shows `comment` + `authorName` from the entry record, never from a page attribute;
+     semi-transparent on hover, opaque after a click on it (`content-overlay-ui.md` Flow 3–4, AC3).
+   - The click makes it opaque **and nothing else**: no textarea, no `Сохранить`/`Отмена`/`Удалить`
+     — the editor is `t3-03-content-editor`. The foreign-entry header (`Вы` vs the author name)
+     exists here and offers no edit affordance (model AC7/AC8 UI half); `visible` never changes
+     edit rights (`A1`).
+   - The tooltip lives in the shadow host, is anchored to the **first fragment box with an area**
+     (`A67`, via the exported `hasArea`), and near a viewport edge flips to the other side and never
+     covers its own range (overlay → Edge Cases).
+   - An entry with no area-bearing fragment gets **no tooltip**; it stays listed and deletable.
+   - Hover hit-testing must not open the create card: the painted range is not a selection, and the
+     `selectionchange` handler stays as `t3-01` left it (`t3-03` owns selection-inside-the-editor).
+4. Commit order (`A53` plus crash insurance — this is why the split is allowed):
+   - **commit 1** `fix(t3-02): paint pass over one stream, pins widened` — the attempt-1 code plus
+     the five green tests. Make this commit **as soon as the five are green**, before starting the
+     tooltip, so a second crash cannot lose the slice again.
+   - **commit 2** `feat(t3-02): hover tooltip and ownership header` — tooltip module + tests.
+   - **commit 3** `docs(t3-02): painting, teardown and tooltip rules` — spec lines in
+     `docs/specs/content-overlay-ui.md`: one named highlight per entry (`A70`), teardown (`A39`),
+     the paint-path measurement rule (`A66`), the tooltip anchor for zero-area boxes (`A67`), the
+     tooltip content source, and **which `A41` variant shipped** (`adoptedStyleSheets` or the single
+     `<style id="inlinenotes-paint">`) — record what the code does, and if the fallback shipped,
+     amend AC2 in the same commit.
+   Gates in `A62` order before each commit.
+5. Report to `docs/state/engineer-report.md`: commits, commands quoted, AC self-check per AC1–AC5,
+   deviations, and the `A41` observation. Do not edit the task state file.
+
+Hard constraints carried from `t3-01b` (binding, restated in one line each): the measurement seam is
+`documentRangeForFragment` + `fragmentBox` over **every** fragment, never `placementFragmentBox`;
+`A66` per-entry `catch`, never a pass-wide one and never a storage write; `A68` the paint pass owns
+`CSS.highlights` and card visibility never clears it; `A39` teardown deletes every `inlinenotes-…`
+name and a second pass does not accumulate; no page DOM mutation beyond the host and the one paint
+stylesheet.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (attempt 1 engineer — crashed,
+delivered an uncommitted tree; attempt 2 engineer — completion). Remaining: 2 (reviewer + 1 fix).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: attempt 1 crashed (no report, no commit); attempt 2 in flight
 - reviewer verdict: not started
 
 ## Open questions
