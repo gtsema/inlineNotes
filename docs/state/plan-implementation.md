@@ -251,7 +251,9 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A85` (process): a provider **stream error** kills a child mid-sentence with nothing committed, exactly like a timeout.
   Same recovery: `resume` the same session, hand the child the measured tree (`git status`, one-error typecheck summary) and
   order commits per checkpoint. Two such recoveries in two consecutive stages (`t3-03` timeout, `t4-01` stream error) — the mitigation is
-  the commit discipline, not the model choice.
+  the commit discipline, not the model choice. A third variant hit the `t4-01` **reviewer**: the model endpoint refused a
+  connection (`UND_ERR_CONNECT_TIMEOUT` to the local server). Recovery is the same `resume`; a reviewer that dies loses only
+  analysis, never code, so it never costs a checkpoint.
 - **Ruling `A77` (corrected after the `t3-03` re-review)**: the reviewer re-runs **only** `node scripts/check-agent-config.mjs`
   — the role is read-only and `code-review-flow.md` → Edge Cases plus `docs/project-profile.md:71` forbid it from running a
   build; briefs must not order a reviewer to build or test. A reviewer instead corroborates read-only (declaration counts,
