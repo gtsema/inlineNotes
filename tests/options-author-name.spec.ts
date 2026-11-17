@@ -316,6 +316,42 @@ describe('AC4 — the counter and the refusal measure code points (A55)', () => 
     expect(nameCounterText(over.codePointCount)).toBe('40/40');
   });
 
+  it('saves a 40-code-point name through the core write, astral name included (R4)', async () => {
+    // `content-overlay-ui.md` -> AC19 promises 40 code points are accepted **and
+    // saved**. Acceptance and refusal were pinned; this is the storage half of the
+    // sentence: the record under `settings:v1` holds the whole astral name, and the
+    // author rule still accepts it when the value is read back.
+    const port = new MemoryStoragePort();
+    const service = serviceFor(port);
+    const atCap = 'a'.repeat(MAX_AUTHOR_NAME_CODE_POINTS);
+
+    expect((await service.save(atCap)).message).toBe('saved');
+    expect(storedSettingsValue(port)).toEqual({ name: atCap });
+
+    const astral = await service.save(ASTRAL_NAME_40);
+    expect(astral.message).toBe('saved');
+    expect(writesOf(port)).toHaveLength(2);
+
+    // The stored bytes are the whole 40 emoji — 80 UTF-16 units — under one field:
+    // a UTF-16-cut value or an extra field would change this string.
+    expect(storedJson(port)).toBe(JSON.stringify({ [SETTINGS_KEY]: { name: ASTRAL_NAME_40 } }));
+
+    // And the stored value is a usable identity: the read returns it unchanged with
+    // no code, and the author rule accepts it.
+    const read = await loadSettings(port);
+    expect(read.codes).toEqual([]);
+    expect(read.name).toBe(ASTRAL_NAME_40);
+    expect(read.name.length).toBe(MAX_AUTHOR_NAME_CODE_POINTS * 2);
+    expect(validateAuthorName(read.name).ok).toBe(true);
+
+    // A page opened later shows that name instead of generating over it: the stored
+    // astral name is not one of the shapes `A54` repairs.
+    const reopened = new MemoryStoragePort();
+    reopened.seed(SETTINGS_KEY, { name: ASTRAL_NAME_40 });
+    expect(await serviceFor(reopened).open()).toEqual({ name: ASTRAL_NAME_40, message: null });
+    expect(writesOf(reopened)).toEqual([]);
+  });
+
   it('prints the cap from the core constant, not from a number in the UI', () => {
     expect(nameCounterText(0)).toBe('0/40');
     expect(nameCounterText(MAX_AUTHOR_NAME_CODE_POINTS)).toBe(
