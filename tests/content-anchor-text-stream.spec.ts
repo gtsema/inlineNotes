@@ -118,6 +118,10 @@ describe('normalized text stream (AC1)', () => {
       ['<table><tr><td>a</td><td>b</td></tr></table>', 'a b'],
       ['<table><tr><th>a</th><th>b</th></tr><tr><td>c</td><td>d</td></tr></table>', 'a b c d'],
       ['<table><tr><th>head</th></tr><tr><td>cell</td></tr></table>', 'head cell'],
+      // A nested table inside a cell (t3-04 remark 2): the outer cell's entry and
+      // exit space requests collapse with the inner row's into one separator, so
+      // the three pieces stay three words and gain no edge space.
+      ['<table><tr><td>a<table><tr><td>b</td></tr></table>c</td></tr></table>', 'a b c'],
       ['<section>a</section><article>b</article>', 'a b'],
     ];
     for (const [html, expected] of cases) {
