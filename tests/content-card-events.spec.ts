@@ -34,6 +34,8 @@
  *   synchronous half of a rule.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -53,12 +55,35 @@ const PAGE_URL = 'https://example.test/article';
 /** Short enough for a test, large enough that a pending timer is observable. */
 const SETTLE_MS = 15;
 /**
- * The `settle delay` value as the spec pins it (`docs/specs/content-overlay-ui.md`
- * -> Terms / Aliases). Ruling `A63`: a constant the spec names is asserted against
- * that value, the way the 8 px `card gutter` and the 240-code-point warning
- * threshold already are, because `> 0` pins nothing an article could not break.
+ * The `settle delay` the spec pins, read out of the Terms row of
+ * `docs/specs/content-overlay-ui.md` instead of being repeated here. Ruling `A63`:
+ * the shipped constant is asserted against the number **and** the constant name the
+ * spec itself writes, the way the 8 px `card gutter` and the 240-code-point warning
+ * threshold are asserted against the numbers in their spec lines, because `> 0`
+ * pins nothing an article could not break. The reader fails loudly if the Terms row
+ * loses its value or its constant name, so the two cannot drift apart silently.
  */
-const SPEC_SETTLE_MS = 150;
+function specSettleDelayMs(): number {
+  // `import.meta.url` is a dev-server URL in the jsdom environment of this file, so
+  // the repository root comes from the working directory, which is the project root
+  // for `npm test`.
+  const spec = readFileSync(
+    join(process.cwd(), 'docs/specs/content-overlay-ui.md'),
+    'utf8',
+  );
+  const row = spec.split('\n').find((line) => line.includes('| `settle delay` |'));
+  if (row === undefined) {
+    throw new Error('the overlay spec lost its `settle delay` Terms row');
+  }
+  const value = /\*\*(\d+) ms\*\*/.exec(row);
+  if (value === null || value[1] === undefined) {
+    throw new Error('the `settle delay` Terms row pins no millisecond value');
+  }
+  if (!row.includes('`SELECTION_SETTLE_MS`')) {
+    throw new Error('the `settle delay` Terms row names no shipped constant');
+  }
+  return Number(value[1]);
+}
 /** jsdom measures nothing, so the fragment box arrives through the shipped seam. */
 const FRAGMENT_BOX = { left: 40, top: 120, width: 200, height: 16 };
 
@@ -307,7 +332,7 @@ describe('detaching the binding stops the capture path', () => {
 
 describe('the settle delay is a constant the spec pins (ruling A63)', () => {
   it('keeps the shipped delay at the value the spec names', () => {
-    expect(SELECTION_SETTLE_MS).toBe(SPEC_SETTLE_MS);
+    expect(SELECTION_SETTLE_MS).toBe(specSettleDelayMs());
   });
 
   it('uses the pinned delay at the production call site, where no delay is passed', async () => {

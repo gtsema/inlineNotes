@@ -31,7 +31,14 @@
 import { currentSelectionRange, isInsideOverlayHost } from '../capture/page-selection';
 import type { CreateCardController } from './create-card-controller';
 
-/** How long the selection has to stop moving before a card is opened (ms). */
+/**
+ * How long the selection has to stop moving before a card is opened, in ms.
+ *
+ * The value is durable in the spec, not here: `docs/specs/content-overlay-ui.md`
+ * -> Terms / Aliases -> `settle delay` names this constant and its number
+ * (ruling `A63`), and `tests/content-card-events.spec.ts` asserts the constant
+ * against the value read out of that Terms row.
+ */
 export const SELECTION_SETTLE_MS = 150;
 
 /** Removes every listener and cancels any pending capture attempt. */
