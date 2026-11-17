@@ -5,7 +5,7 @@ Owner = the role that must keep the spec current. Covered paths use `src/` and `
 
 | Spec | Owner role | Covered paths |
 |---|---|---|
-| `docs/specs/inline-comment-model.md` | `extension-engineer` (rules drafted by `project-manager`) | `src/core/`, `src/content/store`, `src/popup/store`, `tests/` |
+| `docs/specs/inline-comment-model.md` | `extension-engineer` (rules drafted by `project-manager`) | `src/core/`, `src/content/anchor`, `src/content/store`, `src/popup/store`, `tests/` |
 | `docs/specs/content-overlay-ui.md` | `extension-engineer` | `src/content/`, `src/popup/`, `src/options/`, `src/manifest.json`, `tests/` |
 | `docs/specs/code-review-flow.md` | `project-manager` | `docs/state/`, `.pi/agents/code-reviewer.md`, `.pi/skills/code-review-checklist/SKILL.md`, `scripts/check-agent-config.mjs` |
 

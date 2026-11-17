@@ -53,9 +53,11 @@
  * and `nodeName`, so the module loads in a Node test process and in the page, and
  * the caller decides which subtree of which document it walks.
  *
- * No caching (ruling `A29`): the walk runs on every call. A cached stream would
- * pin positions the page no longer has and would break the reload-stability
- * property `tests/core-anchor-resolve.spec.ts` pins.
+ * No caching (ruling `A29`, bounded by review finding `N4`): the walk runs on
+ * every call. A cached stream would pin positions the page no longer has and would
+ * break the reload-stability property `tests/core-anchor-resolve.spec.ts` pins. No
+ * character decision is memoized either; the separator test is a constant set, so
+ * this module keeps no per-page state at all.
  */
 
 import { normalizeText } from '../../core/text-normalize';
@@ -271,23 +273,53 @@ export function nodeCodePointIndex(data: string): NodeCodePointIndex {
 }
 
 /**
- * Whitespace test for one code point, asked of the core normalizer itself, so the
- * stream can never disagree with the normalization that the anchor stores: the set
- * of separators is exactly the set `normalizeText` collapses.
+ * Whitespace test for one code point, decided by a constant set (review finding
+ * `N4`). The set is the closed enumeration of spec "Normalized text" — the same
+ * code points `WHITESPACE_RUN` matches in `src/core/text-normalize.ts` — written
+ * out instead of asked of the normalizer per character, so no module-level state
+ * grows with the characters of the pages a content script visits: the only
+ * module-level data here is two frozen tag lists and this set.
  *
- * The map caches only this pure character decision. It caches no node, no offset
- * and no stream, so ruling `A29` ("the stream is rebuilt, never cached") holds.
+ * The agreement with core is not assumed: `tests/content-anchor-text-stream.spec.ts`
+ * compares this set with `normalizeText` for every code point of the Basic
+ * Multilingual Plane, so a separator core collapses and this set does not (or the
+ * reverse) fails the test.
+ *
+ * No node, no offset and no stream is cached anywhere in this module, so ruling
+ * `A29` ("the stream is rebuilt, never cached") holds.
  */
-const whitespaceDecision = new Map<string, boolean>();
+export const WHITESPACE_CODE_POINTS: readonly string[] = [
+  '\t',
+  '\n',
+  '\u000B',
+  '\u000C',
+  '\r',
+  ' ',
+  '\u00A0',
+  '\u1680',
+  '\u2000',
+  '\u2001',
+  '\u2002',
+  '\u2003',
+  '\u2004',
+  '\u2005',
+  '\u2006',
+  '\u2007',
+  '\u2008',
+  '\u2009',
+  '\u200A',
+  '\u2028',
+  '\u2029',
+  '\u202F',
+  '\u205F',
+  '\u3000',
+  '\uFEFF',
+];
+
+const WHITESPACE_CODE_POINT_SET = new Set(WHITESPACE_CODE_POINTS);
 
 function isWhitespaceCodePoint(codePoint: string): boolean {
-  const cached = whitespaceDecision.get(codePoint);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const decision = normalizeText(codePoint).length === 0;
-  whitespaceDecision.set(codePoint, decision);
-  return decision;
+  return WHITESPACE_CODE_POINT_SET.has(codePoint);
 }
 
 /** Text nodes carry the page text; the type guard keeps `nodeType` a plain number. */

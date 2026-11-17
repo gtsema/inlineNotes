@@ -8,8 +8,9 @@ import { fragmentsForRange, locateAnchor, locateAnchorInStream } from '../src/co
 import type { EntryAnchor } from '../src/core/entry';
 
 /**
- * Layer and dependency boundaries of the `t2-02` anchor modules, plus the
- * `jsdom` discipline of PM ruling `A2`.
+ * Layer and dependency boundaries of the `src/content/anchor/` modules, plus the
+ * `jsdom` discipline of PM ruling `A2`, hardened by task `t3-04` (finding `N3`:
+ * the `dist/` half of the scan must not pass vacuously).
  *
  * This file deliberately runs in the default **node** environment: importing
  * `src/content/anchor/*` here proves AC4 ("the module imports cleanly in a Node
@@ -209,12 +210,19 @@ describe('jsdom discipline (AC5, ruling A2)', () => {
     expect(manifest.toLowerCase()).not.toContain('jsdom');
   });
 
-  it('is absent from every built bundle when dist/ exists', () => {
+  it('is absent from every built bundle, and a missing build fails the check (AC5, finding N3)', () => {
     const distDir = join(projectRoot, 'dist');
-    if (!existsSync(distDir)) {
-      return;
-    }
-    expect(bundleFilesMentioningJsdom(distDir)).toEqual([]);
+    // Model AC23 says jsdom is absent "from every built bundle". A scan that
+    // skipped itself when `dist/` was missing proved nothing, so the directory and
+    // its bundles are asserted first: run `npm run build` before `npm test`.
+    expect(existsSync(distDir)).toBe(true);
+    const bundles = builtBundles(distDir);
+    expect(bundles.length).toBeGreaterThan(0);
+
+    const offenders = bundles
+      .filter((file) => readFileSync(file, 'utf8').toLowerCase().includes('jsdom'))
+      .map((file) => file.slice(distDir.length));
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -284,17 +292,15 @@ function stubElement(tagName: string, children: readonly Node[]): Node {
   return element as unknown as Node;
 }
 
-/** Every `.js` file inside `dist/` whose text mentions jsdom, by relative path. */
-function bundleFilesMentioningJsdom(distDir: string): string[] {
+/** Every `.js` file inside `dist/`, by absolute path. */
+function builtBundles(distDir: string): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(distDir, { withFileTypes: true })) {
     const full = join(distDir, entry.name);
     if (entry.isDirectory()) {
-      found.push(...bundleFilesMentioningJsdom(full));
+      found.push(...builtBundles(full));
     } else if (entry.name.endsWith('.js')) {
-      if (readFileSync(full, 'utf8').toLowerCase().includes('jsdom')) {
-        found.push(full.slice(distDir.length));
-      }
+      found.push(full);
     }
   }
   return found;

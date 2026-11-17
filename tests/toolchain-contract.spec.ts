@@ -54,6 +54,26 @@ function codeOnly(text: string): string {
   return text.replaceAll(/\/\*[\s\S]*?\*\//g, ' ').replaceAll(/\/\/[^\n]*/g, ' ');
 }
 
+/** The `import ... from '...'` clauses of one source file, comments removed. */
+function importClauses(text: string): string[] {
+  return [...codeOnly(text).matchAll(/\bimport\b[^;]*\bfrom\s*'[^']*'/g)].map((match) => match[0]);
+}
+
+/** Shipped modules that import the identifier `name` from another module. */
+function importersOf(name: string): string[] {
+  const mention = new RegExp(`\\b${name}\\b`);
+  return sourceFiles('src')
+    .filter((file) => importClauses(file.text).some((clause) => mention.test(clause)))
+    .map((file) => file.path);
+}
+
+/** Shipped modules whose code, not comments, contains a quoted string literal. */
+function modulesHoldingLiteral(literal: string): string[] {
+  return sourceFiles('src')
+    .filter((file) => codeOnly(file.text).includes(`'${literal}'`))
+    .map((file) => file.path);
+}
+
 function readManifest(): ManifestShape {
   const raw = readFileSync(join(projectRoot, 'src', 'manifest.json'), 'utf8');
   return JSON.parse(raw) as ManifestShape;
@@ -128,6 +148,26 @@ describe('layer boundaries', () => {
       .filter((file) => codeOnly(file.text).includes('chrome.storage'))
       .map((file) => file.path);
     expect(users).toEqual(['src/content/store/chrome-storage-port.ts']);
+  });
+
+  it('reads and writes the settings key in exactly one shipped module (t3-01 review remark 2)', () => {
+    // `inline-comment-model.md` -> "Storage layout" says exactly one core module
+    // reads and writes `settings:v1`. The `chrome.storage` half of that claim is
+    // pinned by the test above; this is the key half: one importer of
+    // `SETTINGS_KEY`, one holder of the literal key itself.
+    expect(importersOf('SETTINGS_KEY')).toEqual(['src/core/settings-store.ts']);
+    expect(modulesHoldingLiteral('settings:v1')).toEqual(['src/core/storage-keys.ts']);
+  });
+
+  it('imports no internal settings helper anywhere (ruling A57)', () => {
+    // `settingsValueOf` and `settingsFromStorageValue` build and decode the stored
+    // record for `saveSettings` and `loadSettings` only. A UI half that composed
+    // them by hand would be a second reader of `settings:v1`, which is the same
+    // reason `assertCreatable` is not imported outside `create-entry.ts` under
+    // ruling `A52`. The rule needs a grep test, not a comment.
+    for (const internal of ['settingsValueOf', 'settingsFromStorageValue']) {
+      expect(importersOf(internal)).toEqual([]);
+    }
   });
 
   it('every UI layer keeps its strings in one constants module', () => {

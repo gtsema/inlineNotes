@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,8 @@ import type { StoragePort } from '../src/core/storage-port';
 import { MemoryStoragePort } from './support/memory-storage-port';
 
 /**
- * The storage seam of task `t1-05` (AC1).
+ * The storage seam of task `t1-05` (AC1), and since `t2-04` / `t3-04` the single
+ * purity scan over `src/core/` (ruling `A51`, module list derived per `A58`).
  *
  * Rule owner: `docs/specs/inline-comment-model.md` -> Rules / Semantics ->
  * "Storage seam". Every case runs against the hand-written in-memory port: no
@@ -137,18 +138,71 @@ describe('failure codes (AC1)', () => {
   });
 });
 
-describe('purity of the core modules (AC1, review remark R6)', () => {
-  const MODULES: readonly string[] = [
-    'storage-port.ts',
-    'settings-store.ts',
-    'page-index-store.ts',
-    'entry-store-read.ts',
-    'entry-store-write.ts',
-    'entry-overlap.ts',
-    'text-normalize.ts',
-    'anchor-build.ts',
-    'anchor-resolve.ts',
-  ];
+describe('purity of the core modules (AC1, review remark R6, rulings A51 and A58)', () => {
+  /**
+   * Every module under `src/core/`, derived from the directory instead of named by
+   * hand (ruling `A58`): the hand-maintained list covered 9 of the 15 modules and
+   * grew stale twice (`t2-04` remark 1, `t3-01` remark 7), so the drift is now
+   * impossible rather than annually corrected.
+   */
+  function coreModuleNames(): string[] {
+    const names: string[] = [];
+    const walk = (prefix: string): void => {
+      for (const entry of readdirSync(join(projectRoot, 'src', 'core', prefix), {
+        withFileTypes: true,
+      })) {
+        const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+        if (entry.isDirectory()) {
+          walk(relative);
+        } else if (entry.name.endsWith('.ts')) {
+          names.push(relative);
+        }
+      }
+    };
+    walk('');
+    return names.sort();
+  }
+
+  const MODULES: readonly string[] = coreModuleNames();
+
+  it('covers every module in the directory, with no module named by hand (A58)', () => {
+    const onDisk = readdirSync(join(projectRoot, 'src', 'core'), { recursive: true })
+      .map((entry) => String(entry).split('\\').join('/'))
+      .filter((name) => name.endsWith('.ts'))
+      .sort();
+
+    expect(onDisk.length).toBeGreaterThan(0);
+    expect([...MODULES]).toEqual(onDisk);
+
+    // The six modules the hand-maintained list left outside the scan (`t3-01`
+    // review remark 7) are inside it now. This list is a pin, not the source.
+    for (const name of [
+      'entry-rules.ts',
+      'entry.ts',
+      'page-index.ts',
+      'page-key.ts',
+      'slot-key.ts',
+      'storage-keys.ts',
+    ]) {
+      expect(MODULES).toContain(name);
+    }
+  });
+
+  it('strips comments, so the non-ASCII rule reads code and never prose (A51)', () => {
+    // Prerequisite of the absorbed rule: nine `src/core/` files carry em-dashes,
+    // arrows and dashes in comments, and the rule that forbids non-ASCII text must
+    // not fire on them. `codeOnly` removes them, and the raw file proves the point.
+    expect(codeOnly('const a = 1; // an em-dash \u2014 and an arrow \u2192')).not.toMatch(
+      /[^\x00-\x7F]/,
+    );
+    expect(codeOnly('const a = 1; /* \u2014 \u2192 "quoted" */ const b = 2;')).not.toMatch(
+      /[^\x00-\x7F]/,
+    );
+    expect(readFileSync(join(projectRoot, 'src', 'core', 'anchor-build.ts'), 'utf8')).toMatch(
+      /[^\x00-\x7F]/,
+    );
+    expect(coreSource('anchor-build.ts')).not.toMatch(/[^\x00-\x7F]/);
+  });
 
   it('uses no DOM, no chrome.*, no clock, no randomness, no crypto, no network', () => {
     for (const name of MODULES) {
@@ -169,7 +223,7 @@ describe('purity of the core modules (AC1, review remark R6)', () => {
     }
   });
 
-  it('uses no any, no type-system escape hatch and no framework import', () => {
+  it('uses no any, no type-system escape hatch, no framework import, no non-ASCII text', () => {
     for (const name of MODULES) {
       const code = coreSource(name);
       expect(code).not.toMatch(/\bany\b/);
@@ -177,6 +231,10 @@ describe('purity of the core modules (AC1, review remark R6)', () => {
       expect(code).not.toContain('@ts-expect-error');
       expect(code).not.toContain('@angular/');
       expect(code).not.toContain('preact');
+      // The stronger rule of the scan that used to live in
+      // `tests/core-entry-overlap.spec.ts`, absorbed here for every core module
+      // (ruling `A51`): UI strings are Russian and belong in a UI constants module.
+      expect(code).not.toMatch(/[^\x00-\x7F]/);
 
       const imported = code.match(/from\s+'([^']+)'/g) ?? [];
       for (const specifier of imported) {

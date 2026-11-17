@@ -6,6 +6,7 @@ import { isNormalizedText, normalizeText, sliceCodePoints } from '../src/core/te
 import {
   BLOCK_TAG_NAMES,
   EXCLUDED_TAG_NAMES,
+  WHITESPACE_CODE_POINTS,
   buildTextStream,
   nodeCodePointIndex,
 } from '../src/content/anchor/text-stream';
@@ -13,13 +14,13 @@ import type { TextStream } from '../src/content/anchor/text-stream';
 
 /**
  * The DOM side of the anchor stage: task `t2-02`, AC1 and AC4, hardened by task
- * `t3-04` (`A35` table cells, `N2` the stream claim).
+ * `t3-04` (`A35` table cells, `N2` the stream claim, `N4` the bounded separator set).
  *
  * `docs/specs/inline-comment-model.md` -> Rules / Semantics -> "Normalized text
- * stream", "No raw-text equality", "Block boundary"; PM rulings `A20` (one space
- * per block boundary), `A35` (`td` / `th` join that list), `A21` (excluded
- * subtrees), `A2` (jsdom is a test-only environment) and `A29` (the stream is
- * rebuilt, never cached).
+ * stream", "No raw-text equality", "Block boundary", "Normalized text", "Stream
+ * ownership"; PM rulings `A20` (one space per block boundary), `A35` (`td` / `th`
+ * join that list), `A21` (excluded subtrees), `A2` (jsdom is a test-only
+ * environment) and `A29` (the stream is rebuilt, never cached).
  *
  * `jsdom` is the Vitest environment of this file and nothing is shipped: the
  * module under test receives the subtree as an argument and never reads a global.
@@ -352,6 +353,68 @@ describe('node code point index', () => {
   });
 });
 
+describe('the separator decision is a constant set, not a per-page cache (AC5, finding N4)', () => {
+  it('lists the closed enumeration of the spec once, without duplicates', () => {
+    // 25 code points: the five C0 controls of the set, U+0020, U+00A0, U+1680,
+    // the eleven U+2000-U+200A space separators, U+2028, U+2029, U+202F, U+205F,
+    // U+3000 and U+FEFF (`inline-comment-model.md` -> "Normalized text").
+    expect(WHITESPACE_CODE_POINTS).toHaveLength(25);
+    expect(new Set(WHITESPACE_CODE_POINTS).size).toBe(WHITESPACE_CODE_POINTS.length);
+    for (const codePoint of [
+      '\t',
+      '\n',
+      '\u000B',
+      '\u000C',
+      '\r',
+      ' ',
+      '\u00A0',
+      '\u1680',
+      '\u2000',
+      '\u2009',
+      '\u200A',
+      '\u2028',
+      '\u2029',
+      '\u202F',
+      '\u205F',
+      '\u3000',
+      '\uFEFF',
+    ]) {
+      expect(WHITESPACE_CODE_POINTS).toContain(codePoint);
+    }
+
+    // Outside the closed set, so never a separator: the spec names U+0085 (NEL)
+    // and U+200B (zero width space) as code points that survive untouched.
+    for (const kept of ['\u0085', '\u200B']) {
+      expect(WHITESPACE_CODE_POINTS).not.toContain(kept);
+    }
+  });
+
+  it('agrees with the core normalizer for every code point of the BMP', () => {
+    // Two adjacent copies of the code point are the discriminator: a separator
+    // collapses to one code point in both views, anything else stays two. A set
+    // that missed one of the 25 (or listed one core does not collapse) fails here.
+    for (let unit = 0; unit <= 0xffff; unit += 1) {
+      const repeated = String.fromCharCode(unit);
+      const sample = `a${repeated}${repeated}b`;
+      expect(nodeCodePointIndex(sample).starts.length).toBe(codePointLength(normalizeText(sample)));
+    }
+  });
+
+  it('agrees with the core normalizer across the astral planes', () => {
+    for (let codePoint = 0x10000; codePoint <= 0x10ffff; codePoint += 4096) {
+      const pair = String.fromCodePoint(codePoint);
+      const sample = `a${pair}${pair}b`;
+      expect(nodeCodePointIndex(sample).starts.length).toBe(codePointLength(normalizeText(sample)));
+    }
+
+    // The two forms the spec calls out by name, in both directions.
+    expect(nodeCodePointIndex('a\u0085\u0085b').starts.length).toBe(4);
+    expect(codePointLength(normalizeText('a\u0085\u0085b'))).toBe(4);
+    expect(nodeCodePointIndex('a\u2009\u2009b').starts.length).toBe(3);
+    expect(codePointLength(normalizeText('a\u2009\u2009b'))).toBe(3);
+  });
+});
+
 describe('the stream is rebuilt, never cached (A29)', () => {
   it('sees a node the page added and forgets a node the page removed', () => {
     const root = subtree('<p>first</p>');
@@ -374,5 +437,30 @@ describe('the stream is rebuilt, never cached (A29)', () => {
     expect(first.text).toBe(second.text);
     expect(first.fragments[0]).not.toBe(second.fragments[0]);
     expect(first.fragments[0].node).toBe(second.fragments[0].node);
+  });
+
+  it('differs between two calls over a mutated DOM, on code points seen for the first time (AC5)', () => {
+    const root = subtree('<p>one two</p>');
+    const paragraph = root.querySelector('p');
+    if (paragraph === null) {
+      throw new Error('fixture lost its paragraph');
+    }
+    const before = buildTextStream(root);
+    expect(before.text).toBe('one two');
+
+    // A separator and an astral character the module has never been asked about:
+    // a memoized per-character or per-node decision would answer from the old page.
+    (paragraph.firstChild as Text).data = 'one\u3000two\u{1F600}';
+    const after = buildTextStream(root);
+    expect(after.text).not.toBe(before.text);
+    expect(after.text).toBe('one two\u{1F600}');
+    expect(after.fragments).toHaveLength(1);
+    expect((after.fragments[0].node as Text).data).toBe('one\u3000two\u{1F600}');
+    expect(after.fragments[0].streamEnd - after.fragments[0].streamStart).toBe(8);
+
+    // Same DOM again: the same answer, built again.
+    const third = buildTextStream(root);
+    expect(third.text).toBe(after.text);
+    expect(third.fragments[0]).not.toBe(after.fragments[0]);
   });
 });

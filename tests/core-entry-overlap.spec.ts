@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import type { Entry, EntryAnchor } from '../src/core/entry';
@@ -28,17 +25,15 @@ import type {
  * stream itself belongs to `src/content/anchor/`, so every range here is a number
  * pair the caller resolved, and the cases below are written against the stream
  * shape `t2-02` produces.
+ *
+ * The module's purity is asserted by the single scan over `src/core/` in
+ * `tests/core-storage-port.spec.ts` (ruling `A51`): the local copy of that scan
+ * used to hold a non-ASCII rule the shared one did not, which is the only reason
+ * it existed.
  */
-
-const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
 const PAGE_KEY = 'https://example.com/a';
 const ANCHOR: EntryAnchor = { text: 'span', prefix: '', suffix: '', fragmentCount: 1 };
-
-/** Strips comments so the purity checks look at code, not at prose. */
-function codeOnly(text: string): string {
-  return text.replaceAll(/\/\*[\s\S]*?\*\//g, ' ').replaceAll(/\/\/[^\n]*/g, ' ');
-}
 
 function entryOf(id: string, overrides: Partial<Entry> = {}): Entry {
   return {
@@ -309,46 +304,6 @@ describe('findDuplicateEntry (ruling A23)', () => {
       findDuplicateEntry(candidate(10, 20, 'note'), entries, rangesOf([['hidden', range(10, 20)]]))
         ?.id,
     ).toBe('hidden');
-  });
-});
-
-describe('purity of the resolved-span module (AC5)', () => {
-  const MODULES: readonly string[] = ['entry-overlap.ts'];
-
-  it('uses no DOM, no chrome.*, no clock, no randomness, no crypto, no network', () => {
-    for (const name of MODULES) {
-      const code = codeOnly(readFileSync(join(projectRoot, 'src', 'core', name), 'utf8'));
-      for (const forbidden of [
-        'document',
-        'window',
-        'chrome.',
-        'Date',
-        'Math.random',
-        'crypto',
-        'fetch(',
-        'XMLHttpRequest',
-        'WebSocket',
-      ]) {
-        expect(code).not.toContain(forbidden);
-      }
-    }
-  });
-
-  it('uses no any, no type-system escape hatch, no framework import, no UI string', () => {
-    for (const name of MODULES) {
-      const code = codeOnly(readFileSync(join(projectRoot, 'src', 'core', name), 'utf8'));
-      expect(code).not.toMatch(/\bany\b/);
-      expect(code).not.toContain('@ts-ignore');
-      expect(code).not.toContain('@ts-expect-error');
-      expect(code).not.toContain('@angular/');
-      expect(code).not.toContain('preact');
-      expect(code).not.toMatch(/[^\x00-\x7F]/);
-
-      const imported = code.match(/from\s+'([^']+)'/g) ?? [];
-      for (const specifier of imported) {
-        expect(specifier).toMatch(/from\s+'\.\//);
-      }
-    }
   });
 });
 
