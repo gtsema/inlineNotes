@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import type { RandomSource } from '../src/core/entry-rules';
@@ -25,6 +28,8 @@ import { MemoryStoragePort } from './support/memory-storage-port';
  * AC5 (one reader/writer of `settings:v1`) is a source-shape claim and lives in
  * `tests/toolchain-contract.spec.ts`, next to the greps it extends.
  */
+
+const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
 /** The name `sequenceRng([0.5])` generates: `floor(0.5 * 36)` = 18 = `'i'`. */
 const GENERATED_NAME = 'iiiiiiii';
@@ -198,6 +203,20 @@ describe('AC2 — Сохранить calls the core save and nothing else', () =
       expect(text, code).not.toBe('');
     }
     expect(OPTIONS_MESSAGE_TEXT.saved).toBe(OPTIONS_STRINGS.saved);
+  });
+
+  it('keeps every sentence in the spec that fixes it', () => {
+    // Same discipline as the content-layer refusal map: a wording may only change
+    // together with the spec line that owns it (`content-overlay-ui.md` ->
+    // "Options message map").
+    const spec = readFileSync(
+      join(projectRoot, 'docs', 'specs', 'content-overlay-ui.md'),
+      'utf8',
+    );
+    expect(spec).toContain('- Options message map');
+    for (const [code, text] of Object.entries(OPTIONS_MESSAGE_TEXT)) {
+      expect(spec.includes(text), `${code}: ${text}`).toBe(true);
+    }
   });
 });
 
