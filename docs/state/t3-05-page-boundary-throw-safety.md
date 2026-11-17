@@ -58,14 +58,22 @@ a refusal code or a Russian wording (the vocabulary is fixed by `text.ts` and th
 
 - attempt 1: brief prepared (2026-11-17), not delegated yet — `t4-02-options-name` runs first because it unblocks the
   runtime loop for the user.
+- attempt 1 **delivered** (`14995da` fix + tests, `6865db2` spec + comments; report copied to
+  `docs/state/t3-05-engineer.md`). Mid-run the engineer stalled on exact-match edits into the 1129-line
+  `tests/content-create-card-controller.spec.ts`; the PM steered it to a **new** spec file per the briefed allowance, and
+  those reverted partial edits are absent from the final diff (`git diff --stat 5375011..HEAD`). The red state before the
+  fix is quoted in the report, including the four unhandled `InvalidAccessError` rejections — the defect chain the review
+  named. PM re-ran the gates: build green, **672/672** over 37 files (+22), checker **0 errors** (57 INFO), typecheck
+  exit 0, tree clean, `src/core/` untouched.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered; one mid-run steer,
+not a child). Remaining: 1 (reviewer).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: attempt 1 delivered, copied to `docs/state/t3-05-engineer.md`
 - reviewer verdict: not started
 
 ## Open questions
