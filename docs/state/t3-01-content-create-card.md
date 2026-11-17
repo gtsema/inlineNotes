@@ -131,12 +131,12 @@ SPA URL watching and `storage.onChanged` (`t4-03`), iframes.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (attempt 1 timeout + attempt 2 in flight).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer ×2 + reviewer ×1 in flight).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: copied to `docs/state/t3-01-content-create-card-engineer.md`.
+- reviewer verdict: running (`a582bf31`), range `d29f55b..5f4b82d`.
 
 ## Open questions
 
