@@ -22,8 +22,14 @@ final observable-behavior checklist, so the loop is verifiable by a human.
   `chrome.storage.local`, and when a key belonging to its own page (slot key) or `settings:v1` changes, it re-reads
   through core and repaints. It does not queue, merge or reconcile writes: the cross-tab read-modify-write race stays a
   v1 limitation (recorded since `t1-06`), and this task documents it rather than pretending to solve it.
-- `A61` **A stale entry stays visible in the popup and stays deletable** (already spec'd); this task adds only the
-  Russian wording for the stale state in the popup row, from the popup's own constants module.
+- `A61` **corrected by `A86` before delegation.** A stale entry stays visible in the popup and stays deletable — that is
+  already spec'd and already shipped by `t4-01`. The old sentence here promised that this task "adds only the Russian wording
+  for the stale state in the popup row", and it is **not implementable as written**: staleness is a page-side locate result
+  (`anchor_not_found` / `anchor_stale` in the paint pass), while the popup reads only `chrome.storage.local` through core, and
+  the two paths that could deliver that knowledge to the popup — message passing and a service worker mapping `tab.id` →
+  page key — were deliberately rejected by `A49`/`A50`. Ruling `A86`: **the popup does not label stale entries in v1.** The
+  Terms label «запись недоступна» stays where it is true (the page: no highlight, no tooltip). What the user actually gets is
+  the specified promise: a stale entry is still listed and still deletable.
 
 ## AC (3 substantive for this slice + gates)
 
