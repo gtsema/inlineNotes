@@ -308,12 +308,23 @@ describe('layer boundaries', () => {
     });
 
     it('sends no message to the page from the checkbox (ruling A50)', () => {
-      // The checkbox writes storage; the page repaints from `storage.onChanged`, which
-      // is task `t4-03`. A second, popup-initiated channel would be a third moving part
-      // and the pair would disagree about which one repaints.
+      // The checkbox writes storage; the page repaints from the `storage watch` of
+      // `t4-03`, whose subscription lives in the one storage adapter. A second,
+      // popup-initiated channel would be a third moving part and the pair would
+      // disagree about which one repaints.
       expect(popupCode()).not.toMatch(/\bsendMessage\b/);
       expect(popupCode()).not.toMatch(/\bconnect(\s*\(|\.Port)/);
       expect(popupCode()).not.toMatch(/\bchrome\.storage\.onChanged\b/);
+    });
+
+    it('keeps the repaint channel on the page side: one `onChanged` subscriber in `src` (t4-03 AC2, A50)', () => {
+      // The popup is allowed no subscriber of its own only if the page really has
+      // exactly one. This is the pairing half of ruling `A50`: the write is the
+      // message, and one listener in the page turns it into a repaint.
+      const subscribers = sourceFiles('src')
+        .filter((file) => codeOnly(file.text).includes('chrome.storage.onChanged'))
+        .map((file) => file.path);
+      expect(subscribers).toEqual(['src/content/store/chrome-storage-port.ts']);
     });
 
     it('keeps the component a facade with no core rule of its own', () => {
@@ -355,6 +366,144 @@ describe('layer boundaries', () => {
       expect(template).not.toMatch(/<textarea/);
       expect(template).not.toMatch(/Сохранить/);
       expect(template).not.toMatch(/onSave/);
+    });
+
+    /**
+     * The popup template, taken out of the component metadata so the render contract
+     * of ruling `A83` can be pinned as a **document order and nesting** fact instead of
+     * as a wording grep (task `t4-03` CF1).
+     */
+    const popupTemplate = (): string => {
+      const raw = codeOnly(
+        readFileSync(join(projectRoot, 'src', 'popup', 'popup.component.ts'), 'utf8'),
+      );
+      const template = /template:\s*`([\s\S]*?)`/.exec(raw)?.[1];
+      if (template === undefined) {
+        throw new Error('the popup component has no inline template to scan');
+      }
+      return template;
+    };
+
+    /** Reads the balanced `(...)` that starts at `open`, and returns its content. */
+    function conditionAt(template: string, open: number): string {
+      let depth = 0;
+      for (let i = open; i < template.length; i += 1) {
+        if (template[i] === '(') {
+          depth += 1;
+        } else if (template[i] === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            return template.slice(open + 1, i);
+          }
+        }
+      }
+      throw new Error('unbalanced control-flow condition in the popup template');
+    }
+
+    /**
+     * The control-flow blocks that enclose `needle`, outermost first, each named by its
+     * keyword and condition (`@if (…)` / `@for (…)` / `@else`). Interpolations are
+     * removed first: `{{ x }}` is braces, not a block.
+     */
+    function blocksAround(needle: string): string[] {
+      const template = popupTemplate().replaceAll(/\{\{[^}]*\}\}/g, ' ');
+      const at = template.indexOf(needle);
+      if (at < 0) {
+        throw new Error(`the popup template holds no ${needle}`);
+      }
+      const stack: string[] = [];
+      let pending: string | null = null;
+      let i = 0;
+      while (i < at) {
+        const ifAt = template.startsWith('@if (', i);
+        const forAt = template.startsWith('@for (', i);
+        if (ifAt || forAt) {
+          const head = ifAt ? '@if (' : '@for (';
+          const condition = conditionAt(template, i + head.length - 1);
+          pending = `${head}${condition})`;
+          i += head.length + condition.length + 1;
+          continue;
+        }
+        if (template.startsWith('@else', i)) {
+          pending = '@else';
+          i += '@else'.length;
+          continue;
+        }
+        const character = template[i];
+        if (character === '{') {
+          stack.push(pending ?? 'block');
+          pending = null;
+        } else if (character === '}') {
+          stack.pop();
+        }
+        i += 1;
+      }
+      return stack;
+    }
+
+    it('renders both notice lines above the list, in document order (A81, A83; t4-03 CF1)', () => {
+      const template = popupTemplate();
+      const listAt = template.indexOf('class="rows"');
+      const nameNoticeAt = template.indexOf('class="notice notice--name"');
+      const restrictedNoticeAt = template.indexOf('class="notice notice--not-injectable"');
+      expect(listAt).toBeGreaterThan(-1);
+      expect(nameNoticeAt).toBeGreaterThan(-1);
+      expect(restrictedNoticeAt).toBeGreaterThan(-1);
+
+      // Ruling `A83`, in the shape that broke: a notice that replaced the list instead
+      // of standing above it. Document order is the whole criterion.
+      expect(nameNoticeAt).toBeLessThan(listAt);
+      expect(restrictedNoticeAt).toBeLessThan(listAt);
+
+      // Both codes the service can answer have a branch of their own, so a notice can
+      // never disappear because a case is missing, and neither branch is nested in the
+      // other: they are the `@if` / `@else` pair of one loop.
+      expect(blocksAround('class="notice notice--name"')).toEqual([
+        '@for (notice of view().notices; track notice)',
+        "@if (notice === 'name_required')",
+      ]);
+      expect(blocksAround('class="notice notice--not-injectable"')).toEqual([
+        '@for (notice of view().notices; track notice)',
+        '@else',
+      ]);
+    });
+
+    it('renders the list, the checkbox and `Удалить` outside every notice and outside any ownership condition (A25, A83; t4-03 CF1)', () => {
+      // The list block is the `@else` half of the empty check and nothing else: no
+      // notice, no name gate and no ownership gate stands between the page and its
+      // rows, because stored entries the reader cannot see are still entries the reader
+      // has to be able to delete.
+      expect(blocksAround('class="rows"')).toEqual(['@else']);
+      const rowChain = blocksAround('class="delete"');
+      expect(rowChain).toEqual([
+        '@else',
+        '@for (row of view().rows; track row.id)',
+      ]);
+      expect(blocksAround('type="checkbox"')).toEqual(rowChain);
+      expect(rowChain.filter((frame) => /own|name_required|not_injectable/i.test(frame))).toEqual(
+        [],
+      );
+
+      // And the ownership marker is a class on the row (ruling `A82`), never a block
+      // that could wrap the delete button away.
+      expect(popupTemplate()).not.toMatch(/@if \([^)]*own/i);
+    });
+
+    it('renders the empty state as the only alternative to the list (t4-03 CF1)', () => {
+      const template = popupTemplate();
+      expect(template).toMatch(/<p class="empty">\{\{ emptyState \}\}<\/p>/);
+      // Its only gate is the empty check itself, so the paragraph is what a page with
+      // no rows shows at once — the state `tests/popup-entry-list.spec.ts` pins as the
+      // answer of the service after `Удалить` took the last row.
+      expect(blocksAround('class="empty"')).toEqual(['@if (view().rows.length === 0)']);
+
+      // The wording is the one sentence of the one constants module, and the component
+      // hands it over as a field rather than choosing it (facade rule).
+      expect(componentCode()).toMatch(
+        /readonly emptyState: string = POPUP_STRINGS\.emptyState;/,
+      );
+      const strings = codeOnly(readFileSync(join(projectRoot, 'src', 'popup', 'text.ts'), 'utf8'));
+      expect(strings).toContain("'На этой странице нет записей'");
     });
 
     it('holds one wording per popup state, and no second variant of the ownership marker (A81, A82)', () => {
