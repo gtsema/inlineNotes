@@ -66,6 +66,14 @@ interface ResolvedSpans  { candidate: CodePointRange; byEntryId: ResolvedEntryRa
   (`t2-03` remark 6), so the card is the only line of defence for empty/whitespace selections (residual risk 5).
 - `buildAnchor` now also returns `null` for an out-of-domain `fragments`/`contextWindow` (`A28`): treat that as
   "do not enable Save", never as `entry_invalid` (residual risk 4).
+- **Author check comes from `t3-01-settings-read-core` (`docs/state/t3-01-settings-read-core-review.md` → Stage 3
+  readiness).** Ask once through core: `const s = await loadSettings(port)` then branch on
+  `validateAuthorName(s.name).ok`. If false, the card must not open and the message is the existing `name_required`
+  wording. The card must **not**: branch on `s.codes`; truthiness-test `s.name` alone (an over-40-code-point stored name
+  is non-empty **and** unusable); read, decode or re-trim `settings:v1`; import `SETTINGS_KEY`; issue a second read of
+  that key (spec AC28 pins exactly one `get`); generate, default or repair a name (that is `t4-02`, spec `:75`); hold a
+  Russian string outside `src/content/text.ts`. Caching the read per page load is this task's call, but there is no
+  invalidation rule yet — a name changed in options is invisible to an already-loaded page (recorded residual risk).
 - `A52` (`t2-04` review remark 4): **the pure gate is internal.** The card must not call `assertCreatable` for a
   preview or a "would this collide?" check — its `spans` is optional there, so a preview would answer "allowed" and
   re-open the exact failure class `t2-03` remark 3 closed. One spec sentence in `docs/specs/inline-comment-model.md`.

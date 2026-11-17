@@ -22,7 +22,7 @@ A Chrome MV3 extension in which the user sets a personal name in options, select
 - Observed runtime: `dacan / qwen3.8-flash-next-iq3_s`, ~3-bit quantization → slow class, 131k context. Consequence: role and spec bodies are English with short sentences; UI strings and README are Russian.
 - Thinking is **off** in every role (`thinking: off` in frontmatter, `defaultThinkingLevel: "off"`, `subagents.disableThinking: true`, `subagents.defaultThinking: "off"`, `subagents.maxThinking: "off"`, `agentOverrides.<role>.thinking: "off"`).
 - Roles differ only by `tools`, `skills`, `output`, `acceptanceRole`, `maxSubagentDepth`.
-- `timeoutMs: 1800000` is copied from `docs/project-profile.md` → Runtime Model into every role frontmatter.
+- `timeoutMs: 3600000` (raised by ruling `A19`) is copied from `docs/project-profile.md` → Runtime Model into every role frontmatter; `scripts/check-agent-config.mjs` reads the value from the profile, so that file is the only change site.
 
 ## Project Priorities
 

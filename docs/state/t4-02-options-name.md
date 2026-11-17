@@ -72,3 +72,14 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 
 - `A54`/`A55`/`A56` are PM defaults applied without an answer from the user; each is one function or one constant to
   change.
+
+## Residual risks handed over by `t3-01-settings-read-core` (`docs/state/t3-01-settings-read-core-review.md`)
+
+- `saveSettings` and `generateAuthorName` may be wired **only** here (spec `:75`).
+- After a failed save, re-show the previously stored name — the byte-identical guarantee is real and asserted
+  (`tests/core-settings-store.spec.ts:289-321`).
+- The stub's `maxlength="40"` in `src/options/options.component.ts:21` counts **UTF-16 units**, not code points: it must
+  not be the only guard for astral names (`A55`).
+- Two Russian strings already describe a name refusal on two surfaces (`Имя обязательно` in the overlay spec,
+  `Укажите имя в настройках` in the model spec). Keep one per surface, each in its own constants module, and do not add
+  a third for `quota` / `serialization` / `unavailable`.

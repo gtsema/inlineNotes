@@ -19,10 +19,18 @@ two" rule in `.pi/skills/delivery-planning/SKILL.md` allows on top of another ta
    the precise statement — normalized by construction, one U+0020 per `A20` boundary, trimmed at both ends.
 4. Scan hygiene bundle (`N3`, `N5`, `t2-03` remark 7, `t2-04` remark 1 / ruling `A51`): the `dist/` half of the jsdom
    scan fails when `dist/` is missing instead of passing vacuously; `docs/specs/INDEX.md` covered-paths for the model
-   spec gains `src/content/anchor/`; and the shared purity scan in `tests/core-storage-port.spec.ts` absorbs the
-   stronger non-ASCII rule of the local scan in `tests/core-entry-overlap.spec.ts`, whose duplicate `describe` is then
-   deleted. Prerequisite: verify `codeOnly()` strips comments (nine `src/core/` files contain em-dashes and arrows in
-   comments) — if not, the rule is Cyrillic-only (`[Ѐ-ӿ]`), which is what the architecture rule forbids.
+   spec gains `src/content/anchor/`; and the purity scans are merged (`A51`, `t3-01` review remarks 2 and 7):
+   - the shared list in `tests/core-storage-port.spec.ts` stops being hand-maintained and is **derived from the
+     directory** (`A58`) — it covers 9 of 15 `src/core/` modules today, and a derived list makes the drift impossible
+     rather than annually corrected;
+   - it absorbs the stronger non-ASCII rule of the local scan in `tests/core-entry-overlap.spec.ts`, whose duplicate
+     `describe` is then deleted. Prerequisite: verify `codeOnly()` strips comments (nine `src/core/` files contain
+     em-dashes and arrows in comments) — if not, the rule is Cyrillic-only (`[Ѐ-ӿ]`), which is what the
+     architecture rule actually forbids;
+   - one grep test pins the **set of shipped modules allowed to import `SETTINGS_KEY`** to `{src/core/settings-store.ts}`
+     (`t3-01` review remark 2), following the pattern already used for `chrome.storage` at
+     `tests/toolchain-contract.spec.ts:123-131`; the same test asserts no shipped module imports `settingsValueOf` or
+     `settingsFromStorageValue`, which are internal (`A57`, same stance as `assertCreatable` under `A52`).
 5. `N4` bounded cache: the module-scoped whitespace decision map in `text-stream.ts:269` is replaced by a constant
    whitespace set (it currently grows with every distinct code point of every page the content script visits); the
    stream stays uncached (`A29`) and a test pins that two calls over a mutated DOM differ.
