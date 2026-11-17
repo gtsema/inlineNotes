@@ -53,16 +53,20 @@ The create card, the shadow host, painting, popup/options, any `src/core/` chang
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegated after `t3-01-settings-read-core` acceptance (before the create card).
+- attempt 1 (`e21af205`): delivered in **two commits** as ordered (`A53`): `20cf8be` (AC1–AC3, behavior + spec wording)
+  and `5aaa777` (AC4–AC5, scans). Tree clean. PM gates on `5aaa777`: `npm test` **437 passed / 22 files**,
+  `npm run build` self-contained `dist/`, `npm run typecheck` clean, checker `0 / 0 / 23 INFO`.
+  The derived `MODULES` scan is genuinely directory-derived (`tests/core-storage-port.spec.ts:146-160`) and the
+  comment-stripping prerequisite for the absorbed non-ASCII rule is itself asserted (`:190-200`).
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 + reviewer ×1 in flight).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: copied to `docs/state/t3-04-engineer.md`.
+- reviewer verdict: running (`b49c1727`), path-limited range `4047102..5aaa777 -- src tests docs/specs`.
 
 ## Open questions
 
