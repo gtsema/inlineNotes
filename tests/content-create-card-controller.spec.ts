@@ -23,7 +23,12 @@
  *   throws leaves no card and no write (`A64`), a span whose fragments all measure
  *   zero area is placed by the viewport rule (`A65`), and a page that carries an
  *   astral character before the selection still opens a card, stores the whole word
- *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1).
+ *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1);
+ * - the two carried findings of `t3-01` that `t3-02` did not close, now pinned at
+ *   the only call site where they exist: the keyboard contract of an **open** card
+ *   (`t3-01` remark 4, task `t3-02b` AC1, ruling `A74`) and the ruling-`A29`
+ *   re-derive-at-save moment, driven by a DOM that changes **between `open()` and
+ *   `Сохранить`** (`t3-01` remark 5, task `t3-02b` AC2).
  *
  * The environment is jsdom, but only the page side of the boundary is faked: the
  * storage seam is the hand-written `MemoryStoragePort`, and the entry that a save
@@ -34,6 +39,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { buildTextStream } from '../src/content/anchor/text-stream';
+import { locateAnchor } from '../src/content/anchor/locate-anchor';
 import { captureSpan } from '../src/content/capture/selection-span';
 import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect';
 import type { CapturedSelection } from '../src/content/capture/page-selection';
@@ -209,13 +215,52 @@ function refusalLineOf(overlay: OverlayHost): string | null {
   return line === null ? null : (line.textContent ?? '');
 }
 
-async function typeAndSave(overlay: OverlayHost, comment: string): Promise<void> {
+/** Types a draft into the open card and lets the counter and Save state settle. */
+async function typeDraft(overlay: OverlayHost, comment: string): Promise<void> {
   const field = inputOf(overlay);
   field.value = comment;
   field.dispatchEvent(new Event('input', { bubbles: true }));
   await settle(2);
+}
+
+/** Presses the card's `Сохранить`, whatever state the page is in at that moment. */
+async function pressSave(overlay: OverlayHost): Promise<void> {
   saveButtonOf(overlay).click();
   await settle();
+}
+
+async function typeAndSave(overlay: OverlayHost, comment: string): Promise<void> {
+  await typeDraft(overlay, comment);
+  await pressSave(overlay);
+}
+
+/**
+ * Sends one key press to the card's `<textarea>`, which is where a keyboard user
+ * is when the card is open. The card's own handler sits on the card element, so a
+ * bubbling `keydown` from the textarea reaches it exactly as it does in a browser.
+ */
+function pressKey(
+  overlay: OverlayHost,
+  key: string,
+  modifier: 'ctrl' | 'meta' | null = null,
+): void {
+  inputOf(overlay).dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      ctrlKey: modifier === 'ctrl',
+      metaKey: modifier === 'meta',
+    }),
+  );
+}
+
+/**
+ * The elements a browser would put in the tab order, in the order the shadow tree
+ * holds them. A browser walks this order on `Tab`; jsdom has no `Tab` key, so a
+ * test walks it with `focus()` and asserts the same sequence and the same answers.
+ */
+function tabOrderOf(overlay: OverlayHost): Element[] {
+  return [...overlay.root.querySelectorAll('textarea, button, input, select, a[href], [tabindex]')];
 }
 
 /** The wrapper element of the card, or `null` when it was never positioned. */
@@ -656,6 +701,226 @@ describe('a measurement that throws leaves the card closed (ruling A64)', () => 
     expect(fixture.measured).toHaveLength(1);
     expect(writesOtherThanSettings(fixture.port)).toHaveLength(0);
     expect(fixture.port.storedKeys()).toEqual([SETTINGS_KEY]);
+  });
+});
+
+describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)', () => {
+  /**
+   * Ruling `A74` (assumption, applied as the least-risky default): opening the card
+   * takes no focus. The page keeps the element it had focused, and the reader
+   * reaches the card with `Tab`. What is pinned here is the shipped behavior, so a
+   * future change to it has to change this test and the spec sentence together.
+   */
+  it('opens with the page focus exactly where it was', async () => {
+    const article = document.getElementById('art');
+    if (article === null) {
+      throw new Error('fixture article is missing');
+    }
+    const pageButton = document.createElement('button');
+    pageButton.id = 'page-cta';
+    pageButton.textContent = 'Read more';
+    article.append(pageButton);
+    pageButton.focus();
+    expect(document.activeElement).toBe(pageButton);
+
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+
+    // The card really is open — and the document still answers the page's own
+    // element: neither the shadow host nor anything inside its shadow tree took
+    // the focus. A focused element inside a shadow tree would make
+    // `document.activeElement` answer the host, and `root.activeElement` answer it.
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(cardOf(fixture.overlay)).not.toBeNull();
+    expect(document.activeElement).toBe(pageButton);
+    expect(document.activeElement).not.toBe(fixture.overlay.host);
+    expect(fixture.overlay.root.activeElement).toBeNull();
+  });
+
+  it('renders textarea, then Сохранить, then Отмена, as the rendered tab order', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    // A draft first: `Сохранить` is disabled while the comment is empty, and a
+    // disabled control is out of the tab order, so the order is read with the
+    // button in its usable state.
+    await typeDraft(fixture.overlay, 'my note');
+
+    const order = tabOrderOf(fixture.overlay);
+    expect(order).toHaveLength(3);
+    expect(order.map((element: Element) => element.tagName)).toEqual(['TEXTAREA', 'BUTTON', 'BUTTON']);
+    expect(order[0]).toBe(inputOf(fixture.overlay));
+    expect(order[1].textContent).toBe(CONTENT_STRINGS.save);
+    expect(order[2].textContent).toBe(CONTENT_STRINGS.cancel);
+    for (const element of order) {
+      expect((element as HTMLButtonElement).disabled).toBe(false);
+    }
+
+    // Nothing re-orders the sequence and nothing opts a control out of it: the tab
+    // order is the DOM order, because no element carries a `tabindex` of its own.
+    for (const element of order) {
+      expect(element.getAttribute('tabindex')).toBeNull();
+    }
+    expect(fixture.overlay.root.querySelectorAll('[tabindex]')).toHaveLength(0);
+    expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+
+    // Each control in that order really takes focus, and the page only ever sees
+    // the single host answer `document.activeElement` (shadow retargeting), which
+    // is the same isolation AC1 of `t3-01` pins for the element count.
+    for (const element of order) {
+      (element as HTMLElement).focus();
+      expect(fixture.overlay.root.activeElement).toBe(element);
+      expect(document.activeElement).toBe(fixture.overlay.host);
+    }
+  });
+
+  it('cancels on Escape: the card closes, the host hides and nothing is written', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    await typeDraft(fixture.overlay, 'draft');
+
+    pressKey(fixture.overlay, 'Escape');
+    await settle();
+
+    expect(fixture.controller.isOpen()).toBe(false);
+    expect(cardOf(fixture.overlay)).toBeNull();
+    expect(fixture.overlay.host.hidden).toBe(true);
+    expect(writesOtherThanSettings(fixture.port)).toHaveLength(0);
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(0);
+  });
+
+  it('saves on Ctrl+Enter through the real create path', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    await typeDraft(fixture.overlay, 'my note');
+
+    pressKey(fixture.overlay, 'Enter', 'ctrl');
+    await settle();
+
+    expect(fixture.controller.isOpen()).toBe(false);
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0].comment).toBe('my note');
+    expect(page.entries[0].text).toBe('quick brown');
+    expect(fixture.created).toHaveLength(1);
+  });
+
+  it('saves on Cmd+Enter as well', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    await typeDraft(fixture.overlay, 'my note');
+
+    pressKey(fixture.overlay, 'Enter', 'meta');
+    await settle();
+
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(1);
+    expect(refusalLineOf(fixture.overlay)).toBeNull();
+  });
+});
+
+describe('the page moved its words between the open and the save (t3-02b AC2, ruling A29)', () => {
+  /**
+   * Ruling `A29` says the save re-derives the span against a stream built at that
+   * moment, and the card keeps the selection's **boundaries**, never a snapshot of
+   * the page. The only way to see the difference is a page that changed **between
+   * `open()` and `Сохранить`**:
+   *
+   * - a block appeared in front of the selected paragraph, so the anchor window the
+   *   open measured is no longer the window the page has;
+   * - a word appeared **inside** the selected words (a lazily rendered inline
+   *   gloss). A live `Range` follows a `CharacterData` replacement — a boundary
+   *   inside the replaced region snaps to its start, a boundary after it moves by
+   *   the length difference, which is the DOM spec's replace-data rule — so the
+   *   boundaries the card kept now cover one word more.
+   *
+   * Afterwards the open-time wording is nowhere in the page: a span or an anchor
+   * remembered from the open could not produce this record, and a save that
+   * re-derived against a stream of its own moment has to produce exactly it.
+   */
+  it('stores the span the mutated document gives, not the one measured at open', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+    // The open-time measurement, read off the controller's own measurement seam:
+    // the card measured node-local offsets 4..15, which covered "quick brown".
+    expect(fixture.measured).toEqual([{ node: textOf('p1'), start: 4, end: 15 }]);
+    await typeDraft(fixture.overlay, 'my note');
+
+    const article = document.getElementById('art');
+    const firstParagraph = document.getElementById('p1');
+    if (article === null || firstParagraph === null) {
+      throw new Error('fixture article is missing');
+    }
+    const lead = document.createElement('p');
+    lead.textContent = 'Advertisement: a word before';
+    article.insertBefore(lead, firstParagraph);
+    textOf('p1').insertData(10, 'very '); // before "brown", inside the selected words
+
+    await pressSave(fixture.overlay);
+
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(1);
+    const entry = page.entries[0];
+    expect(entry.comment).toBe('my note');
+    // The words the kept boundaries cover **now** — not the words measured when the
+    // card opened — and a context window read off the mutated stream.
+    expect(entry.text).toBe('quick very brown');
+    expect(entry.text).not.toBe('quick brown');
+    expect(entry.anchor.text).toBe(entry.text);
+    expect(entry.anchor.prefix).toBe('Advertisement: a word before The ');
+    expect(entry.anchor.suffix).toContain(' fox jumps');
+    expect(entry.anchor.fragmentCount).toBe(1);
+    expect(fixture.created).toHaveLength(1);
+    expect(fixture.created[0].id).toBe(entry.id);
+
+    // The stored anchor is a real anchor of the mutated page: it resolves there and
+    // covers exactly the words the save measured, while the open-time wording is
+    // gone from the page and could not have been resolved at all.
+    const located = locateAnchor(document.body, entry.anchor);
+    expect(located.ok).toBe(true);
+    if (!located.ok) {
+      return;
+    }
+    const fragment = located.fragments[0];
+    expect(fragment.node).toBe(textOf('p1'));
+    expect(fragment.node.data.slice(fragment.start, fragment.end)).toBe('quick very brown');
+    expect(textOf('p1').data).not.toContain('quick brown');
+  });
+
+  /**
+   * The other half of the same moment: the span is gone, so the save answers with
+   * the content layer's own `selection_lost` (`src/content/text.ts`), sends nothing
+   * to core, and leaves the card open with its text — the wording of the spec rule
+   * "Selection capture and save moments", and never the bug-level `entry_invalid`.
+   */
+  it('answers a span the page no longer has with selection_lost and writes nothing', async () => {
+    const fixture = mount(selection('p1', 4, 15));
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    await typeDraft(fixture.overlay, 'my note');
+
+    // The site re-rendered the paragraph: a fresh text node, so the boundaries the
+    // card kept sit on a node that is no longer in the document at all.
+    textOf('p1').replaceWith(document.createTextNode('An entirely different article body.'));
+    await pressSave(fixture.overlay);
+
+    const line = refusalLineOf(fixture.overlay);
+    expect(line).toBe(REFUSAL_TEXT.selection_lost);
+    expect(line).not.toBe(REFUSAL_TEXT.entry_invalid);
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(inputOf(fixture.overlay).value).toBe('my note');
+    expect(fixture.created).toEqual([]);
+    expect(writesOtherThanSettings(fixture.port)).toHaveLength(0);
+    expect(fixture.port.storedKeys()).toEqual([SETTINGS_KEY]);
+    const page = await loadEntries(fixture.port, PAGE_URL);
+    expect(page.entries).toHaveLength(0);
   });
 });
 
