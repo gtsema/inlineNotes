@@ -19,14 +19,15 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 | `non-blocking finding` | — | recorded remark, does not block |
 | `verdict` | — | `accepted` / `changes requested` / `blocked` |
 | `re-attempt` | — | second attempt of a task with a changed brief |
+| `carried fix` | — | a review finding an earlier task did not close, re-briefed as a numbered item of the next task's `Carried-fix checklist` |
 
 ## Flow / Sequence
 
-1. The PM writes the brief: Task / Input paths / Output path / Acceptance criterion / Constraints, and the task state file `docs/state/<task-id>.md` with the expected delegation count and the task's AC copied from the spec.
-2. `extension-engineer` implements, runs the gates, and writes a report file with the changed paths, the commands run, and the AC self-check.
+1. The PM writes the brief: Task / Input paths / Output path / Acceptance criterion / Constraints, and the task state file `docs/state/<task-id>.md` with the expected delegation count and the task's AC copied from the spec. When the task closes findings left by an earlier review, the brief and the state file carry a numbered **`Carried-fix checklist`**: one number per carried fix, each naming the review artifact it comes from.
+2. `extension-engineer` implements, runs the gates, and writes a report file with the changed paths, the commands run, and the AC self-check. The report answers **every number** of the task's `Carried-fix checklist`, one number per line, with `done` + `path:line` or `skipped` + a reason.
 3. The engineer runs the green gates (`npm test`, `npm run build`, `node scripts/check-agent-config.mjs`) and quotes their output in the report. The PM has no shell tool, so it verifies that the quote is present and complete; when a quote is missing or doubtful, the PM asks `code-reviewer` to re-run the read-only checker `node scripts/check-agent-config.mjs`.
 4. The PM delegates to `code-reviewer` with the diff range (`git diff <base>..HEAD` or the commit list), the spec path, and the report path.
-5. `code-reviewer` inspects only the artifacts, the code, the spec AC and the git diff, and writes its review to the path given in the brief (default `.pi/reviews/<task-id>-review.md` under the managed output routing).
+5. `code-reviewer` inspects only the artifacts, the code, the spec AC and the git diff, and writes its review to the path given in the brief (default `.pi/reviews/<task-id>-review.md` under the managed output routing). The review carries one line per number of the `Carried-fix checklist` with its own verdict, next to the one line per AC.
 6. Verdict is recorded in the task state file: `accepted`, `changes requested` with numbered blocking findings, or `blocked` with the reason.
 7. On `changes requested` the PM re-briefs `extension-engineer` with the concrete findings (the PM never edits code itself). One re-attempt is allowed.
 8. After acceptance the engineer's commit is final, the spec is confirmed as edited in the same commit when behavior changed, and the state file is closed with a one-line outcome.
@@ -37,8 +38,9 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 - Every brief to a role that owns the change must require a `Commands run` section in the report. The harness acceptance gate rejects a report without command evidence. A task that deliberately forbids commands (smoke checks, read-only probes) is launched with an explicit acceptance reason instead of the default gate.
 - The reviewer is read-only: `read, grep, find, ls, bash`; bash is limited to read-only git (`git log`, `git show`, `git diff`, `git status`, `git ls-files`). No edits, no `git add/commit/checkout/push`.
 - The review artifact must quote the AC line it checks for every AC, and must state for each: `pass`, `fail`, or `not covered by tests`.
+- A carried fix is a deliverable, not a remark (ruling `A72`, from `t3-02` review finding 3). Every brief lists its carried fixes as numbers in a `Carried-fix checklist`; the engineer report answers every number on its own line with `done` + `path:line` or `skipped` + a reason; the review artifact carries one line per number; and a carried number that nothing answers is a **blocking finding regardless of the AC verdict** — a task that passes every AC and silently drops a numbered deliverable is not accepted (`t3-02`: four clean commits, two carried fixes vanished, report silent). A brief with no carried fixes states `Carried-fix checklist: none`, so "nothing to answer" is itself written down instead of being inferred.
 - A finding must name the file and the line or the spec section; "improve the code" is not a finding.
-- Blocking only when: an AC is not met, a spec rule is violated, a forbidden dependency or network call appears, tests are missing for a rule the AC lists, or the change mutates host-page DOM for painting.
+- Blocking only when: an AC is not met, a spec rule is violated, a forbidden dependency or network call appears, tests are missing for a rule the AC lists, the change mutates host-page DOM for painting, or a number of the `Carried-fix checklist` is unanswered.
 - Style-only remarks are non-blocking.
 - Spec vs code conflict is never resolved silently: the reviewer reports it as `blocked` and the PM decides (fix code, or edit spec and re-review).
 - A behavior change without a spec edit in the same commit is a blocking finding.
@@ -69,3 +71,4 @@ Out of scope: product behavior rules (owned by `docs/specs/inline-comment-model.
 5. The reviewer's tool set is read-only and the review contains no evidence of file mutation.
 6. A spec-vs-code conflict appears in the state file as `blocked` with a decision recorded by the PM.
 7. `node scripts/check-agent-config.mjs` reports 0 errors after any harness change, and the review of a harness task quotes it.
+8. Every brief that closes an earlier review finding lists those findings as a numbered `Carried-fix checklist`; the engineer report answers every number on its own line with `done` + `path:line` or `skipped` + a reason; the review artifact carries one line per number; and a task whose report leaves a number unanswered carries a blocking finding even when all of its ACs pass.
