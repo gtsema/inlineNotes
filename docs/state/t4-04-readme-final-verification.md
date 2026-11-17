@@ -36,6 +36,10 @@ The browser list owned by `docs/state/t4-03-spa-refresh-docs.md` (items 1–6: `
 save, editor-vs-create-card handover, popup against a real page including the install warning, checkbox repaint) is run by
 the PM with the user and quoted here item by item. A missing human answer is recorded as `not verified`, never as passed.
 
+**Deferred by the user (2026-11-17): «прогон будет позже»**. This card therefore closes on its documentation AC only; the
+verification run stays open as a named pending item in the README status section and in the plan ledger until the user sits
+down at Chrome. No task may claim it as passed.
+
 ## Inputs the engineer reads
 
 `docs/project-profile.md` (commands, limits, runtime model — the source of truth for the README numbers), `README.md` as it
