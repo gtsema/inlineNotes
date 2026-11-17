@@ -53,7 +53,23 @@ is confirmed on a real browser.
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
 | `t4-03-spa-refresh-docs` | **accepted** (`adfc8e9`+`79acb74`+`e0ae2ec`+`c2d74ab`, 778 tests, 0 blocking findings) — SPA/history re-resolve with a 1000 ms address poll, `storage.onChanged` repaint per record, options-name pickup on a loaded page, CF1 closed; `A87`/`A88` upheld by the reviewer | overlay AC8, model AC1 |
 | `t4-03b-watch-pins` | **accepted** (`a35e46f`, 789 tests, +11, comment-only `src/` diff, 0 blocking findings) — the trigger set is now a closed set (exact listener list + runtime `attachments`/`intervals` equality), `pageKeyOfPass()`'s `null` states pinned, the totality boundary named honestly | overlay AC8 pins |
-| `t4-04-readme-final-verification` | **changes requested → attempt 2 running** (attempt 1: `e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`, 790 tests, no `src/` change) — 24 of 25 README claims pinned to code, one false claim found («адреса страниц никуда не записываются» vs the stored `pageKey`); attempt 2 fixes four README clauses + one stale code comment under `A90` | overlay AC9–AC10 surface, model docs |
+| `t4-04-readme-final-verification` | **accepted** (attempt 1 `e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`, attempt 2 `70cd3d6` + PM `b771435`; 790 tests; closed at the 4-child ceiling) — Russian README a stranger can follow and that a reviewer fact-checked sentence by sentence, R2/R3/R4 closed, the browser run named as pending | overlay AC9–AC10 surface, model docs |
+
+**Stage 4 is closed (2026-11-17).** Accepted: `t4-01-popup-list`, `t4-02-options-name`, `t4-03-spa-refresh-docs`,
+`t4-03b-watch-pins`, `t4-04-readme-final-verification`. Gates at closure: **790 unit tests over 41 files**, `npm run build`
+→ a self-contained `dist/` of 10 files, `node scripts/check-agent-config.mjs` → 0 errors / 0 warnings / 87 INFO, `npm run
+typecheck` → exit 0, clean tree. What is **not** done: the six-item browser verification list
+(`docs/state/t4-03-spa-refresh-docs.md`), deferred by the user — it is open work, not a passed criterion.
+
+### Known debt named at Stage-4 closure (no task opened)
+
+1. The popup checkbox has no label of its own (`A91`); its accessible name is the author name.
+2. `src/core/slot-key.ts:10` claims the decode identity for "every page key" while the same comment says a truncated slot key
+   is not reversible — a core-comment pass should fix the wording.
+3. The url watch is address-based: a same-address re-render is not a trigger (spec'd decision).
+4. A refused popup write is silent (`A84`); overturning it costs one string + one spec line + one test.
+5. `main.ts` glue (`claimSelection`, `onCreated`, `onDeleted` wiring) is unpinned in jsdom by design; the browser is where it
+   is verified — currently an open browser item, not a passed one.
 
 ## Harness decisions taken by the PM during Stage 1
 
@@ -254,6 +270,13 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   `anchor_stale`), while the popup reads only storage; the two paths that could deliver that knowledge (message passing, a service
   worker mapping `tab.id` → page key) were rejected by `A49`/`A50`. The specified promise holds anyway: a stale entry stays listed
   and stays deletable. This corrected the `A61` sentence that had promised a popup label.
+- `A90`: **one comment-only `src/` exception**, naming `src/options/text.ts:12-14`, because leaving a code comment that
+  contradicts the just-amended spec is the exact defect `A76` prevents. Comment text only, cited in the commit message.
+- `A91`: **no label string for the popup checkbox in v1** — a new Russian UI string plus a spec line plus a test, for an
+  accessibility nicety nobody asked for. The README describes the real shape; the debt is named.
+- `A92`: attempt 2 removed one false README claim and **replaced it with another** («storage keys carry no address» — the page
+  address is in the key, percent-escaped and reversible). The PM fixed the clause and the rule now reads: re-read a wording fix
+  for the claim it puts in place of the one it removed.
 - `A89`: the `t4-04` engineer edited one line of the **PM-owned** `docs/specs/code-review-flow.md` while following a
   "sweep for dead paths" brief item, with no ruling cited — a breach of `A76`, recorded as one. The edit is kept because the old
   line named `.pi/reviews/…`, a path this repo never used, while practice is `docs/state/<task-id>-review.md`. A sweep item must

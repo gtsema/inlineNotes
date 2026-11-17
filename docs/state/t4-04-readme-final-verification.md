@@ -72,11 +72,18 @@ exactly on the ceiling of 4 — no third attempt is possible on this card.
 
 - engineer report: delivered, copied to `docs/state/t4-04-engineer.md` — AC1–AC4 answered by number, every number in the
   README traced to where it was measured, 4 deviations, 3 residual risks, no open observable question
-- reviewer verdict: **changes requested** — 1 blocking finding, 5 remarks (`docs/state/t4-04-review.md`). AC2 (R3 dedup),
-  AC3 (R2 wording), AC4 (the write test), the INDEX sweep and the `A89` line all `pass`; AC1 `fails` on one README sentence.
-  The reviewer fact-checked 25 README claims and pinned 24 of them to code or a test, and separately confirmed the honest
-  network scoping (`grep -c XMLHttpRequest dist/content.js` → 0, popup/options → 1 each, from `@angular/common/http`).
+- reviewer verdict (attempt 1): **changes requested** — 1 blocking finding, 5 remarks (`docs/state/t4-04-review.md`). AC2 (R3
+  dedup), AC3 (R2 wording), AC4 (the write test), the INDEX sweep and the `A89` line all `pass`; AC1 `fails` on one README
+  sentence. The reviewer fact-checked 25 README claims and pinned 24 of them to code or a test, and separately confirmed the
+  honest network scoping (`grep -c XMLHttpRequest dist/content.js` → 0, popup/options → 1 each, from `@angular/common/http`).
   Checker re-run by the reviewer: 0 errors / 87 INFO.
+- reviewer verdict (attempt 2): **accepted**, 0 blocking findings (`docs/state/t4-04-review-attempt2.md`). The checklist is
+  closed by number; finding 1 is judged "closed, closure honest", and the reviewer walked the final README sentence against
+  `storage-keys.ts:18,25-27`, `slot-key.ts:8-11` and `slot-key.ts:57,64` — the escaped alphabet means `:` `/` `.` never
+  survive raw in a key. `A91` confirmed (no new label string anywhere), `A90` confirmed comment-only, the shipped string
+  `Имя обязательно` byte-identical, `dist/` count measured at 10.
+- **task status: accepted** (`e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`+`70cd3d6`+PM `b771435`); **4 of 4 children
+  used — the card closed exactly at its ceiling, no attempt left over.**
 - **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **790/790** over 41 files (the +1 is
   the AC4 write), `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / **87 INFO** (the engineer's own spec
   sentence added one backticked `tests/…` token — measured, not copied from the brief), `npm run typecheck` exit 0, clean
@@ -144,6 +151,16 @@ must **not** touch, unless a numbered ruling names the file. Recorded in `docs/r
   same authority the PM used for the `t4-03` spec clauses; the engineer's commit `70cd3d6` is otherwise untouched.
   Lesson recorded for the re-review: **a wording fix that removes one false claim must be re-read for the claim it replaces**,
   because the fixer is allowed to be confidently wrong twice.
+
+## Accepted v1 debt and follow-ups out of this card
+
+- The install-warning sentence (`README.md:54-55`) is a claim about Chrome UI, not pinnable to code; it stays until the
+  browser run shows it on a real `chrome://extensions` install.
+- `70cd3d6`'s commit message still contains the clause `A92` corrected in the file. History is not rewritten.
+- `src/core/slot-key.ts:10` says the decode identity holds "for every page key", while `:18-19` of the same comment say a
+  truncated slot key is not reversible. Pre-existing, untouched by this range, propagated nowhere (the README makes no
+  reversibility claim). Named follow-up for a future core-comment pass.
+- The popup checkbox has no label of its own (`A91`); an a11y task may overturn it.
 
 ## Open questions
 

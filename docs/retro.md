@@ -152,3 +152,11 @@ the six-item browser list is deliberately still open (`прогон будет �
 - What went right: the docs slice caught its own over-claim. The README's "the extension makes no network requests" was
   re-scoped to "the extension's own code does", because Angular ships an unused `XhrFactory` into the popup and options
   bundles. A grep-true slogan is not a verified fact; a README number is only allowed if someone measured it in this run.
+- What failed: **documentation is a delivery surface with no tests, and it lies quietly.** The `t4-04` reviewer pinned 24 of
+  25 README sentences to code and found one false («адреса страниц никуда не записываются» — every record carries `pageKey`,
+  and `pages:v1` stores page keys verbatim). Attempt 2 then removed that claim and put a new false one in its place («ключи
+  хранилища адрес не содержат» — `decodeURIComponent(slotKeyFor(pageKey)) === pageKey`). Both survived a green build and 790
+  green tests. Rule from `A92`: a README/spec sentence is accepted only with the `path:line` that makes it true, and a wording
+  fix is re-read for the claim that replaced the deleted one.
+- What went right: the attempt-2 fix stayed inside its ceiling (4 children, closed at 4) because the review named exactly one
+  blocking finding and the PM fixed the leftover clause personally instead of opening a fifth child.
