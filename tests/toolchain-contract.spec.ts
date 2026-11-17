@@ -102,11 +102,22 @@ describe('manifest contract', () => {
     expect(spec).toContain('`https://*/*`');
   });
 
-  it('declares no host_permissions and no permission beyond storage', () => {
+  it('declares no host_permissions and no permission beyond storage and tabs (ruling A49)', () => {
     const manifest = readManifest();
+    // The set is pinned exactly, so no later task can widen it silently: `tabs` is
+    // here because ruling `A49` chose the active-tab read over a service-worker
+    // mapping, and it is the only permission beyond `storage` this extension asks
+    // for. The pair must also be stated in the spec, in the same commit as the code.
+    expect(manifest.permissions ?? []).toEqual(['storage', 'tabs']);
     expect(manifest.host_permissions).toBeUndefined();
-    expect(manifest.permissions ?? []).toEqual(['storage']);
     expect(manifest.optional_permissions).toBeUndefined();
+
+    const spec = readFileSync(
+      join(projectRoot, 'docs', 'specs', 'content-overlay-ui.md'),
+      'utf8',
+    );
+    expect(spec).toContain('- Permissions:');
+    expect(spec).toContain('`storage` and `tabs`');
   });
 });
 
@@ -244,6 +255,126 @@ describe('layer boundaries', () => {
     for (const constants of ['src/content/text.ts', 'src/popup/text.ts', 'src/options/text.ts']) {
       expect(sourceFiles('src').map((file) => file.path)).toContain(constants);
     }
+  });
+
+  describe('the popup is a facade over the core entry API (t4-01 AC1, AC3, AC5)', () => {
+    const popupFiles = (): SourceFile[] => sourceFiles('src/popup');
+    const popupCode = (): string => popupFiles().map((file) => codeOnly(file.text)).join('\n');
+    const componentCode = (): string =>
+      codeOnly(readFileSync(join(projectRoot, 'src', 'popup', 'popup.component.ts'), 'utf8'));
+    const holderPaths = (literal: string): string[] =>
+      modulesHoldingLiteral(literal).sort();
+
+    it('names no storage API and no storage key of its own (t4-01 AC1)', () => {
+      // AC1 of `t4-01` is this scan: the popup reaches storage only through the core
+      // port adapter and writes only through core functions. `src/core/` owns the key
+      // layout, so a popup that imports a key name would be a second store.
+      const directStorage = popupFiles()
+        .filter((file) => codeOnly(file.text).includes('chrome.storage'))
+        .map((file) => file.path);
+      expect(directStorage).toEqual([]);
+
+      const keyMentions = popupFiles()
+        .filter((file) =>
+          importClauses(file.text).some((clause) =>
+            /\b(SETTINGS_KEY|PAGE_INDEX_KEY|ENTRY_KEY_PREFIX|entryStorageKey|slotKeyFor|storage-keys)\b/.test(
+              clause,
+            ),
+          ),
+        )
+        .map((file) => file.path);
+      expect(keyMentions).toEqual([]);
+    });
+
+    it('reads the active tab in exactly one shipped module (ruling A49)', () => {
+      const tabUsers = popupFiles()
+        .filter((file) => codeOnly(file.text).includes('chrome.tabs'))
+        .map((file) => file.path);
+      expect(tabUsers).toEqual(['src/popup/active-tab.ts']);
+
+      const address = codeOnly(
+        readFileSync(join(projectRoot, 'src', 'popup', 'active-tab.ts'), 'utf8'),
+      );
+      expect(address).toMatch(/chrome\.tabs\.query/);
+      expect(address).toMatch(/active:\s*true/);
+      expect(address).toMatch(/currentWindow:\s*true/);
+    });
+
+    it('reaches chrome.storage.local only through the one port adapter factory', () => {
+      const factories = popupFiles()
+        .filter((file) => codeOnly(file.text).includes('createChromeLocalStoragePort'))
+        .map((file) => file.path);
+      expect(factories).toEqual(['src/popup/popup.component.ts']);
+    });
+
+    it('sends no message to the page from the checkbox (ruling A50)', () => {
+      // The checkbox writes storage; the page repaints from `storage.onChanged`, which
+      // is task `t4-03`. A second, popup-initiated channel would be a third moving part
+      // and the pair would disagree about which one repaints.
+      expect(popupCode()).not.toMatch(/\bsendMessage\b/);
+      expect(popupCode()).not.toMatch(/\bconnect(\s*\(|\.Port)/);
+      expect(popupCode()).not.toMatch(/\bchrome\.storage\.onChanged\b/);
+    });
+
+    it('keeps the component a facade with no core rule of its own', () => {
+      const component = componentCode();
+      for (const rule of [
+        'loadEntries',
+        'loadSettings',
+        'setVisible',
+        'deleteEntry',
+        'sortByCreatedAtAsc',
+        'canEdit',
+        'validateAuthorName',
+        'pageKeyFromUrl',
+        'isInjectableUrl',
+      ]) {
+        expect(component).not.toMatch(new RegExp(`\\b${rule}\\b`));
+      }
+    });
+
+    it('holds no comment write and no page clear, so the popup offers no edit path (AC3, A25)', () => {
+      // The popup contract fixes the row: name + checkbox + `Удалить`. A foreign row is
+      // read-only because this surface has no edit affordance for any row, own or
+      // foreign, while `deleteEntry` stays ungated by authorship.
+      for (const write of ['updateEntryComment', 'createEntryOnPage', 'clearPage']) {
+        expect(popupCode()).not.toMatch(new RegExp(`\\b${write}\\b`));
+      }
+    });
+
+    it('renders the row contract: name, checkbox, `Удалить`, and no editor control', () => {
+      const template = componentCode();
+      expect(template).toMatch(/type="checkbox"/);
+      expect(template).toMatch(/\[checked\]="row\.visible"/);
+      expect(template).toMatch(/onToggle\(row\.id,\s*\$event\)/);
+      expect(template).toMatch(/onRemove\(row\.id\)/);
+      expect(template).toMatch(/\[class\]="rowClassOf\(row\)"/);
+      // The name-required notice is a real control, reachable by keyboard (A83).
+      expect(template).toMatch(/<button[^>]*\(click\)="openSettings\(\)"/);
+
+      expect(template).not.toMatch(/<textarea/);
+      expect(template).not.toMatch(/Сохранить/);
+      expect(template).not.toMatch(/onSave/);
+    });
+
+    it('holds one wording per popup state, and no second variant of the ownership marker (A81, A82)', () => {
+      expect(holderPaths('На этой странице подсветка недоступна')).toEqual(['src/popup/text.ts']);
+      // `Укажите имя в настройках` is the one sentence for the settings-gate state on
+      // the two surfaces that name it: the page card and the popup. The options page
+      // keeps its own `Имя обязательно`, and a third variant is forbidden.
+      expect(holderPaths('Укажите имя в настройках')).toEqual([
+        'src/content/text.ts',
+        'src/popup/text.ts',
+      ]);
+
+      const strings = codeOnly(readFileSync(join(projectRoot, 'src', 'popup', 'text.ts'), 'utf8'));
+      // A82: a foreign row is marked by the header word plus a class, never by a new
+      // Russian sentence naming the author.
+      expect(strings).not.toMatch(/Не: /);
+      expect(strings).not.toMatch(/Чужая|Чужой/);
+      expect(strings).toContain("'Вы'");
+      expect(strings).toContain("'Удалить'");
+    });
   });
 });
 

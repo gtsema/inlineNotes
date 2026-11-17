@@ -3,7 +3,7 @@
   "name": "inlineNotes",
   "version": "0.1.0",
   "description": "Личные заметки прямо на странице статьи.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "tabs"],
   "action": {
     "default_popup": "popup/index.html",
     "default_title": "inlineNotes"
