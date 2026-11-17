@@ -39,6 +39,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 | `first-run name` | — | the 8-character lowercase base36 name the options page generates and stores when the stored name is unusable (ruling `A54`); the only place any layer generates a name |
 | `options message line` | see "Options message map" | the line under `Сохранить` carrying the options-layer refusal or confirmation, and the only place its wording is decided |
 | `refusal line` | see "Refusal message map" | the line the card shows under the input when the write refused, and the only place its wording is decided |
+| `page-boundary throw` | — | a call the content layer makes into code it does not own — the page DOM, `Range`, `CSS.highlights`, `document.adoptedStyleSheets`, the storage area — that answers with a throw instead of a value; every such path is enumerated in "Page-boundary throws" (task `t3-05`, ruling `A75`) |
 
 ## Flow / Sequence
 
@@ -131,6 +132,58 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Two tabs open on the same page: a change in one tab updates the other tab's highlights and the popup after reopen.
 - Entry hidden via its checkbox: no highlight, no frame, no tooltip; the entry is still editable from the page if the user selects its text again.
 
+## Page-boundary throws
+
+The content layer is the only layer that calls code it does not own. Any of those calls
+can answer with a throw instead of a value, and a throw that escapes the content script is
+an unhandled rejection on a page that has no idea the extension exists. This section is
+the **single place** that enumerates those paths (task `t3-05`, ruling `A75`): a new
+`catch` under `src/content/` either appears in the table below with a test or is named
+there with the reason it has none, and a reviewer reads this table before accepting a
+content-layer diff.
+
+Three rules:
+
+- **Where the guard sits.** At the content call site that knows what the answer means for
+  that flow — never in `src/core/`, and never inside the module that made the call.
+  `src/content/capture/selection-span.ts` has no `catch` of its own and keeps propagating
+  the `InvalidAccessError` that `Range.intersectsNode` throws once the boundary node the
+  card kept and the fragments of a freshly built `page text stream` no longer share a
+  root; `src/content/create/create-note.ts` and the card controller are the call sites
+  that decide what that throw means. Core keeps throwing its own errors (ruling `A75`).
+- **What the answer is.** An outcome the layer already has: an existing refusal code, an
+  existing skip reason, or "nothing happens". No `catch` in the content layer introduces a
+  new code, a new Russian string or a new state, and no `catch` writes to storage.
+- **Which promises must not reject.** A UI promise whose caller has no rejection handler:
+  `PagePainter.refresh()`, run as `void painter.refresh()` by `src/content/main.ts` at load
+  and again on the create handover, and `CreateCardController.capture()`, run as
+  `void controller.capture()` by `src/content/overlay/card-events.ts`. Both are non-rejecting by
+  contract, and the contract is a test claim, not a comment claim: a `refresh()` that
+  throws at any stage answers with an empty pass, a `paint teardown` of the `paint name`s
+  it had registered, no write, and the code of the stage that failed, and the entries stay
+  stored, listed and deletable (rulings `A40`, `A66`). The card's save path keeps **no**
+  `catch`: `createNote` answers every page-boundary state as a `CreateNoteResult`, so the
+  card's busy / `refusal line` machine has exactly one input. The defect this section
+  closes was the opposite shape: the throw escaped `submit`, the card stayed `busy`,
+  `Сохранить` rendered disabled and no line appeared at all.
+
+### Every `catch` under `src/content/`, and the throw it answers
+
+| Call site | The state that throws | The answer | Verification |
+| --- | --- | --- | --- |
+| `capture/selection-span.ts` `touchedFragments` (`Range.intersectsNode`) | the boundary node the card kept left the document, while the fragments it is tested against are still in it | no `catch` on purpose: the module keeps throwing, because it owns no policy about what a page that threw means for a create or for a paint | `tests/content-save-throw-safety.spec.ts` pins that the throw still propagates (ruling `A75`) |
+| `create/create-note.ts` `createNote` (`buildTextStream`, `captureSpan`) | the same state, at the save moment | `{ ok: false, code: 'selection_lost' }` — «Выделение больше не найдено на странице» in the `refusal line`, nothing sent to core, nothing written, and the card stays open with its draft and a live `Сохранить` | `tests/content-save-throw-safety.spec.ts` (`t3-05` AC1) |
+| `overlay/create-card-controller.tsx` `captureFromPage` | the same state, at the open moment: the node left the document during the `await` of the `settings gate` | Flow 1 answers nothing: no card, no measurement, no write, and no rejection reaching `card-events.ts` | `tests/content-save-throw-safety.spec.ts` |
+| `overlay/create-card-controller.tsx` `measureAnchorBox` | `Range.setStart` / `setEnd` reject because the page shrank or replaced the selected text node during the `settle delay` | the card does not open and nothing is written (ruling `A64`) | `tests/content-create-card-controller.spec.ts` (ruling `A64`) |
+| `overlay/tooltip-controller.tsx` `hoverAnchorOf` | the hover measurement of one painted entry throws | no tooltip for that entry, and nothing else changes (rulings `A66`, `A67`) | `tests/content-tooltip.spec.ts` |
+| `paint/paint-plan.ts` `measureFragments` | the measurement of one entry throws while the pass walks the page | that one entry is skipped with `measurement_failed`; the other entries of the page are painted (ruling `A66`) | `tests/content-paint-plan.spec.ts`, plus the `A66` pin in `tests/content-paint-throw-safety.spec.ts` |
+| `paint/page-painter.ts` `refresh`, page-address stage | the seam that reports the page address throws | empty pass: no `pageKey`, nothing painted, `paint teardown`, read code `url_unparsable` | `tests/content-paint-throw-safety.spec.ts` |
+| `paint/page-painter.ts` `refresh`, read stage | a storage area that rejects with something the port adapter did not code | empty pass with read code `storage_unavailable`, nothing painted, nothing written. **Named, not driven by a throw:** the shipped adapter codes every storage rejection, so no shipped path reaches this `catch`; it is what makes the no-reject contract unconditional instead of dependent on today's adapter | `tests/content-paint-throw-safety.spec.ts` asserts the observable answer (empty pass, no write) |
+| `paint/page-painter.ts` `refresh`, resolve-measure-register stage | `CSS.highlights` or a rebuilt `Range` refuses the registration of one `paint name`, or the stream root is gone | empty pass: every entry of the page is reported skipped, keeping the reason this pass already knew for the entries it had classified and `measurement_failed` for the rest; the names this pass had registered are torn down; nothing is written; the entries stay listed and deletable (rulings `A40`, `A66`) | `tests/content-paint-throw-safety.spec.ts` |
+| `paint/page-painter.ts` `clearPaint` | the registry refuses the teardown as well | swallowed: a failed teardown is not a second failure, and `refresh()` still resolves | `tests/content-paint-throw-safety.spec.ts` |
+| `paint/paint-style.ts` `adoptPaintSheet` (two guards) | `new CSSStyleSheet()` throws, or writing `document.adoptedStyleSheets` throws (a page that froze the array) | `null` = "no `paint stylesheet` for this pass": the spans are painted in the browser's own colour and get no frame, and no `<style>` element appears on the page (`A41` variant 1 only, section "Highlight painting") | **named:** jsdom has no constructed-stylesheet support, so no unit test drives either throw |
+| `store/chrome-storage-port.ts` `guarded` | `chrome.storage.local` rejects | a coded `StorageFailureError`, which is the answer every core read and write already handles; the throw never crosses into a content flow | `tests/content-chrome-storage-port.spec.ts` |
+
 ## Acceptance Criteria
 
 1. On an arbitrary article page, selecting text shows the card with a `0/256` counter and `Сохранить` disabled until at least one non-space character is typed.
@@ -153,3 +206,4 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 18. The options page shows the author name core read, and over a damaged or empty record it shows the `first-run name` — 8 lowercase base36 characters, read back equal to what the core settings read returns afterwards — or, when the store cannot be read at all, an empty field plus `Хранилище недоступно` and no write. The stored value is never shown in the field. `Сохранить` writes exactly `{ name: <trimmed value> }` under the settings key through core and performs no other write (`t4-02` AC1-AC3).
 19. The counter reads `N/40` in Unicode code points: 40 code points are accepted and saved, the 41st code point is refused at the input, a name of 40 surrogate-pair emoji counts as 40 and saves, and `Сохранить` is disabled while the value is empty after the trim (`t4-02` AC4).
 20. The options page reaches storage only through the one port adapter: no file under `src/options/` names `chrome.storage` or a storage key, `saveSettings` has exactly one shipped caller, and `generateAuthorName` has exactly one shipped call site (`t4-02` AC5; pinned by greps in `tests/toolchain-contract.spec.ts`).
+21. A page that takes the selected text away between the card opening and `Сохранить` gets «Выделение больше не найдено на странице» in the `refusal line`, has nothing written, and keeps a usable card: `Сохранить` is enabled, the draft is still in the `textarea`, and `Отмена` and `Esc` still close the card and write nothing (`t3-05` AC1). No content-layer promise whose caller has no rejection handler rejects: `PagePainter.refresh()` and `CreateCardController.capture()` resolve in every `page-boundary throw` state, and a paint pass that throws paints nothing, tears down the `paint name`s it had registered, writes nothing, and leaves every entry of the page stored, listed and deletable (`t3-05` AC2; rulings `A40`, `A66`, `A75`). Every `catch` shipped under `src/content/` is named in the "Page-boundary throws" enumeration above, and that enumeration is one section (`t3-05` AC3; pinned by `tests/content-throw-boundaries.spec.ts`).

@@ -41,8 +41,10 @@ function boot(): void {
   // Flow / Sequence 6 of `inline-comment-model.md`: the entries of this page are read,
   // resolved and painted once at load. `document_idle` in `src/manifest.json` is what
   // makes `document.body` a real subtree here, and `createPagePainter` answers with an
-  // empty pass when it is not. `refresh()` is documented never to throw, so nothing
-  // here has to catch: a page whose store is unreachable simply shows no highlights.
+  // empty pass when it is not. `refresh()` cannot reject (task `t3-05` AC2, ruling
+  // `A75`; pinned by `tests/content-paint-throw-safety.spec.ts`, enumerated in the overlay
+  // spec -> "Page-boundary throws"), so nothing here has a catch: a page whose store is
+  // unreachable simply shows no highlights.
   const painter = createPagePainter(document, { port, url: pageUrl });
 
   const controller = createCreateCardController(document, overlay, {
