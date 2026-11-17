@@ -85,8 +85,9 @@ closure, so it is not carried here.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (attempt 1 timed out, `resume` delivered — a resume is
-a child, not a new attempt, `A80`). Remaining: 1 (the reviewer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** (`resume`-delivered attempt 1 = 2, attempt 2 engineer = 3).
+Remaining: **1** — the narrow re-review, which is also the parent-closure check for blocking finding 1. After it the card is
+at its ceiling: no fifth child without the user's explicit ruling.
 
 ## Verdicts
 
@@ -100,6 +101,10 @@ a child, not a new attempt, `A80`). Remaining: 1 (the reviewer).
   and break AC1/overlay AC5 on a real page
 - **task status: attempt 2 opened** for that finding plus two doc/pin remarks (the card's ceiling allows exactly 4 children;
   3 used after the fix, the re-review is the 4th and last)
+- attempt 2 **delivered** (`4b674ae`, report copied to `docs/state/t3-03-engineer-attempt2.md`): all three items `done` by
+  number, with the load-bearing proof for item 1. PM re-ran the gates: build green, **697/697** over 38 files (+2),
+  checker 0 errors (67 INFO), typecheck exit 0, tree clean. Greps the engineer claims and the PM re-confirms:
+  `content-editor-edit-path` → 0 hits, `Open question: what a successful` → 0 hits.
 
 ## Attempt 2 brief (narrow, three items only)
 
