@@ -23,11 +23,17 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 | `all-or-nothing locate` | — | the locate rule (`A36`) owned by `inline-comment-model.md`: every fragment of a resolved range or none of them |
 | `entry row` | — | one popup line: author name + show/hide checkbox |
 | `visibility flag` | — | per-entry boolean deciding whether its highlight is painted |
+| `card placement` | — | where the selection card sits: below the first text fragment when it fits, above it otherwise (ruling `A30`) |
+| `card gutter` | — | the 8 px distance kept between the card and the viewport edge, and between the card and the selected text (ruling `A30`) |
+| `settle delay` | — | how long a selection has to stop moving before a card is opened |
+| `close-on-scroll` | — | the lifetime rule (ruling `A32`): a scroll closes an open card instead of chasing it |
+| `settings gate` | «Укажите имя в настройках» (the popup names this state) | the core settings read that decides whether a card may open at all (ruling `A31`) |
+| `refusal line` | see "Refusal message map" | the line the card shows under the input when the write refused, and the only place its wording is decided |
 
 ## Flow / Sequence
 
-1. User selects text on the page → the selection card opens next to the selection with an empty textarea, a live counter `0/256`, and buttons `Сохранить` / `Отмена`.
-2. User types and presses `Сохранить` → core validates, the entry is stored, the card closes, the highlight and its translucent frame appear.
+1. User selects text on the page → once the selection has stopped moving for the `settle delay`, and once the `settings gate` answers with a usable name, the selection card opens at the `card placement` of that selection with an empty textarea, a live counter `0/256`, and buttons `Сохранить` / `Отмена`. A selection that resolves to no span at all opens nothing.
+2. User types and presses `Сохранить` → the span is re-derived against a freshly rebuilt `page text stream` (ruling `A29` in `inline-comment-model.md`), core validates, the entry is stored, the card closes, the highlight and its translucent frame appear.
 3. User hovers a highlight → a semi-transparent tooltip appears near the range with the comment text and the author name.
 4. User clicks the tooltip → the tooltip becomes fully opaque and turns into the editor: the textarea is editable, the buttons are `Сохранить`, `Отмена`, `Удалить`.
 5. `Сохранить` updates the entry; `Отмена` or a click outside or `Esc` closes without changes; `Удалить` removes the entry and its highlight.
@@ -46,6 +52,28 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Overlay host: a single element with `position: fixed`, `z-index: 2147483000`, isolated styles (all rules namespaced under one host with a shadow root so page CSS cannot reach the widgets and widget CSS cannot leak out).
 - Registered schemes: the content script is registered for `http://*/*` and `https://*/*` only (`src/manifest.json` -> `content_scripts[0].matches`); `file://`, `chrome://`, Web Store and PDF viewer pages are never injected into.
 - Selection capture ignores selections inside the overlay host and inside `chrome://`, Web Store and PDF viewer pages (content script is not registered there).
+- Card placement (ruling `A30`): the card is one `position: fixed` box inside the shadow root, so its coordinates are viewport coordinates and it never scrolls with the page. It is placed **below** the box of the *first* `text fragment` of the selection when the whole card fits above the bottom `card gutter`, and **above** the selection otherwise; its left edge and its top edge are clamped into the same 8 px gutter, so a selection at the very edge of the window still gets a reachable card; a card taller than the viewport is pinned to the top gutter rather than centered off-screen. The anchor box is measured with the same node-local UTF-16 offsets the paint uses, and the card box is measured after the mount, because the card stylesheet — not the placement code — decides its size.
+- Card lifetime (ruling `A32`): an open card is **closed, never repositioned**, when the page scrolls or when the selection moves to other boundary points; a scroll also cancels a capture that has not settled yet. After a close caused by a selection change, the settled selection opens a new card, which is Flow 1 happening again rather than a move of the old one. A `selectionchange` whose target is not the document answers nothing at all (the card's own textarea holds a selection while the user types), and a `pointerdown` inside the overlay host is not "outside": the card keeps its text. `Отмена`, `Esc` and a `pointerdown` outside the host discard the card and write nothing.
+- Settings gate before the card (ruling `A31`): one capture attempt performs exactly one core `loadSettings` read, and "is there an author" is answered by core `validateAuthorName`, never by a truthiness test of the stored value. A stored name the author rule refuses — empty, or longer than the author cap — opens **no card at all** (not a card whose button can never be used), writes nothing, and shows no `refusal line`; the popup keeps its own «Укажите имя в настройках» message for the same state.
+- Selection capture and save moments: a card opens only for a selection that resolves to a span, so an empty, collapsed or whitespace-only selection opens nothing and a user is never invited to type into a note that cannot exist. Saving re-derives everything from the boundaries the card kept, against a stream built at that moment (`A29`); nothing measured while opening is reused for the write. A span that no longer resolves is answered by the content layer with `selection_lost` and «Выделение больше не найдено на странице», nothing is sent to core, and the card stays open with its text — so `entry_invalid` stays a bug-level answer and is never the wording for "there was nothing to create".
+- Refusal message map (rulings `A33`, `A47`): one module per UI layer maps every machine-readable code the create path can answer with to the Russian `refusal line`, and the map is total over the code union, so a call site can never invent wording and no code can be left without an answer (`src/content/text.ts` for the content layer). `duplicate` and `overlap` are two different refusals with two different sentences: the same span with the same comment already exists, while an intersecting span belongs to another note; collapsing them would hide which of the two the user has to change. The content-layer map:
+
+  | Code | Russian refusal line |
+  |---|---|
+  | `name_required` | `Укажите имя в настройках` |
+  | `comment_empty` | `Введите текст заметки` |
+  | `comment_too_long` | `Заметка длиннее 256 символов` |
+  | `page_limit` | `Достигнут лимит 20 записей на странице` |
+  | `overlap` | `Выделение пересекается с существующей записью` |
+  | `duplicate` | `Такая заметка на этом выделении уже есть` |
+  | `quota` | `Хранилище переполнено` |
+  | `serialization`, `unavailable`, `layout_version`, `index_malformed`, `storage_unavailable`, `slot_malformed`, `entry_invalid` | `Не удалось сохранить заметку` |
+  | `url_unparsable` | `Не удалось определить адрес страницы` |
+  | `not_author` | `Эту заметку может изменить только её автор` |
+  | `entry_not_found` | `Заметка не найдена` |
+  | `selection_lost` | `Выделение больше не найдено на странице` |
+
+  The numbers inside two of those sentences are read from the core constants that enforce them, and the wordings of `overlap`, `page_limit` and `name_required` are the ones already fixed in `inline-comment-model.md`. `tests/content-create-card-boundaries.spec.ts` pins the map's totality over the code union and pins several of these sentences verbatim, so a changed word cannot slip through unnoticed.
 - The card and the editor must be reachable by keyboard: `Esc` = cancel, `Ctrl/Cmd+Enter` = save, `Tab` cycles the buttons.
 - Counter rules: `N/256`, turns warning color at ≥240, blocks input beyond 256 code points, `Сохранить` is disabled while the comment is empty after trim or over the cap.
 - Popup contract: title with the page host, one row per entry in creation order, row content = author name + checkbox (checked = painted on the page). No comment text, no date, no filter of "mine only". Empty state: `На этой странице нет записей`.
@@ -55,7 +83,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 
 ## Edge Cases
 
-- Selection in a scrolled, sticky or transformed container: the card is positioned in viewport coordinates and repositions on scroll without detaching from the range.
+- Selection in a scrolled, sticky or transformed container: the card is positioned in viewport coordinates, and a page scroll **closes** it (ruling `A32`) instead of letting it float over text that has moved out from under it; a new selection is needed to open it again. (This line used to promise a reposition on scroll; ruling `A32` replaced that behavior in task `t3-01`, and `src/content/overlay/card-events.ts` implements the close.)
 - Highlight of a range that spans several block elements must draw a frame around every fragment box, not one bounding rectangle.
 - The site re-renders the article (virtual list, lazy load): a stale highlight disappears; the entry remains in the popup list.
 - A locate that reports `anchor_not_found` or `anchor_stale` produces no highlight, no frame and no tooltip at all; the entry is still listed in the popup and still deletable (`inline-comment-model.md` -> Staleness).
@@ -76,5 +104,8 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 7. The popup shows one row per entry with only the author name and a checkbox; unchecking removes the highlight immediately, checking restores it.
 8. Navigating inside an SPA to a different article changes the popup list and the painted highlights without a manual reload.
 9. Typing beyond 256 code points is impossible; the counter never exceeds `256/256`.
-10. With no name in options, no card opens and the popup shows `Укажите имя в настройках`.
+10. With no usable name in options — empty, or longer than the author cap — no card opens at all, nothing is written, and the popup shows `Укажите имя в настройках`.
 11. A host page with a global CSS reset still renders the card and the tooltip with correct fonts and spacing.
+12. A page scroll, a selection that moved to other words, `Отмена`, `Esc` and a pointer press outside the overlay host each close the card and write nothing, and the card is never moved to follow a selection or a scroll (`A32`).
+13. A selection near the bottom or the side edge of the window gets its card above or inside the edge, and the card never comes closer to the viewport edge than the 8 px `card gutter` (`A30`).
+14. Saving the same comment over the same span a second time shows `Такая заметка на этом выделении уже есть`, an intersecting selection shows `Выделение пересекается с существующей записью`, and in both cases the card stays open with the typed text (`A47`).
