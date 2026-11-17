@@ -30,7 +30,13 @@
  *   the property would be asserted over a card that never opened;
  * - a core read that could not read the page (`storage_unavailable` on the index) is
  *   answered with an empty pass and a teardown: the highlights of the previous pass do
- *   not survive as data older than this pass.
+ *   not survive as data older than this pass;
+ * - `pageKeyOfPass()` answers `null` **before any pass** and **after a pass that ended
+ *   early** (no address, a core read that threw — `page-painter.ts:196,208`), which is
+ *   what the two watches of `src/content/refresh/` read per change, and it keeps the key
+ *   of a pass that did resolve this page but reported a read it would not paint from. The
+ *   consequence for the watch is pinned end-to-end in
+ *   `tests/content-cross-tab-refresh.spec.ts`.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -65,6 +71,8 @@ const PAGE_KEY = pageKeyFromUrl(PAGE_URL) ?? '';
 const AUTHOR = 'reader-one';
 const BOX_A: Box = { left: 10, top: 40, width: 120, height: 18 };
 const BOX_B: Box = { left: 10, top: 80, width: 100, height: 18 };
+/** A lone surrogate code unit: the one page-key shape `slotKeyFor` refuses. */
+const LONE_SURROGATE = '\ud800';
 
 const ARTICLE = [
   '<article id="art">',
@@ -530,5 +538,75 @@ describe('the card and the paint do not own each other (A68)', () => {
     expect(surface.heldNames()).toEqual(names);
     expect(surface.clears).toEqual([]);
     expect(painter.paintedEntries()).toHaveLength(1);
+  });
+});
+
+describe('the page key of the last pass (`pageKeyOfPass`, t4-03 review remark 4)', () => {
+  it('answers null before any pass has run, having read nothing', () => {
+    seedPage(port, [recordFor('a1b2c3d4e5f6', 'quick brown')]);
+    const painter = needPainter(new RecordingSurface(), seam().rangeFor, port);
+
+    expect(painter.pageKeyOfPass()).toBeNull();
+    // Not one storage read: the answer is the state of the pass, not a guess from the
+    // address seam.
+    expect(port.calls).toHaveLength(0);
+  });
+
+  it('answers null after a pass that could not read the page address', async () => {
+    seedPage(port, [recordFor('a1b2c3d4e5f6', 'quick brown')]);
+    const painter = createPagePainter(document, {
+      port,
+      url: (): string => {
+        throw new Error('injected: the page address could not be read');
+      },
+      surface: new RecordingSurface(),
+      style: paintStyleOwnerOf(document),
+      rangeFor: seam().rangeFor,
+    });
+
+    const outcome = await painter.refresh();
+
+    expect(outcome.readCodes).toEqual(['url_unparsable']);
+    expect(painter.pageKeyOfPass()).toBeNull();
+  });
+
+  it('forgets the page key it had after a pass whose core read threw', async () => {
+    seedPage(port, [recordFor('a1b2c3d4e5f6', 'quick brown')]);
+    const painter = needPainter(new RecordingSurface(), seam().rangeFor, port);
+    await painter.refresh();
+    expect(painter.pageKeyOfPass()).toBe(PAGE_KEY);
+
+    // The reachable throw of the read stage: the index lists a page key whose slot key
+    // the encoder refuses (`slot-key.ts` -> a lone surrogate reaches `escapeCodePoint`),
+    // so core answers by throwing and this pass has no page state at all. A port that
+    // merely *fails* a read is not this case: core turns it into the
+    // `storage_unavailable` code, which is the state the next test pins.
+    port.seed(PAGE_INDEX_KEY, { version: 1, pageKeys: [`${PAGE_KEY}?x=${LONE_SURROGATE}`] });
+    const outcome = await painter.refresh();
+
+    expect(outcome.pageKey).toBeNull();
+    expect(outcome.readCodes).toEqual(['storage_unavailable']);
+    // A reset, not only an initial value: a watch must not keep following the slot of a
+    // page this document no longer has a read of.
+    expect(painter.pageKeyOfPass()).toBeNull();
+    // The pass that could not read the page still wrote nothing to it.
+    const stored = port.snapshot()[entryStorageKey(PAGE_KEY)] as { entries: unknown[] };
+    expect(stored.entries).toHaveLength(1);
+  });
+
+  it('keeps the key of a pass that resolved this page but reported a read it will not paint from', async () => {
+    seedPage(port, [recordFor('a1b2c3d4e5f6', 'quick brown')]);
+    // A stored index the decoder refuses: core still resolved which page this document
+    // is, so the slot of that page is the slot the watches must keep following. This is
+    // the boundary of the two `null` answers above, and it is the answer the pass
+    // itself reports in `outcome.pageKey`.
+    port.seed(PAGE_INDEX_KEY, { version: 1, pageKeys: 'not-an-array' });
+    const painter = needPainter(new RecordingSurface(), seam().rangeFor, port);
+
+    const outcome = await painter.refresh();
+
+    expect(outcome.readCodes).toEqual(['index_malformed']);
+    expect(outcome.pageKey).toBe(PAGE_KEY);
+    expect(painter.pageKeyOfPass()).toBe(PAGE_KEY);
   });
 });

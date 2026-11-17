@@ -26,6 +26,11 @@
  *   two records are two repaints, and nothing in this path queues, batches, locks or
  *   replays the change payload. The cross-tab read-modify-write race stays the v1
  *   limitation the model spec states;
+ * - **AC2, the `null` page key** (`t4-03` review remark 4): the watch asks
+ *   `PagePainter.pageKeyOfPass()` per record, so while no pass has resolved a page key
+ *   — before the first pass, or after a pass that ended early — **no** slot is a signal,
+ *   not even this page's own, and only `settings:v1` moves the page. The `null` answers
+ *   themselves are pinned on the painter in `tests/content-page-painter.spec.ts`;
  * - **AC3** — a settings-name change written in options is visible to an already loaded
  *   page: the `ownership header` comparison follows the new name after the repaint the
  *   settings key triggers, the entry that became the reader's own opens its editor on
@@ -198,6 +203,13 @@ interface Wiring {
 interface Boot {
   settings?: string | null;
   records?: Record<string, unknown>[];
+  /**
+   * The load-time paint pass. `run` is the shipped boot; `none` is a document whose
+   * first pass has not finished yet; `address-throws` is a document whose pass ended
+   * early without an address. The last two are the states in which the painter answers
+   * `pageKeyOfPass()` with `null` (`t4-03` review remark 4).
+   */
+  firstPass?: 'run' | 'none' | 'address-throws';
 }
 
 let port: MemoryStoragePort;
@@ -216,11 +228,18 @@ async function boot(watch: Boot = {}): Promise<Wiring> {
   const surface = new RecordingSurface();
   const painter = createPagePainter(document, {
     port,
-    url: () => PAGE_URL,
+    url: (): string => {
+      if (watch.firstPass === 'address-throws') {
+        throw the('injected: the page address could not be read');
+      }
+      return PAGE_URL;
+    },
     surface,
     rangeFor: seam(),
   });
-  await painter.refresh();
+  if (watch.firstPass !== 'none') {
+    await painter.refresh();
+  }
 
   const listeners: ((changedKeys: readonly string[]) => void)[] = [];
   const pending: Promise<unknown>[] = [];
@@ -362,6 +381,51 @@ describe('AC2 — a key that is not this page is not work (A60)', () => {
     wiring.teardown();
     await wiring.fire([entryStorageKey(PAGE_KEY)]);
     expect(wiring.repaintCount()).toBe(0);
+  });
+});
+
+describe('AC2 — with no page key yet, only the settings key moves the page (review remark 4)', () => {
+  it('is no work for any slot, not even this page’s own, before the first pass resolved a page key', async () => {
+    const wiring = await boot({ firstPass: 'none' });
+    expect(wiring.pageKeyOfPass()).toBeNull();
+    const readsBefore = wiring.port.calls.length;
+    const paintsBefore = wiring.surface.writtenNames().length;
+
+    // A slot key is the key of a page key, and the watch has no page key to compose one
+    // from, so the core predicate answers `false` for every entry key (`A87`).
+    await wiring.fire([entryStorageKey(PAGE_KEY)]);
+    await wiring.fire([PAGE_INDEX_KEY]);
+    await wiring.fire(['some-page-script-key']);
+
+    expect(wiring.repaintCount()).toBe(0);
+    expect(wiring.port.calls).toHaveLength(readsBefore);
+    expect(wiring.surface.writtenNames()).toHaveLength(paintsBefore);
+  });
+
+  it('repaints for the settings key alone, and the pass that follows makes the slot a signal', async () => {
+    const wiring = await boot({ firstPass: 'none' });
+
+    await wiring.fire([SETTINGS_KEY]);
+    expect(wiring.repaintCount()).toBe(1);
+    expect(wiring.pageKeyOfPass()).toBe(PAGE_KEY);
+
+    // The page now has a key of its own, so its slot joined the watched set.
+    await wiring.fire([entryStorageKey(PAGE_KEY)]);
+    expect(wiring.repaintCount()).toBe(2);
+  });
+
+  it('follows no slot after a pass that ended early without an address', async () => {
+    const wiring = await boot({ firstPass: 'address-throws' });
+    expect(wiring.pageKeyOfPass()).toBeNull();
+
+    await wiring.fire([entryStorageKey(PAGE_KEY), PAGE_INDEX_KEY]);
+    expect(wiring.repaintCount()).toBe(0);
+
+    await wiring.fire([SETTINGS_KEY]);
+    expect(wiring.repaintCount()).toBe(1);
+    // The repaint of a document with no address still resolves no page key, so the
+    // state is stable and the slot stays out of the watched set.
+    expect(wiring.pageKeyOfPass()).toBeNull();
   });
 });
 

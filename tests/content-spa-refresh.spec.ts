@@ -33,7 +33,17 @@
  *   still in storage — a navigation deletes nothing (`A24`, `A36`);
  * - **AC1, the cost of a tick** (the `A59` cost condition): the watch module reads the
  *   address and compares a string, and touches nothing else. That is pinned from the
- *   text of the module, because "cheap" is not observable in one tick of a unit test.
+ *   text of the module, because "cheap" is not observable in one tick of a unit test;
+ * - **AC1, the trigger set is closed** (`docs/specs/content-overlay-ui.md` -> Rules ->
+ *   "Same-document navigation"): exactly two `window` listeners, one `document`
+ *   listener and one interval are installed, in that order — so `pagehide` / `pageshow`
+ *   or any other trigger cannot be added without failing a test — and the lifecycle
+ *   events of the bfcache answer nothing even when the address really moved, because
+ *   bfcache restore is the reload path;
+ * - **AC1, neither watch is ever torn down in a content script** (same spec Rules
+ *   bullet): `src/content/main.ts` attaches each watch once as a statement and drops
+ *   the returned teardown, and owns no unload step, no `removeEventListener` and no
+ *   `clearInterval` at all.
  */
 
 import { readFileSync } from 'node:fs';
@@ -54,7 +64,11 @@ import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PagePaintOutcome, PagePainter } from '../src/content/paint/page-painter';
 import type { PaintedFragment } from '../src/content/paint/paint-plan';
 import type { PaintSurface } from '../src/content/paint/paint-surface';
-import { URL_POLL_MS, attachUrlChangeWatch } from '../src/content/refresh/url-change-watch';
+import {
+  URL_POLL_MS,
+  attachUrlChangeWatch,
+  type UrlWatchTeardown,
+} from '../src/content/refresh/url-change-watch';
 import { MemoryStoragePort, indexValue, slotValue, storedEntry } from './support/memory-storage-port';
 
 /**
@@ -596,5 +610,180 @@ describe('AC1 — what one tick costs (the A59 cost condition)', () => {
     expect(code.match(/addEventListener\('popstate', check\)/g) ?? []).toHaveLength(1);
     expect(code.match(/addEventListener\('hashchange', check\)/g) ?? []).toHaveLength(1);
     expect(code.match(/setInterval\(check, pollMs\)/g) ?? []).toHaveLength(1);
+
+    // The exact listener set, not a subset: a `pagehide`, a `pageshow` or any other
+    // added trigger fails here as well as in the runtime pin of the next describe.
+    expect(code.match(/addEventListener\('[A-Za-z]+'/g) ?? []).toEqual([
+      "addEventListener('popstate'",
+      "addEventListener('hashchange'",
+      "addEventListener('visibilitychange'",
+    ]);
+  });
+});
+
+/** One listener or timer the shipped watch installed, in the order it installed it. */
+interface WatchAttachment {
+  readonly target: 'window' | 'document';
+  readonly type: string;
+}
+
+type AddListenerLike = (
+  type: string,
+  listener: EventListenerOrEventListenerObject,
+  options?: boolean | AddEventListenerOptions,
+) => void;
+
+/**
+ * Attaches the shipped watch to the real `window` and `document` while recording every
+ * listener and interval it installs, then hands both objects back to jsdom.
+ *
+ * The wrappers call through, so the watch is really attached and behaves exactly as it
+ * does in a page; only the **set** of triggers becomes observable. An exact list is the
+ * whole point: the spec rules `pagehide` / `pageshow` out of the trigger set, and a
+ * subset check would let any number of extra triggers through.
+ */
+function recordAttachments(attach: () => UrlWatchTeardown): {
+  readonly attachments: readonly WatchAttachment[];
+  readonly intervals: number;
+  readonly teardown: UrlWatchTeardown;
+} {
+  const attachments: WatchAttachment[] = [];
+  let intervals = 0;
+
+  const windowAdd = window.addEventListener.bind(window) as AddListenerLike;
+  const documentAdd = document.addEventListener.bind(document) as AddListenerLike;
+  const startInterval = window.setInterval.bind(window) as (
+    handler: TimerHandler,
+    ms?: number,
+  ) => number;
+
+  const wrapperFor = (target: 'window' | 'document', add: AddListenerLike): AddListenerLike => {
+    return (type, listener, options): void => {
+      attachments.push({ target, type });
+      add(type, listener, options);
+    };
+  };
+
+  // jsdom owns these properties on the objects themselves, so the restore puts the
+  // original descriptor back rather than deleting what this helper replaced.
+  const replacedPairs: (readonly [object, string, PropertyDescriptor | undefined])[] = [];
+  const override = (target: object, property: string, value: unknown): void => {
+    replacedPairs.push([target, property, Object.getOwnPropertyDescriptor(target, property)]);
+    Object.defineProperty(target, property, { configurable: true, writable: true, value });
+  };
+
+  override(window, 'addEventListener', wrapperFor('window', windowAdd));
+  override(document, 'addEventListener', wrapperFor('document', documentAdd));
+  override(window, 'setInterval', (handler: TimerHandler, ms?: number): number => {
+    intervals += 1;
+    return startInterval(handler, ms);
+  });
+
+  let teardown: UrlWatchTeardown | null = null;
+  try {
+    teardown = attach();
+  } finally {
+    for (const [target, property, descriptor] of replacedPairs) {
+      if (descriptor === undefined) {
+        delete (target as Record<string, unknown>)[property];
+      } else {
+        Object.defineProperty(target, property, descriptor);
+      }
+    }
+  }
+  if (teardown === null) {
+    throw new Error('the shipped watch did not attach');
+  }
+  return { attachments, intervals, teardown };
+}
+
+/**
+ * The events a bfcache move or a tab change produces and the watch is ruled not to
+ * listen for. Both targets are dispatched, because a mutation is free to pick either.
+ */
+const UNTRIGGERED_LIFECYCLE_EVENTS: readonly string[] = [
+  'pagehide',
+  'pageshow',
+  'freeze',
+  'resume',
+  'beforeunload',
+  'focus',
+  'blur',
+  'online',
+  'offline',
+];
+
+describe('AC1 — the trigger set is exactly the one the spec names (spec Rules)', () => {
+  it('installs two window listeners, one document listener and one interval, and nothing else', () => {
+    const seen = recordAttachments(() =>
+      attachUrlChangeWatch(window, document, {
+        url: (): string => window.location.href,
+        onUrlChange: (): void => undefined,
+      }),
+    );
+    // The teardown this pin calls is the one the watch returns for tests: without it
+    // the pin would leave a live interval and three listeners in the document.
+    seen.teardown();
+
+    expect(seen.attachments).toEqual([
+      { target: 'window', type: 'popstate' },
+      { target: 'window', type: 'hashchange' },
+      { target: 'document', type: 'visibilitychange' },
+    ]);
+    expect(seen.intervals).toBe(1);
+  });
+
+  it('answers nothing to `pagehide` / `pageshow` or any lifecycle event, though the address moved (spec Rules)', async () => {
+    // `pollMs: 0` removes the timer, so only a listener could report the move.
+    const harness = track(await bootAtOne(0));
+
+    pushSite(TWO_PATH);
+    for (const type of UNTRIGGERED_LIFECYCLE_EVENTS) {
+      window.dispatchEvent(new Event(type));
+      document.dispatchEvent(new Event(type));
+    }
+    await harness.settle();
+    await wait(60);
+
+    // The address really moved: the silence is the trigger set, not a fixture that
+    // never navigated.
+    expect(new URL(window.location.href).pathname).toBe(TWO_PATH);
+    expect(harness.navigations()).toEqual([]);
+    expect(harness.repaintCount()).toBe(0);
+    expect(harness.painter.pageKeyOfPass()).toBe(ONE_KEY);
+  });
+});
+
+describe('AC1 — neither watch is ever torn down in a content script (spec Rules)', () => {
+  const mainCode = (): string =>
+    codeOnly(readFileSync(join(process.cwd(), 'src/content/main.ts'), 'utf8'));
+
+  it('attaches each watch once, as a statement that drops the returned teardown', () => {
+    const code = mainCode();
+    for (const attach of ['attachUrlChangeWatch', 'attachStorageChangeWatch']) {
+      // A bare statement: the teardown value is never bound, returned or stored, so no
+      // code path ever receives a handle that could tear a watch down.
+      expect(code.match(new RegExp(`^\\s*${attach}\\(`, 'gm')) ?? []).toHaveLength(1);
+      expect(
+        code.match(new RegExp(`(const|let|var)\\s+[\\w$]+\\s*=\\s*${attach}\\(`, 'g')) ?? [],
+      ).toEqual([]);
+      expect(code.match(new RegExp(`return\\s+${attach}\\(`, 'g')) ?? []).toEqual([]);
+    }
+  });
+
+  it('owns no unload step and no teardown call at all, so the interval lives for the document', () => {
+    const code = mainCode();
+    for (const forbidden of [
+      'pagehide',
+      'pageshow',
+      'beforeunload',
+      'unload',
+      'removeEventListener',
+      'clearInterval',
+      'clearTimeout',
+      'Teardown',
+    ]) {
+      expect(code).not.toContain(forbidden);
+    }
   });
 });

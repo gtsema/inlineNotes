@@ -64,8 +64,16 @@ export function slotKeyFromStorageKey(storageKey: string): string | null {
  * decode a slot back into a page key (`inline-comment-model.md` -> "Slot key decode
  * invariant").
  *
- * Pure and total: an empty or whitespace-only `pageKey` answers `false` for entry keys
- * instead of reaching the `slotKeyFor` guard that refuses one.
+ * Total over every `pageKey` this extension can produce, and that is the whole
+ * guarantee: an empty or whitespace-only `pageKey` answers `false` for entry keys
+ * instead of reaching the `slotKeyFor` guard that refuses one, so a change record is
+ * never a throw path for a listener. The boundary is malformed input, which no shipped
+ * reader produces and which this module deliberately does not guard: a `pageKey`
+ * holding a lone surrogate code unit still throws through `entryStorageKey` ->
+ * `slotKeyFor` -> `escapeCodePoint`, exactly the input `slot-key.ts` declares out of
+ * scope because page keys come from `pageKeyFromUrl`, which emits well-formed Unicode
+ * only. A guard here would be a new core rule, so the exception stays where it is
+ * declared and this module stays key vocabulary.
  */
 export function storageChangeConcernsPage(storageKey: string, pageKey: string | null): boolean {
   if (storageKey === SETTINGS_KEY) {

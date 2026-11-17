@@ -194,9 +194,13 @@ describe('which storage changes concern one page (task t4-03 AC2, AC3; ruling A6
     expect(storageChangeConcernsPage(ENTRY_KEY_PREFIX, PAGE)).toBe(false);
   });
 
-  it('is total: an empty page key answers false for entry keys, without the slot guard', () => {
+  it('answers false for an empty page key instead of reaching the slot guard (the totality boundary)', () => {
     // `slotKeyFor` throws on an empty page key; the watch may be handed a pass that
     // resolved no page key, and a listener must not be a throw path.
+    // The boundary of that guarantee is malformed input, and nothing is asserted for it
+    // on purpose: a lone-surrogate `pageKey` still throws through `entryStorageKey` ->
+    // `slotKeyFor` -> `escapeCodePoint`, which `slot-key.ts` declares out of scope. A
+    // guard there would be a new core rule, not a wording fix.
     expect(storageChangeConcernsPage(entryStorageKey(PAGE), '')).toBe(false);
     expect(storageChangeConcernsPage(entryStorageKey(PAGE), '   ')).toBe(false);
     expect(storageChangeConcernsPage(entryStorageKey(PAGE), null)).toBe(false);
