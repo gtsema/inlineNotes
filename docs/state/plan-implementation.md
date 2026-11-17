@@ -153,3 +153,9 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A55` (t4-02): the options counter and its refusal measure **code points** via the core helpers, never `String.length`.
 - `A56` (t4-02): saving an unchanged name still calls the core save (it is how a damaged record gets repaired) and shows
   a saved state rather than a fake write.
+- `A59` **open question for the user** (t4-03): SPA URL change detection. Default: poll `location.href` every 1000 ms
+  plus `popstate`/`visibilitychange`; alternative: no timer, but a same-document `pushState` stays invisible until the
+  user interacts. Reverting the default is one constant.
+- `A60` (t4-03): `storage.onChanged` triggers a re-read and repaint only for this page's slot key and `settings:v1`; it
+  is not a merge, the cross-tab race stays a documented v1 limitation.
+- `A61` (t4-03): stale entries keep their popup row and stay deletable; only the Russian wording is added here.
