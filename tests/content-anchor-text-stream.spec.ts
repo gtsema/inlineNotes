@@ -12,12 +12,14 @@ import {
 import type { TextStream } from '../src/content/anchor/text-stream';
 
 /**
- * The DOM side of the anchor stage: task `t2-02`, AC1 and AC4.
+ * The DOM side of the anchor stage: task `t2-02`, AC1 and AC4, hardened by task
+ * `t3-04` (`A35` table cells, `N2` the stream claim).
  *
  * `docs/specs/inline-comment-model.md` -> Rules / Semantics -> "Normalized text
- * stream", "Anchor domains"; PM rulings `A20` (one space per block boundary),
- * `A21` (excluded subtrees), `A2` (jsdom is a test-only environment) and `A29`
- * (the stream is rebuilt, never cached).
+ * stream", "No raw-text equality", "Block boundary"; PM rulings `A20` (one space
+ * per block boundary), `A35` (`td` / `th` join that list), `A21` (excluded
+ * subtrees), `A2` (jsdom is a test-only environment) and `A29` (the stream is
+ * rebuilt, never cached).
  *
  * `jsdom` is the Vitest environment of this file and nothing is shipped: the
  * module under test receives the subtree as an argument and never reads a global.
@@ -97,6 +99,8 @@ describe('normalized text stream (AC1)', () => {
       'H6',
       'BLOCKQUOTE',
       'TR',
+      'TD',
+      'TH',
       'SECTION',
       'ARTICLE',
     ]);
@@ -110,6 +114,9 @@ describe('normalized text stream (AC1)', () => {
       ['<h1>a</h1><h2>b</h2>', 'a b'],
       ['<blockquote>a</blockquote><p>b</p>', 'a b'],
       ['<table><tr><td>a</td></tr><tr><td>b</td></tr></table>', 'a b'],
+      ['<table><tr><td>a</td><td>b</td></tr></table>', 'a b'],
+      ['<table><tr><th>a</th><th>b</th></tr><tr><td>c</td><td>d</td></tr></table>', 'a b c d'],
+      ['<table><tr><th>head</th></tr><tr><td>cell</td></tr></table>', 'head cell'],
       ['<section>a</section><article>b</article>', 'a b'],
     ];
     for (const [html, expected] of cases) {
@@ -148,29 +155,36 @@ describe('normalized text stream (AC1)', () => {
     expect(textOf('')).toBe('');
   });
 
-  it('is normalized by construction and equals normalizeText of the raw subtree text (R5)', () => {
+  it('is normalized by construction, trimmed and single-spaced, and claims no raw-text equality (AC1, N2)', () => {
     const stream = streamOf(ARTICLE_FIXTURE);
     expect(isNormalizedText(stream.text)).toBe(true);
     expect(stream.text).toBe(
       'Quiet Harbor First paragraph with spaces. Second paragraph with emphasis inside. alpha beta',
     );
 
-    // The same string the core normalizer produces from the raw subtree text.
-    const rawNodes: string[] = [];
-    const walker = document.createTreeWalker(subtree(ARTICLE_FIXTURE), NodeFilter.SHOW_TEXT);
-    let current = walker.nextNode();
-    while (current !== null) {
-      const text = current as Text;
-      if (text.parentElement?.closest('script,style,noscript,template,head') === null) {
-        rawNodes.push(text.data);
-      }
-      current = walker.nextNode();
-    }
-    expect(stream.text).toBe(normalizeText(rawNodes.join(' ')));
-
+    // What "normalized by construction" claims, precisely: trimmed at both ends,
+    // every separator exactly one U+0020, and one U+0020 per `A20` boundary.
     for (const html of ['<p>a</p><p>b</p>', '<div><span>a </span><span> b</span></div>', ARTICLE_FIXTURE]) {
-      expect(isNormalizedText(textOf(html))).toBe(true);
+      const text = textOf(html);
+      expect(isNormalizedText(text)).toBe(true);
+      expect(text.startsWith(' ')).toBe(false);
+      expect(text.endsWith(' ')).toBe(false);
+      expect(text).not.toContain('  ');
+      expect(text.split('\n')).toHaveLength(1);
+      expect(text.split('\t')).toHaveLength(1);
     }
+
+    // The equality the module header and the spec used to state is false, so it is
+    // not claimed anywhere and no fixture asserts it: `textContent` glues adjacent
+    // elements with nothing between them, while the walk contributes a boundary
+    // space, so the two strings differ in exactly that one code point.
+    const glued = subtree('<div><p>a</p>tail</div>');
+    expect(textOf('<div><p>a</p>tail</div>')).toBe('a tail');
+    expect(normalizeText(glued.textContent ?? '')).toBe('atail');
+
+    const adjacent = subtree('<div><b>foo</b><i>bar</i></div>');
+    expect(textOf('<div><b>foo</b><i>bar</i></div>')).toBe('foobar');
+    expect(normalizeText(adjacent.textContent ?? '')).toBe('foobar');
   });
 
   it('skips a whitespace-only text node but keeps its separating effect', () => {

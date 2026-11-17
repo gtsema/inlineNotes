@@ -25,10 +25,16 @@
  * Two failure codes, and the difference is observable:
  * - `anchor_not_found` — the anchor text is not in the current stream at all
  *   (spec "Staleness"): paint nothing, keep the entry listed and deletable;
- * - `anchor_stale` — the string did resolve, but the text nodes it points at are
- *   no longer part of the subtree, or the stream and the node disagree about how
- *   many code points the node contributed. Painting would mean trusting a position
- *   the page does not have, so nothing is returned and nothing throws.
+ * - `anchor_stale` — the string did resolve, but the range it resolved to is not
+ *   supported by the DOM any more: any mapped text node has left the subtree, or
+ *   the stream and a node disagree about how many code points that node
+ *   contributed. Painting would mean trusting a position the page does not have,
+ *   so nothing is returned and nothing throws.
+ *
+ * All-or-nothing (ruling `A36`): a resolved range is reported as a whole or not at
+ * all. Half of a remembered selection is worse than none of it, because the user
+ * cannot tell which half the page still has, so the first mapped node that fails
+ * decides the whole result and no partial fragment list ever leaves this module.
  *
  * No globals: the subtree and its nodes arrive as arguments, and nothing here
  * creates a `Range`, reads `document` / `window`, or touches the page.
@@ -64,9 +70,11 @@ export function locateAnchor(root: Node, anchor: EntryAnchor): LocateAnchorResul
  * The same locate against a stream the caller built from `root` moments before.
  *
  * `root` is still required: every returned fragment must be a live descendant of
- * it. A fragment that was detached between the build and this call makes the whole
- * result `anchor_stale`, because painting half of a range would paint a span the
- * user never selected.
+ * it. The result is all-or-nothing (ruling `A36`): a fragment that was detached
+ * between the build and this call — or a node whose own code-point map no longer
+ * accounts for what the stream recorded — makes the **whole** result
+ * `anchor_stale`, because painting half of a range would paint a span the user
+ * never selected.
  */
 export function locateAnchorInStream(
   stream: TextStream,
@@ -78,12 +86,20 @@ export function locateAnchorInStream(
     return { ok: false, code: resolved.code };
   }
 
-  const mapped = fragmentsForRange(stream, resolved.start, resolved.end);
-  const live = mapped.filter((fragment) => isInsideSubtree(fragment.node, root));
-  if (live.length === 0) {
+  const mapping = mapRange(stream, resolved.start, resolved.end);
+  // `refused` is the second half of the same ruling: a covered node the clip
+  // rejected is a stream/DOM disagreement, and the surviving neighbours must not
+  // be painted around it. `fragments.length === 0` is the range that sits on
+  // boundary spaces only: there is no node to paint.
+  if (mapping.refused > 0 || mapping.fragments.length === 0) {
     return { ok: false, code: 'anchor_stale' };
   }
-  return { ok: true, fragments: live };
+  for (const fragment of mapping.fragments) {
+    if (!isInsideSubtree(fragment.node, root)) {
+      return { ok: false, code: 'anchor_stale' };
+    }
+  }
+  return { ok: true, fragments: mapping.fragments };
 }
 
 /**
@@ -94,22 +110,44 @@ export function locateAnchorInStream(
  * fragment carries the matching local `start` / `end` inside its own text node.
  * A range that falls entirely in the separators between two fragments maps to an
  * empty list, which the caller reports as `anchor_stale`.
+ *
+ * This is the mapping alone: it answers "which fragments does the range cover",
+ * not "is the answer paintable". `locateAnchorInStream` adds the liveness check
+ * and the all-or-nothing rule, because it is the only caller holding the `root`.
  */
 export function fragmentsForRange(
   stream: TextStream,
   start: number,
   end: number,
 ): TextFragment[] {
+  return mapRange(stream, start, end).fragments;
+}
+
+/** A range mapping plus how many covered nodes the mapping refused. */
+interface MappedRange {
+  readonly fragments: TextFragment[];
+  /** Covered nodes whose own code-point map disagreed with the stream. */
+  readonly refused: number;
+}
+
+/** The mapping step, reported finely enough for the all-or-nothing decision. */
+function mapRange(stream: TextStream, start: number, end: number): MappedRange {
   const clipped: TextFragment[] = [];
+  let refused = 0;
   for (const fragment of stream.fragments) {
     const from = Math.max(start, fragment.streamStart);
     const to = Math.min(end, fragment.streamEnd);
-    const narrow = to > from ? clipFragment(fragment, from, to) : null;
-    if (narrow !== null) {
+    if (to <= from) {
+      continue;
+    }
+    const narrow = clipFragment(fragment, from, to);
+    if (narrow === null) {
+      refused += 1;
+    } else {
       clipped.push(narrow);
     }
   }
-  return clipped;
+  return { fragments: clipped, refused };
 }
 
 /**

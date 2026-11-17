@@ -341,6 +341,34 @@ describe('degenerate and stale cases (AC3)', () => {
     expect(locateAnchorInStream(stream, root, anchor)).toEqual({ ok: false, code: 'anchor_stale' });
   });
 
+  it('reports anchor_stale, never a survivor, when one of two mapped nodes left the subtree (AC3, A36)', () => {
+    const root = subtree('<p>alpha beta</p><p>gamma delta</p>');
+    const stream = buildTextStream(root);
+    const anchor = anchorOf(stream, 'beta gamma', 2);
+    const paragraphs = Array.from(root.querySelectorAll('p'));
+    const survivor = textNodesOf(root)[0];
+    expect(locateAnchorInStream(stream, root, anchor).ok).toBe(true);
+
+    // One of the two nodes the range maps to is gone; the other one is still a
+    // live descendant of `root`. Ruling `A36` refuses to paint half the span.
+    root.removeChild(paragraphs[1]);
+    expect(isInsideSubtree(survivor, root)).toBe(true);
+    expect(locateAnchorInStream(stream, root, anchor)).toEqual({ ok: false, code: 'anchor_stale' });
+    expect(() => locateAnchorInStream(stream, root, anchor)).not.toThrow();
+  });
+
+  it('reports anchor_stale, never a survivor, when one of two mapped nodes was rewritten (AC3, A36)', () => {
+    const root = subtree('<p>alpha beta</p><p>gamma delta</p>');
+    const stream = buildTextStream(root);
+    const anchor = anchorOf(stream, 'beta gamma', 2);
+    expect(locateAnchorInStream(stream, root, anchor).ok).toBe(true);
+
+    // The node is still inside the subtree, but it no longer accounts for the code
+    // points the stream recorded, so the range is no longer supported in full.
+    textNodesOf(root)[1].data = 'a second paragraph with quite a different length';
+    expect(locateAnchorInStream(stream, root, anchor)).toEqual({ ok: false, code: 'anchor_stale' });
+  });
+
   it('reports anchor_stale when a contributing node no longer matches the stream', () => {
     const root = subtree('<p>alpha beta</p><p>gamma delta</p>');
     const stream = buildTextStream(root);

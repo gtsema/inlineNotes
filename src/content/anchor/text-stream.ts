@@ -14,9 +14,10 @@
  * Stream construction (PM rulings `A20`, `A21`):
  * - text-node content in document order;
  * - exactly one U+0020 per block-level boundary of ruling `A20` (`p`, `div`, `li`,
- *   `br`, `h1`–`h6`, `blockquote`, `tr`, `section`, `article`), requested on entry
- *   and on exit, so two adjacent blocks contribute exactly one space between them
- *   and a selection that crosses a `<br>` still re-anchors;
+ *   `br`, `h1`–`h6`, `blockquote`, `tr`, `td`, `th`, `section`, `article`; the two
+ *   cells are ruling `A35`), requested on entry and on exit, so two adjacent blocks
+ *   contribute exactly one space between them and a selection that crosses a
+ *   `<br>` still re-anchors;
  * - excluded subtrees of ruling `A21` (`script`, `style`, `noscript`, `template`,
  *   `head`) contribute nothing at all, not even a boundary space;
  * - a whitespace-only text node contributes a word separator, never text;
@@ -24,11 +25,18 @@
  *   `visibility` inspection happens here.
  *
  * Normalized by construction: every contributed piece is the output of the core
- * `normalizeText`, and every separator is a single U+0020 that is never emitted at
- * the start of the stream or twice in a row. Therefore `result.text` always
- * satisfies `isNormalizedText(result.text)`, and `result.text` equals
- * `normalizeText` of the raw subtree text — the stream and the selection text can
- * never be spelled differently (ruling `A26`).
+ * `normalizeText`, every separator is a single U+0020, no separator is emitted at
+ * the start or the end of the stream, and no two separators are adjacent.
+ * Therefore `result.text` always satisfies `isNormalizedText(result.text)`
+ * (ruling `A26`), it is trimmed at both ends, and between two neighboring pieces
+ * there is exactly one U+0020.
+ *
+ * What is **not** claimed (review finding `N2`): the stream is not
+ * `normalizeText` applied to the raw subtree text. There is no such referent —
+ * `Node.textContent` glues adjacent elements with nothing between them, so
+ * `<div><p>a</p>tail</div>` streams as `"a tail"` (one `A20` boundary space)
+ * while `normalizeText` of that `textContent` is `"atail"`. The boundary spaces
+ * are contributed by the walk, never recovered from the raw text.
  *
  * Two offset domains, and they are never mixed:
  * - `streamStart` / `streamEnd` are half-open Unicode **code point** offsets into
@@ -59,8 +67,10 @@ const TEXT_NODE_TYPE = 3;
 const ELEMENT_NODE_TYPE = 1;
 
 /**
- * Ruling `A20`: the block-level boundaries that contribute one U+0020 each. The
- * list is a value, not prose, so a test can pin it against the spec.
+ * Ruling `A20`: the block-level boundaries that contribute one U+0020 each, with
+ * the table cells added by ruling `A35` so a selection that crosses cells stops
+ * being one glued word. The list is a value, not prose, so a test can pin it
+ * against the spec.
  */
 export const BLOCK_TAG_NAMES: readonly string[] = [
   'P',
@@ -75,6 +85,8 @@ export const BLOCK_TAG_NAMES: readonly string[] = [
   'H6',
   'BLOCKQUOTE',
   'TR',
+  'TD',
+  'TH',
   'SECTION',
   'ARTICLE',
 ];

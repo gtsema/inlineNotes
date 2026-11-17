@@ -20,6 +20,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 | `highlight frame` | — | translucent outline drawn around the highlighted range |
 | `text fragment` | — | one contributing text node the paint is built over; the contract and both offset domains are owned by `inline-comment-model.md` |
 | `page text stream` | — | the normalized stream the content layer rebuilds for every re-resolve; its construction rules are owned by `inline-comment-model.md` |
+| `all-or-nothing locate` | — | the locate rule (`A36`) owned by `inline-comment-model.md`: every fragment of a resolved range or none of them |
 | `entry row` | — | one popup line: author name + show/hide checkbox |
 | `visibility flag` | — | per-entry boolean deciding whether its highlight is painted |
 
@@ -38,7 +39,7 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 ## Rules / Semantics
 
 - Highlight painting: CSS Highlight API (`CSS.highlights` + `::highlight(inline-notes)`), one named highlight per entry. Painting never mutates the host DOM and never adds elements to the page body other than the overlay host.
-- Text stream and fragments: before painting, the resolved anchor range is mapped onto `text fragment`s taken from a freshly rebuilt `page text stream`. The stream construction (block boundary space, excluded subtree), the fragment contract, the code-point versus UTF-16 domains and the locate codes `anchor_not_found` / `anchor_stale` are owned by `inline-comment-model.md` -> Rules / Semantics. Painting consumes the fragments it is given, never runs a text search of its own, and never paints a range that was not resolved against the current stream.
+- Text stream and fragments: before painting, the resolved anchor range is mapped onto `text fragment`s taken from a freshly rebuilt `page text stream`. The stream construction (block boundary space, excluded subtree), the fragment contract, the code-point versus UTF-16 domains and the locate codes `anchor_not_found` / `anchor_stale` are owned by `inline-comment-model.md` -> Rules / Semantics. Painting consumes the fragments it is given, never runs a text search of its own, and never paints a range that was not resolved against the current stream. The locate result is `all-or-nothing locate` (ruling `A36`): painting receives either every fragment of the resolved range or no fragment at all, so half of a remembered selection is never painted.
 - `highlight frame`: `outline`-like translucent border around the highlighted box set (`text-decoration`/`outline` on the highlight pseudo-element), `rgba` color, no background fill of the author's own color choice — one shared style for all entries.
 - Own entries and foreign entries are visually distinguished only in the tooltip header (`Вы` vs the author name); the highlight style is identical.
 - Tooltip default opacity: semi-transparent (about 0.75); after click: 1.0 and the textarea receives focus. Only one editor instance may be open at a time.
