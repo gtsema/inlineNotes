@@ -102,3 +102,25 @@ whole set is implemented and needs a browser check.
 
 Ruled and **scheduled**: Stage 5 = `t5-01-author-overlap`, `t5-02-author-colors`, `t5-03-tooltip-click-editor`; Stage 6 =
 `t5-04-focus-on-open`, `t5-05-popup-host-line`, `t5-06-popup-author-groups`. See `docs/state/plan-implementation.md`.
+
+## Rulings issued while `t5-01` was in flight (2026-11-18, engineer escalation — the engineer was right to stop)
+
+- `A99` (**one author identity, everywhere**): the per-author filter uses the shipped `isSameAuthor`
+  (`src/core/entry-rules.ts:125`: trim both sides, case-sensitive, an empty side never matches) — the same identity `canEdit`,
+  the «Вы» tooltip label and `docs/specs/inline-comment-model.md:77` already use. My card asked for **exact `===` equality** in
+  one AC line while `A93` said "the same identity as edit rights"; those cannot both hold, and a second identity would answer
+  one pair of strings two different ways. Consequence: a stored record authored by `"Я "` **does** block an attempt under `"Я"`.
+  `A93` is corrected by this ruling — "exact string equality" was wrong, "the identity `isSameAuthor` implements" is what is
+  meant. Reachability note kept from the escalation: since `createEntryOnPage` stores a trimmed name, an untrimmed author only
+  arrives through a hand-written storage record, so the choice is observable in almost no real case — which is exactly why the
+  single identity wins.
+- `A100` (**the per-author rule is not one call site**): overlap is per-author **at both** call sites — the creation gate
+  `assertCreatable` and the editor's direct `findOverlappingEntry` (`src/content/editor/edit-entry.ts:153`, self-exclusion `A45`
+  untouched). The user's rule is about authors, not about a function; a spec line that is true for new ranges and false for
+  moved/re-derived ones is the half-true documentation the previous stage just spent a task on. `src/core/entry-overlap.ts`
+  stays pure and unchanged; the shared filter is one exported core projection `entriesOfAuthor(entries, currentName)` built on
+  `isSameAuthor` (additive core vocabulary, `A87` precedent). The `t5-01` brief is amended to name `src/content/editor/edit-entry.ts`
+  as the one authorized `src/content/` file, per the `A90` naming rule.
+- Process note for the retro: the escalation arrived **before** any line was written, and it caught a contradiction inside my own
+  brief (AC8 vs the card's own identity sentence) plus a scope hole the spec made visible. That is the brief-reading behavior I
+  want; the fix on my side is to never write "exact equality" and "the same identity as X" in one paragraph.
