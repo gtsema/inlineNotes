@@ -50,8 +50,8 @@ is confirmed on a real browser.
 | Task | Slice | Owning spec AC |
 |---|---|---|
 | `t4-01-popup-list` | Angular popup: rows, per-entry checkbox, empty/restricted/name-required states | overlay AC7, AC10 |
-| `t4-02-options-name` | Angular options: name field, validation, first-run random name | overlay AC9, model AC9 |
-| `t4-03-spa-refresh-docs` | SPA/history refresh, `storage.onChanged`, README, final verification | overlay AC8, model AC1 |
+| `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
+| `t4-03-spa-refresh-docs` | SPA/history refresh, `storage.onChanged`, README, final verification; **also carries** `t4-02` review remarks R2–R4 (spec-wording conflicts) and the three browser-only checks (`Tab` walk, `pointermove` cost, detached-node save) | overlay AC8, model AC1 |
 
 ## Harness decisions taken by the PM during Stage 1
 
@@ -228,3 +228,7 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A76`: `extension-engineer` may edit `docs/specs/code-review-flow.md` **only** under a numbered PM ruling that names the
   file, cited in the commit message (resolves the `docs/specs/INDEX.md` ownership row for that spec, which names
   `project-manager`).
+- **The full page loop now works for the user (2026-11-17): name set from the options UI, then selection → card → save →
+  highlight → tooltip on a real article, no console workaround.** Stage 3's runtime blocker is closed; what remains
+  observable is the editor (`t3-03`), the popup list and checkboxes (`t4-01`), SPA refresh (`t4-03`), and the stuck-card fix
+  (`t3-05`).

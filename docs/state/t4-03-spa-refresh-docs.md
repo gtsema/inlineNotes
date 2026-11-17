@@ -77,6 +77,21 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 3. **Select text, let the site replace the node, press `Сохранить`** — the browser case jsdom cannot produce
    (`docs/state/t3-02b-review.md` remark 1, closed in code by `t3-05`, verified here).
 
+## Carried fixes from `t4-02-options-name` (review remarks R2–R4; docs/verification half, three items — the budget limit)
+
+1. **R2 — the empty-name path contradicts itself across two sources.** The options UI disables `Сохранить` while the value
+   is empty after the trim (`src/options/options.component.ts:62`, `author-name-service.ts:154`), so the sentence
+   `Имя обязательно` (`src/options/text.ts:46`) is unreachable on that surface, while
+   `docs/specs/content-overlay-ui.md:53` still promises it as the empty-value path. Decide one story for v1 — the PM's
+   default: the disabled button is the shipped rule, and the spec says the `name_required` sentence belongs to the popup
+   and the content layer, not to the options input — then amend the spec line in the same commit.
+2. **R3 — one rule copied into two specs**: the "shapes generated over" enumeration exists verbatim in
+   `docs/specs/inline-comment-model.md:76` and `docs/specs/content-overlay-ui.md:103`. One of them becomes a
+   cross-reference (the model spec owns name rules) before a future edit desynchronizes them.
+3. **R4 — a spec clause wider than its tests**: AC19 (`content-overlay-ui.md:154`) promises 40 code points "accepted **and
+   saved**"; acceptance and refusal are pinned, but nothing writes a 40-code-point name through `saveSettings`. Either add
+   that write (the astral case is the interesting one) or drop "and saved" from the sentence.
+
 ## Open questions
 
 - `A59` is worth asking the user (a permanent timer on every page vs. a missed SPA navigation). Default applied.

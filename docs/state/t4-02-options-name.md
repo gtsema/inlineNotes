@@ -25,7 +25,9 @@ task the extension has exactly one writer of `settings:v1` and the user can see 
 ## AC (5 substantive + gates)
 
 1. The options page loads the current name through `loadSettings` (no direct storage read) and shows it; a damaged or
-   empty record shows an empty field plus the Russian hint, not the raw stored bytes.
+   empty record shows an empty field plus the Russian hint, not the raw stored bytes. **Superseded by `A54`/AC3 and
+   amended after review (R1)**: an unusable stored record shows the **generated** name in the field, not an empty one; the
+   "not the raw stored bytes" half of the sentence still holds.
 2. `Сохранить` calls `saveSettings(port, { name })` and nothing else; a refused name (`name_required`, `quota`,
    `serialization`) renders the matching message from the options-layer constants module (`A33` applies to this layer
    too: one message map per UI layer).
@@ -76,13 +78,35 @@ The popup list (`t4-01`), `storage.onChanged` and SPA refresh (`t4-03`), any pag
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered). Remaining: 1
-(reviewer). The report answers the five residual-risk bullets by number (`A72`).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2 of 4** (engineer delivered, reviewer **accepted**,
+0 blocking findings). Task closed. The report answered every handed-over risk; the numbering differed from the brief's
+bullets (reviewer remark R8) — the mapping: brief 1 ↔ report 1, brief 2 ↔ report 3, brief 3 ↔ report 6, brief 4 ↔ the
+report's AC4 section, brief 5 ↔ report 5; report 2 and 7 are extras.
 
 ## Verdicts
 
 - engineer report: attempt 1 delivered, copied to `docs/state/t4-02-engineer.md`
-- reviewer verdict: not started
+- reviewer verdict: **accepted**, 0 blocking findings (`docs/state/t4-02-review.md`); gates re-run by the reviewer, the +24
+  test delta confirmed independently
+- **task status: accepted** (`1cee49a`+`b872d4a`)
+
+## Runtime confirmation (user, 2026-11-17)
+
+The user reloaded the built `dist/`, set the author name on the options page from the UI, and re-ran the page loop:
+selection → card → note → `Сохранить` → highlight → hover → tooltip, all working, no console errors — the name gate that
+blocked Stage 3 is gone, no console command needed anymore.
+
+## PM decisions on the review remarks
+
+- **R1 — fixed now** (PM artifact): AC1 below is amended to the shipped shape.
+- **R2, R3, R4 → carried into `t4-03-spa-refresh-docs`**, which owns docs and the final verification pass: decide whether
+  the empty-name path is the disabled `Сохранить` (shipped) or the `name_required` sentence (spec promise) and amend the
+  wording; replace the duplicated "shapes generated over" enumeration with a cross-reference; either pin the "40 code
+  points **and saved**" clause with a write through `saveSettings` or drop "and saved".
+- **R5, R6, R7 — accepted v1 debt, no slice**: a one-line `canSave: false` glue assertion, a rendered-template assertion
+  (no Angular test harness in `package.json`, adding one for one assertion is not worth the dependency), and the unused
+  `AuthorNameDraft.overCap` hook (kept as the hook for a future over-cap notice, which needs its own wording ruling).
+  Each is one line to reopen, none is observable-behavior-wrong.
 
 ## Open questions
 
