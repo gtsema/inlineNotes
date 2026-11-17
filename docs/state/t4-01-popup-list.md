@@ -82,14 +82,22 @@ messaging channel to the content script (`A50`).
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (a `resume` is the same child, `A80`). Remaining: 1
-(the reviewer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (engineer = 1 child across a provider-error `resume`;
+reviewer = 1 child across two endpoint-failure `resume`s). No further child on this card.
 
 ## Verdicts
 
 - engineer report: delivered, copied to `docs/state/t4-01-engineer.md` — AC1–AC5 self-check shipped, 4 deviations declared
   by number, 5 residual risks, 2 questions escalated (both answered by the PM below)
-- reviewer verdict: not started
+- reviewer verdict: **accepted**, 0 blocking findings, 1 carried fix (`docs/state/t4-01-review.md`). AC1–AC5 `pass`; `A81`–`A84`
+  implemented as ruled; manifest exactly `storage` + `tabs` with the pre-existing pin edited honestly; the `chrome.storage`
+  scan test proven non-vacuous (6 popup files, comments stripped); checker re-run by the reviewer (0 errors / 79 INFO) and
+  the test delta corroborated read-only (734 declarations at HEAD vs 697 at `c4abdcf`, no `.skip`/`.only`).
+- **task status: accepted.** 2 of 4 children used.
+- **CF1 carried to `t4-03`** (the reviewer's one open item): the row contract is pinned, but nothing pins the *placement*
+  half of AC4/AC5 — that the notices render **above** the list, that the empty-state paragraph renders at all, and that the
+  list block and the `Удалить` button are not hidden behind an ownership or notice condition. One grep trio in
+  `tests/toolchain-contract.spec.ts`; see `docs/state/t4-01-review.md` → "Carried fixes".
 - **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **734/734** over 39 files (+37),
   `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 79 INFO, `npm run typecheck` exit 0, tree clean
 

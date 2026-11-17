@@ -25,7 +25,7 @@ final observable-behavior checklist, so the loop is verifiable by a human.
 - `A61` **A stale entry stays visible in the popup and stays deletable** (already spec'd); this task adds only the
   Russian wording for the stale state in the popup row, from the popup's own constants module.
 
-## AC (5 substantive + gates)
+## AC (3 substantive for this slice + gates)
 
 1. On a same-document URL change (`pushState` or `popstate`) the overlay re-resolves anchors against a **freshly built**
    stream (`A29`) and the highlight set matches the new document; a note whose text moved with the article is painted
@@ -34,10 +34,10 @@ final observable-behavior checklist, so the loop is verifiable by a human.
    reload; a change to a **different** page's slot key triggers no work.
 3. A name change in options (`settings:v1`) is picked up by an already-loaded page: the card that was previously
    refused now opens, and a foreign entry that became "mine" changes its edit affordance (`A31`, `A25`).
-4. README (Russian) covers: build, load-unpacked steps, what `tabs` and `storage` are for (`A49`), the 256/40/20 limits,
-   and the accepted v1 limitations (cross-tab race, repeated-text anchoring, iframes/shadow roots out of scope).
-5. `docs/specs/INDEX.md` and the specs list no dangling task ids, and the final verification checklist (one run per
-   Stage-3/4 observable behavior) is written into this state file with the human result quoted.
+4. **Moved out (PM scope split, 2026-11-17):** the README half and the final-verification half now belong to
+   `t4-04-readme-final-verification`, together with the `t4-02` review remarks R2–R4 and the browser smoke list. Reason
+   (`delivery-planning`, the `t3-03` lesson): this slice already carries 3 AC in the content layer **plus** CF1; a slice that
+   also owns documentation and a human verification run is the shape that overruns the runtime ceiling.
 
 Gates green and quoted: `npm test`, `npm run build`, `node scripts/check-agent-config.mjs`.
 
@@ -76,8 +76,25 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
    (`t3-02` review remark 5).
 3. **Select text, let the site replace the node, press `Сохранить`** — the browser case jsdom cannot produce
    (`docs/state/t3-02b-review.md` remark 1, closed in code by `t3-05`, verified here).
+4. **Selecting the text of your own note opens the editor, never a create card** — the `main.ts:78-79` wiring of the
+   `claimSelection` hook is deliberately unpinned in jsdom (accepted debt: `docs/state/t3-03-review-attempt2.md` new
+   remark 1), so the browser is where this handover is verified.
+5. **The popup against a real page** (asked by the `t4-01` engineer, residual risks 2–4): rows render with the author name,
+   the checkbox state and the ownership marker; `chrome.tabs.query` really returns `tab.url` with the `tabs` permission
+   (`A49`), and the install-time "read browsing history" warning is shown once and explained in the README (Russian) — the
+   README line itself is `t4-04`'s deliverable.
+6. **A checkbox write repaints the page** — shipped by this task's `storage.onChanged` listener; the popup list itself stays
+   a snapshot while open (accepted v1 behavior unless the user rules otherwise).
 
-## Carried fixes from `t4-02-options-name` (review remarks R2–R4; docs/verification half, three items — the budget limit)
+## Carried fixes for this slice (numbered — the engineer answers each by number, `A72`)
+
+1. **CF1** (`docs/state/t4-01-review.md` → "Carried fixes") — pin the **render** half of the popup's AC4/AC5 in
+   `tests/toolchain-contract.spec.ts`: (a) the empty-state paragraph renders (`class="empty">{{ emptyState }}`); (b) document
+   order — both notice branches (`notice--name`, `notice--not-injectable`) precede `class="rows"`, i.e. notices render
+   **above** the list (`A83`, `A81`); (c) the list block and the `Удалить` button are not hidden behind a notice or ownership
+   condition. Test-only; no behavior change expected.
+
+## Carried fixes handed to `t4-04-readme-final-verification` (R2–R4, the docs half)
 
 1. **R2 — the empty-name path contradicts itself across two sources.** The options UI disables `Сохранить` while the value
    is empty after the trim (`src/options/options.component.ts:62`, `author-name-service.ts:154`), so the sentence
@@ -92,15 +109,6 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
    saved**"; acceptance and refusal are pinned, but nothing writes a 40-code-point name through `saveSettings`. Either add
    that write (the astral case is the interesting one) or drop "and saved" from the sentence.
 
-4. **Selecting the text of your own note opens the editor, never a create card** — the `main.ts:78-79` wiring of the
-   `claimSelection` hook is deliberately unpinned in jsdom (accepted debt: `docs/state/t3-03-review-attempt2.md` new
-   remark 1), so the browser is where this handover is verified.
-5. **The popup against a real page** (asked by the `t4-01` engineer, residual risks 2–4): rows render with the author name,
-   the checkbox state and the ownership marker; `chrome.tabs.query` really returns `tab.url` with the `tabs` permission
-   (`A49`), and the install-time "read browsing history" warning is shown once and explained in the README (Russian).
-6. **A checkbox write repaints the page** — only after `t4-03` ships the content-script `storage.onChanged` listener; before
-   it the popup write is correct but the highlight stays until reload. The popup list itself is a snapshot (it does not
-   refresh while open): accepted v1 behavior unless the user rules otherwise.
 
 ## Open questions
 

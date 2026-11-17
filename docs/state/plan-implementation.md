@@ -49,9 +49,10 @@ is confirmed on a real browser.
 
 | Task | Slice | Owning spec AC |
 |---|---|---|
-| `t4-01-popup-list` | **delivered, review running** (`52afe39`+`ecf9a26`+`6a3b3d7`; run 1 died on a provider stream error, recovered by `resume` under `A80`/`A85`, 734 tests green) — Angular popup: rows, per-entry checkbox, empty/restricted/name-required states | overlay AC7, AC10 |
+| `t4-01-popup-list` | **accepted** (`52afe39`+`ecf9a26`+`6a3b3d7`; run 1 died on a provider stream error, recovered by `resume` under `A80`/`A85`, 734 tests, 0 blocking findings) — Angular popup: rows, per-entry checkbox, empty/restricted/name-required states; `A81`–`A84` as ruled; CF1 handed to `t4-03` | overlay AC7, AC10 |
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
-| `t4-03-spa-refresh-docs` | SPA/history refresh, `storage.onChanged`, README, final verification; **also carries** `t4-02` review remarks R2–R4 (spec-wording conflicts) and the three browser-only checks (`Tab` walk, `pointermove` cost, detached-node save) | overlay AC8, model AC1 |
+| `t4-03-spa-refresh-docs` | **scope split by the PM (2026-11-17): code slice only** — SPA/history re-resolve, `storage.onChanged` repaint, options-name pickup on a loaded page, plus **CF1** from the `t4-01` review; keeps the browser-only verification list (6 items) | overlay AC8, model AC1 |
+| `t4-04-readme-final-verification` | **opened by the same scope split, not started** — Russian README (build → load unpacked → permissions → limits → v1 limitations), spec surface clean (no dangling ids, R3 dedup), R2 empty-name wording, R4 the 40-code-point write; the PM runs the browser list with the user and quotes it | overlay AC9–AC10 surface, model docs |
 
 ## Harness decisions taken by the PM during Stage 1
 
