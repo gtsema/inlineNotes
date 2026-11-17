@@ -13,6 +13,7 @@ a ruling stands against it — an explicit overturning ruling. The PM does not i
 | B3 | «в попап окне были записи только для разных пользователей … если у пользователя1 10 заметок, а у пользователя2 — 3, отображается две записи» | The popup renders **one row per entry** in creation order, each with its own `Удалить` and its own visibility checkbox (`visible: boolean` on the entry, `src/core/entry.ts:58`); the contract is spec'd in `docs/specs/content-overlay-ui.md` (popup AC) and confirmed by `t4-01` | none directly, but it moves `visible` from entry → (author, page) and changes what a row is | see the open questions: delete semantics, counts, per-note access |
 | B4 | «при наведении окно было сразу непрозрачным и на него не надо было кликать» | The hover tooltip is translucent until clicked; the click only makes it opaque and changes nothing else — browser-confirmed in Stage 3, spec'd in `docs/specs/content-overlay-ui.md` (AC3 / Flow 4) | the click-to-opaque half of AC3 disappears, so the click needs a new meaning or must do nothing | cheap on its own (a style constant), but it rewrites an AC the user already verified |
 | B5 | «при выделении фокус ввода сразу переносился в окно ввода заметки» | `A74` — opening the card takes **no** focus, nothing inside the overlay host is focused, the reader reaches the controls with `Tab` | **`A74` outright** (currently an `Assumption:`, explicitly marked as pending the user's word — this is that word) | closes the keyboard-path debt from browser item 1; needs a check that focusing a control inside the end-of-`<html>` host does not scroll the page |
+| B6 | «убрать адрес страницы из попап-окна — там всё равно какие-то кракозябры» | The popup prints the page host under the title: `@if (view().host !== null) { <p class="host">…</p> }` (`src/popup/popup.component.ts:61-63`), fed by `hostOf()` = `new URL(url).host` (`src/popup/page-entries-service.ts:138-146`) | the popup-contract spec line "title with the page host" loses its host half | display only — the address **read** stays (`A49`), so the `tabs` permission stays too |
 
 ## Open questions the PM must ask before B1–B3 can be specified
 
@@ -44,10 +45,16 @@ B5 (focus into the card on open):
     (opening an existing note) and to the tooltip?
 13. If the note is on a page whose text is a form field, focus moves away from the field — acceptable?
 
+B6 (the host line):
+14. Drop the line completely, or replace it with something a reader can read (the page's title, or the host only when it is
+    ASCII)? The line exists to answer «это список какой страницы?» — removing it leaves the title «Заметки на этой странице»
+    with no page identity at all.
+
 ## Sequencing the PM proposes (not started, awaiting the user's answers)
 
-1. **B4 + B5** together: both are small, page-side only, and they overturn rulings the user is now overriding by word
-   (`A74`, AC3's click half). One task, one spec edit.
+1. **B4 + B5 + B6** together: all three are small UI-surface changes (a style constant, a focus call, a template line) that
+   overturn or amend rulings the user is overriding by word (`A74`, the click half of AC3, the popup host line). One task, one
+   spec edit.
 2. **B1 + B2** together: overlap model and paint names are one change — a core rule (per-author overlap) plus the paint surface
    (per-author highlight names). This is a `src/core/` change and needs its own stage.
 3. **B3** last: it changes the data model shape of visibility and the popup contract, and its open questions are the most
@@ -55,4 +62,5 @@ B5 (focus into the card on open):
 
 ## Status
 
-Not started. The browser run (`docs/state/browser-verification-run.md`) finishes first.
+Not started. The browser run (`docs/state/browser-verification-run.md`) finishes first. B6 was added by the user during the run
+on the same date.

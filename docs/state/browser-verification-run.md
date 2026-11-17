@@ -103,8 +103,13 @@ Expected:
 - on `chrome://` / `file://` the popup shows «На этой странице подсветка недоступна» **above** the list, and the list is still
   rendered below it (`A81`, `A83`);
 - at install time Chrome showed the «читает историю просмотров» warning once (`A49`) — recorded in the Preflight line.
-Result: `not verified`
-Notes:
+Result: **passed** — items 1–3 confirmed; item 4 confirmed with a wording note the user calls correct.
+Notes: rows in creation order, own row «Вы», a foreign row shows the stored author name in gray (`row--foreign .author`,
+`src/popup/popup.component.ts:149-151`) rather than a «Не: …» prefix (`A82`); the checkbox mirrors the stored visibility; `Удалить`
+dropped the row and the page's highlight disappeared **without a reload**. An empty article shows «На этой странице нет записей».
+On a non-injectable address the popup shows «На этой странице подсветка недоступна» and under it «На этой странице нет
+записей» — the list really is empty there, and the user's word: «И это правильно». The `A83` shape (notice above, list still
+rendered) is therefore confirmed with an empty list rather than with rows.
 
 ## 6. A checkbox write repaints the page (`storage.onChanged`, `A50`, `A60`)
 
@@ -123,7 +128,7 @@ Notes:
 
 ## Outcome
 
-- Items passed: 3 / 6 — items 2, 3, 4
+- Items passed: 4 / 6 — items 2, 3, 4, 5
 - Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
 - Items failed: 0
 - Items not verified: 4

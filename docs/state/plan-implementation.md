@@ -63,11 +63,12 @@ typecheck` → exit 0, clean tree. What is **not** done: the six-item browser ve
 
 ### Improvement backlog (user-requested, **not started**)
 
-Five changes recorded on 2026-11-18 during the browser run in `docs/state/improvement-backlog.md`: per-author overlap rules (B1,
+Six changes recorded on 2026-11-18 during the browser run in `docs/state/improvement-backlog.md`: per-author overlap rules (B1,
 narrows `A26`), per-author highlight colors (B2, overturns `A28`), popup grouped **per author** instead of per note (B3, moves
 `visible` off the entry and re-opens delete semantics), tooltip opaque on hover with no click (B4, rewrites the click half of
-overlay AC3), and focus into the note field on open (B5, **overturns `A74`** outright). Thirteen observable-behavior questions
-must be answered before B1–B3 can be specified; the proposed order is B4+B5 → B1+B2 → B3.
+overlay AC3), and focus into the note field on open (B5, **overturns `A74`** outright); plus the page-host line dropped from the
+popup (B6, amends the popup contract while `A49` keeps the address read). Fourteen observable-behavior questions
+must be answered before B1–B3 can be specified; the proposed order is B4+B5+B6 → B1+B2 → B3.
 
 ### Known debt named at Stage-4 closure (no task opened)
 
