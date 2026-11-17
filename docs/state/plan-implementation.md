@@ -41,6 +41,7 @@ is confirmed on a real browser.
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
 | `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
 | `t3-02-content-highlight-tooltip` | **changes requested, card held open** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 and every boundary check pass, **two carried fixes vanished** → closure proposed as `t3-02b` | overlay AC2, AC3 |
+| `t3-02b-carried-test-fixes` | tests/spec-only fix slice (`A48`/`A72`, user approved): card tab order + `A74` no-focus-theft, the save-moment DOM-mutation test for `A29`, the carried-fix checklist rule in `code-review-flow.md`; closes `t3-02` findings 1–3 by a parent-closure re-check | overlay keyboard rule, model `A29` |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
@@ -201,3 +202,15 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   that card and its re-review a 5th, above the ×2 ceiling, and a third attempt on the task is forbidden. Proposed:
   `t3-02b-carried-test-fixes` (tests/spec only, own budget) + a narrow parent-closure re-check, the way `t3-01` was
   closed. Alternative: the user raises the `t3-02` ceiling to 5.
+- **The budget question is answered (user, 2026-11-17): option 1.** `t3-02b` is opened with its own budget; `t3-02` stays
+  held open until that review re-checks findings 1–2.
+- `A74` (**assumption, flagged**): opening the create card **does not steal focus** from the page; the controls are reached
+  with `Tab`. Chosen for `t3-02b` because the slice may not touch production code and stealing page focus is a host-page
+  intrusion of the same class AC2 forbids. Reverting it is one spec sentence plus one line in `open()`, as its own task.
+- **Stage 3 runtime blocker found by the user's smoke attempt (2026-11-17): selecting text does nothing.** Not a defect:
+  `create-note.ts:99-100` gates the card on a valid author name (`A31`, model AC9, overlay AC10), and the name cannot be
+  set yet — `src/options/options.component.ts` is still the `t1-01` placeholder, and `t4-02-options-name` (the field, the
+  validation, `A54` first-run generation) sits in Stage 4. Consequence, decided by the PM: **`t4-02` is pulled forward,
+  before `t3-03`**, because Stage 3's done-criterion (select → card → save → highlight → tooltip → edit) is unreachable
+  without it and the `A41` smoke observation cannot be made. Until `t4-02` ships, the only way to unblock a manual run is
+  writing the record from the extension page console: `chrome.storage.local.set({"settings:v1":{name:"Я"}})`.
