@@ -58,8 +58,9 @@ is confirmed on a real browser.
 **Stage 4 is closed (2026-11-17).** Accepted: `t4-01-popup-list`, `t4-02-options-name`, `t4-03-spa-refresh-docs`,
 `t4-03b-watch-pins`, `t4-04-readme-final-verification`. Gates at closure: **790 unit tests over 41 files**, `npm run build`
 → a self-contained `dist/` of 10 files, `node scripts/check-agent-config.mjs` → 0 errors / 0 warnings / 87 INFO, `npm run
-typecheck` → exit 0, clean tree. What is **not** done: the six-item browser verification list
-(`docs/state/t4-03-spa-refresh-docs.md`), deferred by the user — it is open work, not a passed criterion.
+typecheck` → exit 0, clean tree. The six-item browser verification list **was run on 2026-11-18 in Chrome 157.0.8103.38**
+(`docs/state/browser-verification-run.md`): **5 items passed, 1 partially verified, 0 failed** — the only claim left without a
+real-Chrome confirmation is the `Tab` order of the card's controls in a live shadow tree.
 
 ### Improvement backlog (user-requested, **not started**)
 

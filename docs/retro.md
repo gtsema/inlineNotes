@@ -160,3 +160,20 @@ the six-item browser list is deliberately still open (`прогон будет �
   fix is re-read for the claim that replaced the deleted one.
 - What went right: the attempt-2 fix stayed inside its ceiling (4 children, closed at 4) because the review named exactly one
   blocking finding and the PM fixed the leftover clause personally instead of opening a fifth child.
+
+## Stage 5 — the browser verification run (2026-11-18)
+
+- What went right: **none of the six items failed.** Hover cost on a very long article, the `selection_lost` refusal after a real
+  text-node mutation, the Flow 6 handover (own → editor, foreign → nothing, `A78` no anchor move), the popup against a real page
+  and the `storage.onChanged` repaint across two tabs all behaved as the specs say. The specs describe the real browser, not jsdom.
+- What only the run produced: two documentation corrections. The `tabs` install warning was **never observed** (an unpacked reload
+  shows none) — the README stopped asserting it; and the popup's host line reads as punycode garbage to the user, which became
+  backlog item B6.
+- Process failure of the PM: **the same mechanical edit bug three times in one file** — an anchor that ended on the next item's
+  `## heading` swallowed that heading. Rule for docs files: an edit anchor never ends on a heading, and after editing a state file
+  with several identically-shaped `Result:` blocks, re-read the boundaries.
+- Probe design failure: the `Shift+Tab`-from-the-omnibox probe for the card's tab order cannot work — the omnibox has its own
+  UI items («Спросить гугл об этой странице»). A probe must be validated before the run starts; an unrunnable probe leaves a
+  half of an AC unverifiable, which is exactly what happened to item 1.
+- The run also generated six improvement requests; they live in `docs/state/improvement-backlog.md` as B1–B6 with fourteen
+  observable-behavior questions, and two of them overturn rulings (`A74`, and the click half of overlay AC3).

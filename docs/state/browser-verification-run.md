@@ -121,16 +121,24 @@ Expected:
 - a write to a **different** page does not make this page do anything;
 - the popup list itself is a snapshot while the popup is open (accepted v1): after a delete in another tab, reopening the
   popup shows the current store.
-Result: `not verified`
-Notes:
+Result: **passed** — all four sub-items confirmed («все 4 — ок»). Turning a checkbox off and on repainted the highlight with no
+reload; a write made in a **second tab of the same page** repainted this tab; a write on a **different** page left this page
+untouched; the open popup did not refresh itself and showed the current store on reopening (the accepted snapshot v1 shape).
+This is the `storage.onChanged` watch of `t4-03` (`src/content/refresh/storage-change-watch.ts`) running against a real
+`chrome.storage.onChanged`, and the `A88` scoping holding: the index write alone does not make every tab repaint.
 
 ---
 
 ## Outcome
 
-- Items passed: 4 / 6 — items 2, 3, 4, 5
-- Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
+- Items passed: 5 / 6 — items 2, 3, 4, 5, 6
+- Items partially verified: 1 — item 1 (`A74` no-focus-theft **passed**; the `Tab`-reachability half not verified, the probe hit
+  a Chrome UI element «Спросить гугл об этой странице»)
 - Items failed: 0
-- Items not verified: 4
-- New tasks opened from this run: none
-- Debt added by this run: the keyboard path into the card is "tab through the rest of the page" (accepted by the user).
+- Items not verified: 0
+- New tasks opened from this run: none. Confirmed correct on the spot by the user: a non-injectable page shows the notice **and**
+  an empty list below it.
+- Debt added by this run: the keyboard path into the card is "tab through the rest of the page" (accepted by the user); the popup
+  host line became backlog item B6; the `tabs` install warning was never observed, so the README stopped asserting it.
+- **Run closed 2026-11-18.** Nothing among the six items failed. The only claim left without a real-Chrome confirmation is the
+  `Tab` order of the card's controls in a live shadow tree, which stays pinned by `tests/content-create-card-controller.spec.ts`.
