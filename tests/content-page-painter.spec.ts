@@ -137,8 +137,16 @@ function recordFor(
   id: string,
   needle: string,
   overrides: Record<string, unknown> = {},
+  fragments = 1,
 ): Record<string, unknown> {
-  return storedEntry({ id, text: needle, anchor: storedAnchorOf(needle), ...overrides });
+  // `fragments` is the anchor's `fragmentCount`: a span that crosses a block
+  // boundary is located as two `text fragment`s and must be stored as one.
+  return storedEntry({
+    id,
+    text: needle,
+    anchor: storedAnchorOf(needle, fragments),
+    ...overrides,
+  });
 }
 
 /** The box seam of the pass: a box per fragment in call order. */
@@ -236,7 +244,7 @@ describe('a page of stored entries reaches the page (AC1, A70)', () => {
   });
 
   it('paints every fragment of a span that wraps, and keeps them under one name (A36)', async () => {
-    seedPage(port, [recordFor('a1b2c3d4e5f6', 'dog. Second', 2)]);
+    seedPage(port, [recordFor('a1b2c3d4e5f6', 'dog. Second', {}, 2)]);
     const surface = new RecordingSurface();
     const boxes = seam([BOX_A, BOX_B]);
     const painter = needPainter(surface, boxes.rangeFor, port);
@@ -440,7 +448,9 @@ describe('one bad entry does not dim the page (A66)', () => {
     await painter.refresh();
     expect(surface.heldNames()).toHaveLength(1);
 
-    port.failNextRead('storage_unavailable');
+    // The port answers "the storage area is unreachable"; core turns any port
+    // failure into the load code `storage_unavailable`.
+    port.failNextRead('unavailable');
     const outcome = await painter.refresh();
 
     expect(outcome.readCodes).toContain('storage_unavailable');
@@ -454,7 +464,7 @@ describe('the page DOM stays the page (AC2, A41)', () => {
   it('leaves the document element byte-identical and adds no host', async () => {
     seedPage(port, [
       recordFor('a1b2c3d4e5f6', 'quick brown'),
-      recordFor('b2c3d4e5f6a1', 'dog. Second', 2),
+      recordFor('b2c3d4e5f6a1', 'dog. Second', {}, 2),
     ]);
     const surface = new RecordingSurface();
     const painter = needPainter(surface, seam().rangeFor, port);

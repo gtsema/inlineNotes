@@ -144,8 +144,16 @@ function recordFor(
   id: string,
   needle: string,
   overrides: Record<string, unknown> = {},
+  fragments = 1,
 ): Record<string, unknown> {
-  return storedEntry({ id, text: needle, anchor: storedAnchorOf(needle), ...overrides });
+  // `fragments` is the anchor's `fragmentCount`: a span that crosses a block
+  // boundary is located as two `text fragment`s and must be stored as one.
+  return storedEntry({
+    id,
+    text: needle,
+    anchor: storedAnchorOf(needle, fragments),
+    ...overrides,
+  });
 }
 
 /** The two entry records of the fixture: one own, one foreign. */
@@ -486,7 +494,7 @@ describe('what cannot be hovered (A40, staleness, A67, A66)', () => {
 
 describe('where the tooltip is placed (A67, `A30` reuse)', () => {
   it('anchors to the first fragment box that has an area, not to a collapsed one', async () => {
-    await boot({ records: [recordFor('a1b2c3d4e5f6', 'dog. Second', 2)] });
+    await boot({ records: [recordFor('a1b2c3d4e5f6', 'dog. Second', {}, 2)] });
     const first = painter.paintedEntries()[0].fragments[0];
     caret = { node: first.node, offset: first.start + 1 };
     seam.setBoxes([COLLAPSED_BOX, BOX_B]);
