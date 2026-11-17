@@ -31,17 +31,23 @@
  * Teardown runs before painting, and it removes **only** names carrying the
  * extension prefix: `CSS.highlights` is a document-global map, and a page script's
  * own highlight names are not this extension's to delete.
+ *
+ * Nothing in this module rejects (task `t3-05` AC2, ruling `A75`): every stage that
+ * touches the page or the store is guarded where it is called, and a stage that throws
+ * ends the pass with an empty paint, a `paint teardown` and the code of that stage. The
+ * claim is pinned by `tests/content-paint-throw-safety.spec.ts`, not by this comment.
  */
 
-import type { PageLoadCode } from '../../core/entry-store-read';
+import type { PageEntriesResult, PageLoadCode } from '../../core/entry-store-read';
 import { loadEntries } from '../../core/entry-store-read';
 import type { StoragePort } from '../../core/storage-port';
+import type { Entry } from '../../core/entry';
 import { documentRangeForFragment } from '../capture/fragment-rect';
 import type { RangeForFragment } from '../capture/fragment-rect';
 import { currentAuthorName } from '../create/create-note';
 import { isPaintHighlightName } from './highlight-name';
 import { buildPaintPlan } from './paint-plan';
-import type { PaintedEntry, PaintPlan, SkippedEntry } from './paint-plan';
+import type { PaintedEntry, PaintPlan, PaintSkipReason, SkippedEntry } from './paint-plan';
 import { paintStyleOwnerOf } from './paint-style';
 import type { PaintStyleOwner } from './paint-style';
 import { documentPaintSurface } from './paint-surface';
@@ -61,9 +67,28 @@ export interface PagePaintOutcome {
 
 /** A live paint pass. */
 export interface PagePainter {
-  /** Runs one pass: read, resolve, tear down, paint. Never throws. */
+  /**
+   * Runs one pass: read, resolve, tear down, paint.
+   *
+   * **Cannot reject** (task `t3-05` AC2, `docs/state/t3-02-review.md` remark 4). The
+   * property is not decoration: `src/content/main.ts` runs `void painter.refresh()` at
+   * load and again in the `onCreated` handover, and neither call site has a rejection
+   * handler, so a rejecting pass is an unhandled rejection on somebody else's page.
+   * Every stage of a pass is therefore guarded at its call site here (ruling `A75`), and
+   * each of the four answers — an unreadable address, a storage read that threw, a
+   * resolve/measure/register stage that threw, a teardown that threw — is pinned by
+   * `tests/content-paint-throw-safety.spec.ts`. A failing pass paints nothing, tears
+   * down what it had already registered, writes nothing, and reports the code of the
+   * stage that failed; the entries stay stored, listed and deletable (rulings `A40`,
+   * `A66`).
+   */
   refresh(): Promise<PagePaintOutcome>;
-  /** Removes every highlight and rule this extension owns (ruling `A39`). */
+  /**
+   * Removes every highlight and rule this extension owns (ruling `A39`).
+   *
+   * Also non-throwing: a registry the page refuses to write is the same registry this
+   * teardown walks, and `refresh()` calls it on its own failure paths.
+   */
   clearPaint(): void;
   /** What the page paints right now: the hover targets of the tooltip, and the
    * repaint source for the editor of `t3-03`. */
@@ -138,8 +163,32 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
   let authorName: string | null = null;
 
   async function refresh(): Promise<PagePaintOutcome> {
-    const page = await loadEntries(input.port, input.url());
-    authorName = await currentAuthorName(input.port);
+    // `t3-05` AC2, ruling `A75`: every stage of a pass touches something the page owns
+    // — the address, the storage area, the DOM, `CSS.highlights`, the adopted sheet —
+    // and each stage is guarded where it is called, because this promise has no caller
+    // that can catch it. Each catch answers with an empty pass plus the code of the
+    // stage that failed, and the code is always one core already has: no new refusal
+    // code and no new wording comes out of this module.
+    let url: string;
+    try {
+      url = input.url();
+    } catch {
+      // No address, so no page key, so no page to paint: core's own code for that
+      // state is `url_unparsable`.
+      clearPaint();
+      return { pageKey: null, painted: [], skipped: [], readCodes: ['url_unparsable'] };
+    }
+
+    let page: PageEntriesResult;
+    try {
+      page = await loadEntries(input.port, url);
+      authorName = await currentAuthorName(input.port);
+    } catch {
+      // A read stage that threw is the same answer as a read that could not read: the
+      // pass has no trustworthy page state, so it paints nothing from it.
+      clearPaint();
+      return { pageKey: null, painted: [], skipped: [], readCodes: ['storage_unavailable'] };
+    }
 
     if (isUntrustworthyRead(page.codes)) {
       // The store did not answer for this pass, so nothing is painted from a page
@@ -158,27 +207,48 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       return { pageKey: page.pageKey, painted: [], skipped: [], readCodes: page.codes };
     }
 
-    const root = streamRoot();
-    const plan: PaintPlan =
-      root === null
-        ? { painted: [], skipped: [] }
-        : buildPaintPlan({ entries: page.entries, root, rangeFor });
+    // The resolve-measure-register stage: the part of the pass that asks the page for
+    // boxes and writes names into a document-global registry. A throw anywhere in it
+    // ends the pass, and `plan` keeps whatever this pass had already learned so the
+    // entries that were skipped for a known reason keep that reason.
+    let plan: PaintPlan = emptyPlan();
+    try {
+      const root = streamRoot();
+      plan =
+        root === null
+          ? emptyPlan()
+          : buildPaintPlan({ entries: page.entries, root, rangeFor });
+      registerPlan(surface, style, plan);
+    } catch {
+      clearPaint();
+      return {
+        pageKey: page.pageKey,
+        painted: [],
+        skipped: skippedForFailedPass(page.entries, plan),
+        readCodes: page.codes,
+      };
+    }
 
-    registerPlan(surface, style, plan);
     painted = [...plan.painted];
     return { pageKey: page.pageKey, painted, skipped: plan.skipped, readCodes: page.codes };
   }
 
   function clearPaint(): void {
-    if (surface !== null) {
-      for (const held of surface.heldNames()) {
-        if (isPaintHighlightName(held)) {
-          surface.clear(held);
+    try {
+      if (surface !== null) {
+        for (const held of surface.heldNames()) {
+          if (isPaintHighlightName(held)) {
+            surface.clear(held);
+          }
         }
       }
-    }
-    if (style !== null) {
-      style.clear();
+      if (style !== null) {
+        style.clear();
+      }
+    } catch {
+      // A teardown the page refuses is reported by the pass that called it, not here:
+      // `refresh()` is in its own failure handler at this moment, and a throw escaping
+      // the teardown would turn "paint nothing" back into an unhandled rejection.
     }
     painted = [];
   }
@@ -193,6 +263,36 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       return authorName;
     },
   };
+}
+
+/** A pass that decided nothing about any entry of the page. */
+function emptyPlan(): PaintPlan {
+  return { painted: [], skipped: [] };
+}
+
+/**
+ * What one failed pass reports about the entries of the page: every entry that is still
+ * stored and still listed, and for each of them the reason this pass already knew — the
+ * entry it found hidden stays `hidden`, the entry whose anchor is gone stays
+ * `anchor_not_found` — with `measurement_failed` for every entry this pass could not
+ * put on the page (ruling `A66`'s reason, reused rather than invented: the page refused
+ * to give this entry a place, which is what it did).
+ *
+ * No new code appears here, and nothing about the entry changes: the records stay in
+ * storage, stay in the popup list and stay deletable (rulings `A40`, `A66`).
+ */
+function skippedForFailedPass(
+  entries: readonly Entry[],
+  plan: PaintPlan,
+): SkippedEntry[] {
+  const known = new Map<string, PaintSkipReason>();
+  for (const skipped of plan.skipped) {
+    known.set(skipped.entryId, skipped.reason);
+  }
+  return entries.map((entry) => ({
+    entryId: entry.id,
+    reason: known.get(entry.id) ?? 'measurement_failed',
+  }));
 }
 
 /**

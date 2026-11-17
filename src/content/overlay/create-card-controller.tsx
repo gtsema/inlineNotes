@@ -41,6 +41,7 @@
 import { render } from 'preact';
 import { buildTextStream } from '../anchor/text-stream';
 import { captureSpan } from '../capture/selection-span';
+import type { CapturedSpan } from '../capture/selection-span';
 import { documentRangeForFragment, placementFragmentBox } from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
 import {
@@ -213,6 +214,25 @@ export function createCreateCardController(
     }
   }
 
+  /**
+   * Reads the selected span out of the page at the open moment (Flow 1 step 2).
+   *
+   * Guarded at the call site (task `t3-05` AC1, ruling `A75`): the text node the
+   * selection sits in may leave the document during the `await` of the author gate
+   * above, and a real engine then **throws** `InvalidAccessError` from
+   * `Range.intersectsNode` rather than answering `false`. `card-events.ts` runs `void
+   * controller.capture()`, so a rejection leaving this function is an unhandled
+   * rejection on a page that has no idea the extension exists. Flow 1's answer to "no
+   * usable span" is no card at all, so a throw answers the same way as a `null`.
+   */
+  function captureFromPage(selection: CapturedSelection): CapturedSpan | null {
+    try {
+      return captureSpan(buildTextStream(selection.root), selection.range);
+    } catch {
+      return null;
+    }
+  }
+
   async function capture(): Promise<void> {
     if (session !== null) {
       return;
@@ -225,7 +245,7 @@ export function createCreateCardController(
     if (authorName === null) {
       return;
     }
-    const span = captureSpan(buildTextStream(selection.root), selection.range);
+    const span = captureFromPage(selection);
     if (span === null) {
       return;
     }

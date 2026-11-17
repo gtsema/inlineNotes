@@ -40,7 +40,13 @@
  * - invent a name, a default or a repair (`spec :75` — that is `t4-02`);
  * - treat a `null` from `buildAnchor` as a storage failure: it means "there is no
  *   span to create", so the card never learns a code that would suggest the note
- *   was attempted.
+ *   was attempted;
+ * - swallow a page-boundary throw inside the capture module or inside core (ruling
+ *   `A75`, task `t3-05` AC1): `captureSpan` keeps calling `Range.intersectsNode` and
+ *   keeps propagating the `InvalidAccessError` a real engine throws for a boundary node
+ *   the page detached. This module is the call site that knows what that answer means
+ *   for a create, so the guard sits here and turns it into `selection_lost` — never
+ *   into a rejected promise the card cannot answer.
  */
 
 import type { EntryWriteCode } from '../../core/entry-store-write';
@@ -48,6 +54,7 @@ import { buildTextStream } from '../anchor/text-stream';
 import type { TextStream } from '../anchor/text-stream';
 import { locateAnchorInStream } from '../anchor/locate-anchor';
 import { captureSpan } from '../capture/selection-span';
+import type { CapturedSpan } from '../capture/selection-span';
 import { createEntryOnPage } from '../../core/entry-store-write';
 import { loadEntries } from '../../core/entry-store-read';
 import { loadSettings } from '../../core/settings-store';
@@ -106,13 +113,33 @@ export async function currentAuthorName(port: StoragePort): Promise<string | nul
  *
  * `{ ok: false, code: 'selection_lost' }` is the content-layer answer for "the
  * page no longer has that span": nothing was sent to core, nothing was stored, and
- * the card stays open with its text so the user can re-select.
+ * the card stays open with its text so the user can re-select. A page-boundary
+ * throw over a detached boundary node answers with the same code (task `t3-05` AC1,
+ * ruling `A75`).
  */
 export async function createNote(input: CreateNoteInput): Promise<CreateNoteResult> {
   const page = await loadEntries(input.port, input.url);
 
-  const stream = buildTextStream(input.root);
-  const span = captureSpan(stream, input.range);
+  // The two calls of this path that touch the page, guarded where they are called
+  // (task `t3-05` AC1, ruling `A75`). `Range.intersectsNode` throws `InvalidAccessError`
+  // in a real engine once the boundary node the card kept and the fragments of a
+  // freshly built stream no longer share a root: the site re-rendered the paragraph
+  // between the card opening and the save press. A test-only DOM implementation answers
+  // `false` for that same state, so no other test in this repository runs the throw;
+  // `tests/content-save-throw-safety.spec.ts` injects it. `buildTextStream` walks the
+  // same tree and is guarded with it for the same reason.
+  //
+  // The answer is the code the card already knows how to show: the page does not have
+  // that span. No code is invented, nothing is written, and the card stays usable —
+  // open, holding the draft, with its save button live — instead of stuck in `busy`.
+  let stream: TextStream;
+  let span: CapturedSpan | null;
+  try {
+    stream = buildTextStream(input.root);
+    span = captureSpan(stream, input.range);
+  } catch {
+    return { ok: false, code: 'selection_lost' };
+  }
   if (span === null) {
     return { ok: false, code: 'selection_lost' };
   }
