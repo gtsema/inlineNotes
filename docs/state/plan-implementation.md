@@ -315,3 +315,27 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   highlight → tooltip on a real article, no console workaround.** Stage 3's runtime blocker is closed; what remains
   observable is the editor (`t3-03`), the popup list and checkboxes (`t4-01`), SPA refresh (`t4-03`), and the stuck-card fix
   (`t3-05`).
+
+## Stage 5 — the note model becomes per-author (rulings `A93`, `A94`, `A96`)
+
+Opened 2026-11-18 from the user's improvement set (`docs/state/improvement-backlog.md`). The user is **not** consulted again
+until the whole set is implemented; the PM rules on anything new and records it.
+
+| Task | Slice (one verifiable behavior) | Spec / AC anchor | Children |
+|---|---|---|---|
+| `t5-01-author-overlap` | `assertCreatable` rejects a duplicate or an overlap **only against entries of the same `authorName`**; foreign overlaps become legal | `inline-comment-model.md` (overlap, duplicate) + `A93` | engineer, reviewer |
+| `t5-02-author-colors` | one paint name per author, color from a 6-color palette keyed by a deterministic hash of the name; the paint plan and the adopted stylesheet carry N rules instead of 1 | `content-overlay-ui.md` (painting) + `A94` (overturns `A28`) | engineer, reviewer |
+| `t5-03-tooltip-click-editor` | tooltip opaque on hover; **click opens the editor**; selecting text inside one's own note opens **nothing**; Flow 6 and `claimSelection` are retired with their pins | `content-overlay-ui.md` AC3 / Flow 4 / Flow 6 + `A96` | engineer, reviewer |
+
+## Stage 6 — the surfaces follow (rulings `A97`, `A95`, `A98`)
+
+| Task | Slice | Spec / AC anchor | Children |
+|---|---|---|---|
+| `t5-04-focus-on-open` | opening the card or the editor focuses its `textarea`; no page scroll; `Esc` / `Ctrl+Enter` unchanged | `content-overlay-ui.md` keyboard rule + `A97` (overturns `A74`) | engineer, reviewer |
+| `t5-05-popup-host-line` | the popup stops rendering the page host line; the address read and `tabs` stay | popup contract + `A98` | engineer, reviewer |
+| `t5-06-popup-author-groups` | one popup row per author with a count; the checkbox is an aggregate write over that author's entries; popup `Удалить` deletes that author's whole page set; a new named core operation owns that delete | popup contract + `A95` | engineer, reviewer |
+
+Order is fixed: `t5-01` before `t5-02` (overlaps must be legal before they are colored side by side), `t5-03` is independent,
+`t5-06` last (it moves visibility semantics). Gates at every acceptance: `npm run build`, `npm test`,
+`node scripts/check-agent-config.mjs`, plus `npm run typecheck`. The browser check happens **once, at the end**, and the user is
+invited then.
