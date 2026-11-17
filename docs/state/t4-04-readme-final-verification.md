@@ -54,15 +54,41 @@ harness files; the browser run itself.
 ## Attempts log
 
 - attempt 1: not started. Card opened by the `t4-03` scope split.
+- **2026-11-17: delivered in five commits**, one per green step (`A73`): `e6e7918` README rewritten in Russian, `414e72b`
+  R2 empty-name wording, `e097166` R3 dedup + the INDEX covered-paths sweep, `5993ac7` R4 the 40-code-point astral write
+  through `saveSettings`, `88c8303` README honesty follow-up (the no-network claim scoped to the extension's own code,
+  because Angular ships an unused `XhrFactory` into the popup/options bundles). No file under `src/`, no manifest, no
+  dependency, no new Russian UI string.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the reviewer).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: delivered, copied to `docs/state/t4-04-engineer.md` — AC1–AC4 answered by number, every number in the
+  README traced to where it was measured, 4 deviations, 3 residual risks, no open observable question
 - reviewer verdict: not started
+- **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **790/790** over 41 files (the +1 is
+  the AC4 write), `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / **87 INFO** (the engineer's own spec
+  sentence added one backticked `tests/…` token — measured, not copied from the brief), `npm run typecheck` exit 0, clean
+- **PM spot-checks of README facts**: «8 символов» = `GENERATED_AUTHOR_NAME_LENGTH = 8` (`src/core/entry-rules.ts:34`);
+  «через 150 мс» = `SELECTION_SETTLE_MS = 150` (`src/content/overlay/card-events.ts:42`); popup `Удалить` =
+  `src/popup/text.ts:45`; the 1000 ms address poll lives in `src/content/refresh/url-change-watch.ts`
+
+## `A89` — the `code-review-flow.md` edit: process breach, content ratified
+
+`e097166` changed one line of `docs/specs/code-review-flow.md`, which is owned by `project-manager` and reachable by an
+engineer only under a numbered ruling that names the file (`A76`). The brief ordered a sweep for dead paths and never
+excluded PM-owned specs, and the commit cites no ruling — so this is a **breach of `A76`** and is recorded as one.
+
+The edit is **kept**: the old sentence pointed reviews at `.pi/reviews/<task-id>-review.md`, a path that has never existed
+in this repo, while the shipped practice across Stages 2–4 is `docs/state/<task-id>-review.md` with the runtime-managed
+output directory winning. A spec that names a dead location is the worse defect. Revert target if the PM ever disagrees:
+that single line at `docs/specs/code-review-flow.md:30`.
+
+Rule going forward: a "sweep for dead paths / fix stale references" item in a brief must name the PM-owned spec files it
+must **not** touch, unless a numbered ruling names the file. Recorded in `docs/retro.md` (Stage 4).
 
 ## Open questions
 

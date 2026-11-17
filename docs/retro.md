@@ -126,3 +126,29 @@ Accepted: `t3-01-settings-read-core`, `t3-01b`, the `t3-01` card, `t3-02`, `t3-0
 - What went right: the numbered carried-fix checklist (`A72`) worked on every task it was applied to; the fix-slice +
   parent-closure re-check pattern closed `t3-02` without a forbidden third attempt; and `A75` turned a review remark into a
   fix for a defect **jsdom could not reproduce** (a real engine throws where jsdom answers `false`).
+
+## Stage 4 — popup, options, refresh, docs (2026-11-17)
+
+Accepted: `t4-01-popup-list`, `t4-02-options-name`, `t4-03-spa-refresh-docs`, `t4-03b-watch-pins`; `t4-04` delivered,
+review pending. 790 unit tests over 41 files; the page loop and the options screen are confirmed by the user in real Chrome;
+the six-item browser list is deliberately still open (`прогон будет позже`).
+
+- What went right and saved the stage: `t4-03` was **split before delegation** (code slice vs `t4-04` docs+verification),
+  because the card as written carried 5 AC plus a README plus a human verification run. The code slice finished inside one
+  hour; the unsplit shape is exactly what killed `t3-03` attempt 1 at the ceiling. A slice that ends with "and then a human
+  checks it in a browser" is two slices.
+- What failed: three runtime deaths in one stage, none of them a delivery failure — a wall-clock ceiling (`t3-03`), a
+  malformed provider SSE stream mid-sentence (`t4-01` run 1, nothing committed), and a model endpoint that was unreachable
+  twice (`t4-01` reviewer, connect timeout then `ENETUNREACH`). None cost an attempt (`A80`, `A85`). What made the recovery
+  cheap was commit-per-green-step: the reviewer's death lost analysis only, never a checkpoint.
+- What failed (the PM's brief again): the `t4-04` brief ordered a sweep for dead paths, and the sweep walked into
+  `docs/specs/code-review-flow.md`, which is PM-owned and reachable by an engineer only under a numbered ruling naming the
+  file (`A76`). The edit itself was correct (the spec pointed reviews at `.pi/reviews/`, which never existed here; practice
+  is `docs/state/<task-id>-review.md`), so it is ratified as `A89` — but a sweep item must name PM-owned specs as excluded.
+- What went right: the observable-behavior questions arrived **from the child as an interview** instead of being guessed by
+  the PM (`A81` not-injectable wording, `A82` spec outranks the task card, `A83` notice above a still-visible list, then
+  `A84` silence on a refused write). A task card that contradicts its spec is a PM bug: `A82` was that, and the card was
+  corrected rather than the code.
+- What went right: the docs slice caught its own over-claim. The README's "the extension makes no network requests" was
+  re-scoped to "the extension's own code does", because Angular ships an unused `XhrFactory` into the popup and options
+  bundles. A grep-true slogan is not a verified fact; a README number is only allowed if someone measured it in this run.

@@ -53,7 +53,7 @@ is confirmed on a real browser.
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
 | `t4-03-spa-refresh-docs` | **accepted** (`adfc8e9`+`79acb74`+`e0ae2ec`+`c2d74ab`, 778 tests, 0 blocking findings) — SPA/history re-resolve with a 1000 ms address poll, `storage.onChanged` repaint per record, options-name pickup on a loaded page, CF1 closed; `A87`/`A88` upheld by the reviewer | overlay AC8, model AC1 |
 | `t4-03b-watch-pins` | **accepted** (`a35e46f`, 789 tests, +11, comment-only `src/` diff, 0 blocking findings) — the trigger set is now a closed set (exact listener list + runtime `attachments`/`intervals` equality), `pageKeyOfPass()`'s `null` states pinned, the totality boundary named honestly | overlay AC8 pins |
-| `t4-04-readme-final-verification` | **opened by the same scope split, not started** — Russian README (build → load unpacked → permissions → limits → v1 limitations), spec surface clean (no dangling ids, R3 dedup), R2 empty-name wording, R4 the 40-code-point write; the PM runs the browser list with the user and quotes it | overlay AC9–AC10 surface, model docs |
+| `t4-04-readme-final-verification` | **delivered, review running** (`e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`, 790 tests, no `src/` file touched) — Russian README a stranger can follow, R2/R3/R4 closed, honest status with the browser run named as pending | overlay AC9–AC10 surface, model docs |
 
 ## Harness decisions taken by the PM during Stage 1
 
@@ -250,6 +250,14 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A84`: a **refused** popup write (`setVisible` / `deleteEntry`) stays silent — the popup re-reads the page and shows what
   the store says. Recorded as `Assumption:` because no spec line covers the state and inventing a sentence for it is a larger
   observable change than silence; overturning it costs one string + one spec line + one test.
+- `A86`: **the popup does not label stale entries in v1.** Staleness is a page-side locate result (`anchor_not_found` /
+  `anchor_stale`), while the popup reads only storage; the two paths that could deliver that knowledge (message passing, a service
+  worker mapping `tab.id` → page key) were rejected by `A49`/`A50`. The specified promise holds anyway: a stale entry stays listed
+  and stays deletable. This corrected the `A61` sentence that had promised a popup label.
+- `A89`: the `t4-04` engineer edited one line of the **PM-owned** `docs/specs/code-review-flow.md` while following a
+  "sweep for dead paths" brief item, with no ruling cited — a breach of `A76`, recorded as one. The edit is kept because the old
+  line named `.pi/reviews/…`, a path this repo never used, while practice is `docs/state/<task-id>-review.md`. A sweep item must
+  name the PM-owned specs it must not touch.
 - `A87`: an **additive pure helper in `src/core/storage-keys.ts`** (`storageChangeConcernsPage`) is key vocabulary, not a
   business-rule change, and belongs in core — the real violation would have been the content layer decoding slot keys itself. A
   brief that says "do not touch core" means "do not change a rule"; an additive helper must still be named as a deviation, as it was.
