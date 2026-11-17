@@ -67,14 +67,21 @@ The popup list (`t4-01`), `storage.onChanged` and SPA refresh (`t4-03`), any pag
   `node scripts/check-agent-config.mjs` — one test fails when `dist/` is missing.
 - This task is the first shipped consumer of `loadSettings`/`saveSettings` in the options layer and the only writer of
   `settings:v1` (`t3-01-settings-read-core` review handed the residual risks; AC5 of this task pins it).
+- **2026-11-17: attempt 1 delivered** (`1cee49a` code+tests, `b872d4a` specs; report copied to
+  `docs/state/t4-02-engineer.md`). PM re-ran the gates personally in the `A62` order: `npm run build` green,
+  `npm test` **650/650** over 34 files (+24 vs `t3-02b`), checker **0 errors** (36 INFO, all the standing
+  "planned path" tokens), `npm run typecheck` green, tree clean. Note: the report calls the handed-over baseline
+  "from `t4-01`" — wrong label, `t4-01` has not run; the real baseline is `t3-02b` (626). Numbers are right, the
+  attribution is a wording slip.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (attempt 1 engineer, delivered). Remaining: 1
+(reviewer). The report answers the five residual-risk bullets by number (`A72`).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: attempt 1 delivered, copied to `docs/state/t4-02-engineer.md`
 - reviewer verdict: not started
 
 ## Open questions
