@@ -24,8 +24,18 @@ Expected:
 - after a few `Tab`s the caret reaches the card's own controls in a sensible order: textarea → `Сохранить` → close/cancel;
 - the visible focus ring is inside the shadow host, not on the page;
 - `Enter` on `Сохранить` saves and the highlight appears.
-Result: `not verified`
+Result: **partially verified** — `focus on open` (`A74`) **passed**; the tab-reachability half **not verified**.
 Notes:
+- Observed: after a mouse selection, `Tab` moves focus **down through the page's own focusables**, not into the card; with no
+  selection `Tab` does not jump. Opening the card takes no focus and the page keeps its own tab flow — the `A74` half the spec
+  pins is confirmed on a real page.
+- The decisive probe for "the reader reaches the card with `Tab`" could not be run cleanly: `Shift+Tab` from the omnibox landed
+  on a Chrome UI item («Спросить гугл об этой странице»), not on the document's last tab stop. The rendered order
+  `textarea` → `Сохранить` → `Отмена` therefore stays pinned only in jsdom (`tests/content-create-card-controller.spec.ts`).
+- **Debt recorded (accepted by the user: «это не проблема»)**: the keyboard-only path into the card is "tab through the rest of
+  the page", because the overlay host is appended last in `<html>` (`src/content/overlay/host.ts:48`) and `A74` deliberately
+  forbids taking focus on open. Shortening it (autofocus, or a `Tab`-trap inside the card) is a behavior change with its own
+  spec line and task; `A74` is still an `Assumption:` pending the user's word.
 
 ## 2. Hover cost on a very long article (`pointermove`, unthrottled hit-test)
 
@@ -103,6 +113,8 @@ Notes:
 ## Outcome
 
 - Items passed: 0 / 6
+- Items partially verified: 1 — item 1 (`A74` no-focus-theft passed, tab reachability not verified)
 - Items failed: 0
-- Items not verified: 6
+- Items not verified: 5
 - New tasks opened from this run: none
+- Debt added by this run: the keyboard path into the card is "tab through the rest of the page" (accepted by the user).
