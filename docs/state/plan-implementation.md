@@ -49,7 +49,7 @@ is confirmed on a real browser.
 
 | Task | Slice | Owning spec AC |
 |---|---|---|
-| `t4-01-popup-list` | Angular popup: rows, per-entry checkbox, empty/restricted/name-required states | overlay AC7, AC10 |
+| `t4-01-popup-list` | **delivered, review running** (`52afe39`+`ecf9a26`+`6a3b3d7`; run 1 died on a provider stream error, recovered by `resume` under `A80`/`A85`, 734 tests green) — Angular popup: rows, per-entry checkbox, empty/restricted/name-required states | overlay AC7, AC10 |
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
 | `t4-03-spa-refresh-docs` | SPA/history refresh, `storage.onChanged`, README, final verification; **also carries** `t4-02` review remarks R2–R4 (spec-wording conflicts) and the three browser-only checks (`Tab` walk, `pointermove` cost, detached-node save) | overlay AC8, model AC1 |
 
@@ -236,6 +236,22 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
   counter; a fresh attempt is only for a brief whose approach changed. Related wording rule: a brief excludes the **task
   state file** by name, never `docs/state/*`, because the role's `output:` path lives there — the `t3-03` resumed run died
   exactly on that contradiction, after all its work was committed.
+- `A81`: the popup's not-injectable state gets one line, «На этой странице подсветка недоступна» — the Edge Cases sentence
+  requires the popup to **state** it, so "render nothing" was not a legal option.
+- `A82`: **a spec outranks a task card.** The card promised «Не: <name>" "per the overlay spec", the overlay spec ships the
+  ownership header instead; the popup reuses it (own «Вы», foreign the stored `authorName`) plus a `row--foreign` marker
+  pinned with the header text. When a card cites a spec and the spec says otherwise, the card is corrected, the engineer does
+  not resolve it, and the correction is recorded here.
+- `A83`: with no usable name the notice «Укажите имя в настройках» renders **above** the list and the list still renders (a
+  hidden list would make stored entries invisible and undeletable); the notice itself is the keyboard-reachable control that
+  calls `chrome.runtime.openOptionsPage()` and writes nothing.
+- `A84`: a **refused** popup write (`setVisible` / `deleteEntry`) stays silent — the popup re-reads the page and shows what
+  the store says. Recorded as `Assumption:` because no spec line covers the state and inventing a sentence for it is a larger
+  observable change than silence; overturning it costs one string + one spec line + one test.
+- `A85` (process): a provider **stream error** kills a child mid-sentence with nothing committed, exactly like a timeout.
+  Same recovery: `resume` the same session, hand the child the measured tree (`git status`, one-error typecheck summary) and
+  order commits per checkpoint. Two such recoveries in two consecutive stages (`t3-03` timeout, `t4-01` stream error) — the mitigation is
+  the commit discipline, not the model choice.
 - **Ruling `A77` (corrected after the `t3-03` re-review)**: the reviewer re-runs **only** `node scripts/check-agent-config.mjs`
   — the role is read-only and `code-review-flow.md` → Edge Cases plus `docs/project-profile.md:71` forbid it from running a
   build; briefs must not order a reviewer to build or test. A reviewer instead corroborates read-only (declaration counts,

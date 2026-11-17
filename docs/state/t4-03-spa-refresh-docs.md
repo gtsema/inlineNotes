@@ -95,6 +95,12 @@ expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
 4. **Selecting the text of your own note opens the editor, never a create card** — the `main.ts:78-79` wiring of the
    `claimSelection` hook is deliberately unpinned in jsdom (accepted debt: `docs/state/t3-03-review-attempt2.md` new
    remark 1), so the browser is where this handover is verified.
+5. **The popup against a real page** (asked by the `t4-01` engineer, residual risks 2–4): rows render with the author name,
+   the checkbox state and the ownership marker; `chrome.tabs.query` really returns `tab.url` with the `tabs` permission
+   (`A49`), and the install-time "read browsing history" warning is shown once and explained in the README (Russian).
+6. **A checkbox write repaints the page** — only after `t4-03` ships the content-script `storage.onChanged` listener; before
+   it the popup write is correct but the highlight stays until reload. The popup list itself is a snapshot (it does not
+   refresh while open): accepted v1 behavior unless the user rules otherwise.
 
 ## Open questions
 

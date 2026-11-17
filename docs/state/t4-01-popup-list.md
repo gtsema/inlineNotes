@@ -37,8 +37,11 @@ storage key by hand.
    `Удалить`. A scan test asserts no `chrome.storage` access in `src/popup/` outside the core port adapter.
 2. Unchecking a row calls `setVisible(… false)` and checking calls it with `true`; the entry stays in the list either
    way and the order does not change (`A1`, `A12`, overlay AC7).
-3. A row whose `authorName` differs from the current options name is marked as foreign (`Не: <name>` header wording per
-   the overlay spec) and offers no edit path; `Удалить` is still present (`A25`).
+3. A row whose `authorName` differs from the current options name is marked as foreign and offers no edit path; `Удалить`
+   is still present (`A25`). **Corrected by `A82` after delegation:** the card originally said «`Не: <name>` header wording
+   per the overlay spec», but the overlay spec has no such wording — it ships the ownership header (own = «Вы», foreign =
+   the stored `authorName`), which is what the popup now reuses, plus a `row--foreign` CSS marker pinned in the same test as
+   the header text. The card was wrong; the spec won.
 4. Empty and error states: no name in options → `Укажите имя в настройках` + a link to options (overlay AC10); no
    entries for the page → the empty-page message; the page is not injectable (`http(s)` only, or a URL core refuses) →
    the message that this page cannot show highlights while the list still renders (overlay Edge Cases).
@@ -67,15 +70,42 @@ messaging channel to the content script (`A50`).
 ## Attempts log
 
 - attempt 1: brief prepared; delegated after Stage 3 closes.
+- attempt 1 run 1 **died on a provider stream error** ("malformed server-sent event JSON"), mid-sentence, with the popup
+  source, the manifest and the toolchain pin written and **nothing committed**. `npm run typecheck` on the abandoned tree had
+  exactly one error (an unused declaration in the half-written test file).
+- attempt 1 run 2 = **`resume` of the same session** (`A80`, no new attempt burned), with the measured tree handed to the
+  child so it would not rediscover it, and a commit-at-each-green-checkpoint order. Delivered three commits:
+  `52afe39` (list over the core API), `ecf9a26` (`tabs` permission + its pins, `A49`), `6a3b3d7` (spec lines for
+  `A81`–`A83`).
+- the child **stopped and asked instead of inventing wording** for three states — answered as rulings `A81`, `A82`, `A83`
+  while it kept working; the report quotes each one as implemented.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1** (a `resume` is the same child, `A80`). Remaining: 1
+(the reviewer).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: delivered, copied to `docs/state/t4-01-engineer.md` — AC1–AC5 self-check shipped, 4 deviations declared
+  by number, 5 residual risks, 2 questions escalated (both answered by the PM below)
 - reviewer verdict: not started
+- **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **734/734** over 39 files (+37),
+  `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 79 INFO, `npm run typecheck` exit 0, tree clean
+
+## PM rulings on this task (asked by the engineer, answered before delivery)
+
+- `A81`: the not-injectable state gets a line, wording «На этой странице подсветка недоступна» — the Edge Cases sentence
+  requires the popup to *state* it, so "no line" was not a legal option.
+- `A82`: **the spec outranks the task card.** Foreign marking reuses the shipped ownership header (own «Вы», foreign the
+  stored name) plus a CSS row marker; no «Не: » prefix — a second way of naming one fact in a second layer is exactly what
+  grep anchors exist to prevent. The card's AC3 line was corrected accordingly.
+- `A83`: with no usable name the notice «Укажите имя в настройках» renders **above** the list and the list still renders —
+  hiding it would make stored entries invisible and undeletable; the notice itself is the keyboard-reachable control that
+  calls `chrome.runtime.openOptionsPage()` and writes nothing.
+- `A84` (answers the engineer's open question 1): a **refused** `setVisible`/`deleteEntry` stays silent — the popup re-reads
+  the page and shows what the store says. `Assumption:` recorded because no spec line covers it and inventing a sentence for
+  an unlisted state is a bigger observable change than staying silent. Overturning it = one string + one spec line + one test.
 
 ## Open questions
 
