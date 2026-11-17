@@ -131,12 +131,39 @@ SPA URL watching and `storage.onChanged` (`t4-03`), iframes.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 3 (engineer ×2 + reviewer ×1 in flight).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** (engineer ×2 + reviewer ×1). One slot remains, and
+fixing AC2 plus re-reviewing needs **2** — so closing this task honestly is over the ceiling by one child, which is
+renegotiation with the user, not bookkeeping. Per the delivery rule ("≤2 attempts per task; a third retry is forbidden")
+I stopped and asked instead of spending the last slot on a third engineer attempt.
 
 ## Verdicts
 
 - engineer report: copied to `docs/state/t3-01-content-create-card-engineer.md`.
-- reviewer verdict: running (`a582bf31`), range `d29f55b..5f4b82d`.
+- reviewer verdict: **changes requested** — 1 blocking finding, 6 non-blocking remarks; copied to
+  `docs/state/t3-01-content-create-card-review.md`. AC1, AC3, AC4, AC5 and both carried `t3-04` fixes: `pass`.
+  **AC2: `fail`.**
+
+## The blocking finding (its substance)
+
+`src/content/capture/selection-span.ts` trims the span with `streamText.charAt(begin)` and `charAt(finish - 1)` while its
+arguments are **code-point** offsets produced by `streamOffsetOfBoundary`. One astral code point earlier in the same
+stream shifts every probe by one code point, so on a page with an emoji above the article: the stored `anchor.text`
+loses its first character (`hello world` → `ello world`); a one-word selection can degenerate the range so **no card
+opens** or save answers `selection_lost`; and the narrowed candidate turns a `duplicate` answer into an `overlap` one
+(`A23`). The existing astral fixture placed the emoji **inside** the selection, which is why 523 tests missed it. The
+doc-comment above the function asserts the opposite of what the code does.
+
+## PM rulings on the review remarks
+
+- `A63` (remark 3): the **settle delay** must stop being a code-only number — the spec Terms row pins the value and a
+  test asserts the constant equals it, like the 8 px gutter and the 240-code-point warning threshold already do.
+- `A64` (remark 1): if measuring the selection throws because the page shrank the text node during the settle, the card
+  **closes** rather than staying mounted unpositioned — `A32` applied to a new trigger. Assumption, no answer given.
+- `A65` (remark 2): a zero-area fragment box does not participate in placement; if every box is zero-area, placement
+  falls back to the viewport rule instead of the top-left gutter. Tooltip geometry stays a `t3-02` problem.
+- Remark 4 (keyboard reachability untested, no focus move on open) and remark 5 (the `A29` re-derive-at-save property
+  has no test that mutates the DOM between open and save) are coverage gaps over correct behavior. Remark 6 (an id
+  collision on `#inlinenotes-overlay-host`) is a pre-existing `t1-02` path.
 
 ## Open questions
 
