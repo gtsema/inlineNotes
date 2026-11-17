@@ -73,15 +73,42 @@ closure, so it is not carried here.
 - **2026-11-17: delegated after `t4-02` (name unblocked the runtime) and after `t3-05` (the save path is no longer
   wedgeable), ahead of `t4-01`.** Gate order in this brief predates `A62`: `npm run build`, then `npm test`, then
   `node scripts/check-agent-config.mjs`.
+- attempt 1 **timed out at the 60-minute ceiling** with the whole editor uncommitted (10 modified files, 4 new modules, no
+  editor tests, `npm run typecheck` red on the `paint-plan` pins, plus a scratch probe file). Not a delivery failure — a
+  wall-clock one.
+- **Recovered by `resume` of the same child session (ruling `A80`)** with a narrowed order: delete the scratch probe, reach
+  green, commit, then AC by AC. Delivered three green commits: `8861e6f` (retire `PaintedEntry.tooltipBox` = carried fix 2),
+  `e25ef91` (`feat(t3-03): in-place editor and delete`), `14c58a7` (rename of the AC5 suite).
+- The resumed run then **died on a failed `edit` into this very file**, which its brief had declared out of scope while its
+  role writes its report into `docs/state/`. Everything was already committed at that moment; the report artifact survived.
+  Exclusion wording fixed in `delivery-planning` (see `A80` note).
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (attempt 1 timed out, `resume` delivered — a resume is
+a child, not a new attempt, `A80`). Remaining: 1 (the reviewer).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: delivered by the resumed run, copied to `docs/state/t3-03-engineer.md` (AC1–AC5 self-check shipped,
+  both carried fixes answered, one open question escalated, §7 lists what was deliberately not done, §8 residual risks)
 - reviewer verdict: not started
+
+## PM rulings and decisions on this task
+
+- **`A78` — what a successful re-selection stores: the editor owns a comment and a delete, nothing else.** A re-selection
+  decides the `overlap` answer only; a save writes `comment` and `updatedAt` and leaves `anchor`/`text` on the span the note
+  was created on; moving a note to other words is a delete plus a create. Chosen because it needs no `src/core/` change and
+  keeps the `text`/`anchor` consistency rule accepted in `t1-06` intact; the engineer escalated it instead of deciding it,
+  and the shipped code already implements and pins it. Overturning it = one core write + the spec sentence + one test.
+  Spec section rewritten from "Open question" to "Ruling `A78`" by the PM (single-slice authority), Terms row updated.
+- **`editor` Terms row**: the Russian label «Редактирование» removed — the shipped editor renders no heading, only the
+  card's controls plus `Удалить`. A grep anchor naming a string the UI never shows is a false anchor.
+- **Report §7 (no `tests/content-editor-edit-path.spec.ts`)**: accepted for now — the rules are pinned end-to-end in
+  `tests/content-editor-controller.spec.ts`; if the reviewer asks for module-level pins, that is a separate small slice, not
+  a stack-on.
+- **Report §8 residual risks**: inner-container scroll (same shape as the card's `A32` risk) and "the claim refers to the
+  last paint pass across a SPA repaint" both belong to `t4-03`, which owns SPA and `storage.onChanged`.
 
 ## Open questions
 

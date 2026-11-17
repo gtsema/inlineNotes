@@ -66,6 +66,15 @@ metadata:
   each green checkpoint, not one at the end; children never print a full test log (`--reporter=basic` plus `grep`/`tail`)
   and read large files by range; the PM reads report and review artifacts by section, never whole files over ~15 KB, and
   copies child artifacts with `cp` instead of through its own context.
+- **A wall-clock timeout is not an attempt; a `resume` is the cheapest recovery (ruling `A80`).** `t3-03` died at 60 min
+  with the whole editor uncommitted. The PM measured the tree, then revived the **same child session** (`resume`) with a
+  narrowed order: delete scratch files, reach green, commit, then continue AC by AC and stop early rather than leave
+  everything unwritten. That produced three green commits in one resumed run. Count a resume as one child, not as a new
+  attempt; a new attempt is only for a brief that changed its approach.
+- **Brief exclusions must not contradict the role's `output:` path.** The `t3-03` run died on a failed `edit` into
+  `docs/state/<task-id>.md` after its brief said "`docs/state/*` is out of scope" while its role writes its report to
+  `docs/state/engineer-report.md`. Write the exclusion precisely: *the task state file `docs/state/<task-id>.md` is the
+  PM's; the only `docs/state/` file you write is your own report artifact*.
 - Copy each review artifact into `docs/state/<task-id>-review.md`; a brief may only name paths that exist in the repo.
 
 ## Not for:
