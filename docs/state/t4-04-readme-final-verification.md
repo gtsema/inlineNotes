@@ -59,16 +59,24 @@ harness files; the browser run itself.
   through `saveSettings`, `88c8303` README honesty follow-up (the no-network claim scoped to the extension's own code,
   because Angular ships an unused `XhrFactory` into the popup/options bundles). No file under `src/`, no manifest, no
   dependency, no new Russian UI string.
+- **2026-11-17: review verdict `changes requested`** (1 blocking finding, 5 remarks) — see "Carried fixes for attempt 2".
+- **attempt 2 opened** for the blocking finding plus three README remarks plus the `A90` comment fix. No code behavior is in
+  scope.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the reviewer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (engineer, reviewer). Attempt 2 + its re-review land
+exactly on the ceiling of 4 — no third attempt is possible on this card.
 
 ## Verdicts
 
 - engineer report: delivered, copied to `docs/state/t4-04-engineer.md` — AC1–AC4 answered by number, every number in the
   README traced to where it was measured, 4 deviations, 3 residual risks, no open observable question
-- reviewer verdict: not started
+- reviewer verdict: **changes requested** — 1 blocking finding, 5 remarks (`docs/state/t4-04-review.md`). AC2 (R3 dedup),
+  AC3 (R2 wording), AC4 (the write test), the INDEX sweep and the `A89` line all `pass`; AC1 `fails` on one README sentence.
+  The reviewer fact-checked 25 README claims and pinned 24 of them to code or a test, and separately confirmed the honest
+  network scoping (`grep -c XMLHttpRequest dist/content.js` → 0, popup/options → 1 each, from `@angular/common/http`).
+  Checker re-run by the reviewer: 0 errors / 87 INFO.
 - **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **790/790** over 41 files (the +1 is
   the AC4 write), `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / **87 INFO** (the engineer's own spec
   sentence added one backticked `tests/…` token — measured, not copied from the brief), `npm run typecheck` exit 0, clean
@@ -89,6 +97,44 @@ that single line at `docs/specs/code-review-flow.md:30`.
 
 Rule going forward: a "sweep for dead paths / fix stale references" item in a brief must name the PM-owned spec files it
 must **not** touch, unless a numbered ruling names the file. Recorded in `docs/retro.md` (Stage 4).
+
+## Carried fixes for attempt 2 (numbered — the engineer answers each by number, `A72`)
+
+1. **Blocking finding 1 — `README.md:55` is false.** «адреса страниц никуда не записываются и не пишутся в консоль»
+   contradicts the storage layout: every stored entry carries `pageKey` (`src/core/entry.ts:48`, written at
+   `src/core/entry-store-write.ts:204`) and `pages:v1` holds page keys verbatim (`src/core/page-index.ts:20-27`); the README
+   itself says the opposite 15 lines later (`README.md:68-70`, «Ключ страницы — нормализованный адрес»). Rewrite the clause
+   to what is true: the **full** address (hash, tracking parameters) is not persisted, nothing leaves
+   `chrome.storage.local`, and the normalized page key **is** stored as part of every record. Keep the console half (`grep
+   "console\." src/` → 0 hits) — it is accurate.
+2. **Remark 1 — `README.md:17` invents a UI string.** «чекбокс “показывать подсветку”» does not exist: `src/popup/text.ts`
+   has no checkbox label and `src/popup/popup.component.ts:82-89` renders an unlabeled `<input type="checkbox">` inside a
+   `<label>` whose text is the author name. Describe it without guillemets (a checkbox with no label of its own; the row's
+   text is the author name). Do **not** invent a label — `A91` below.
+3. **Remark 2 — `README.md:19-20` is incomplete.** The generation-over story omits the one shape it does not cover: a
+   settings read that **failed** (`storage_unavailable`) leaves the field empty with its message and writes nothing
+   (`content-overlay-ui.md:131`, `src/options/author-name-service.ts`). Add that half-sentence.
+4. **Remark 3 — `README.md:30` under-counts.** «(манифест + 3 бандла)» vs the measured 10 files in `dist/` (two `index.html`,
+   two `3rdpartylicenses.txt`, two `prerendered-routes.json`), which `README.md:104` already states correctly. Make `:30`
+   agree.
+5. **Remark 5, under `A90` (comment-only, named file): `src/options/text.ts:12-14`** still says the options page shows
+   «Имя обязательно» for a refused name, which the amended spec (`content-overlay-ui.md:135`) now contradicts: no shipped
+   options control can trigger that code. Reword the comment to say the row is the total-map answer to a core refusal. **A
+   comment block only** — no string, no code, no behavior.
+
+## Rulings on this task
+
+- `A90`: **a comment-only exception** for `src/options/text.ts:12-14` in attempt 2. The file was out of scope by the brief,
+  but leaving a code comment that contradicts the spec is the exact defect class `A76` exists to prevent. The exception names
+  one file, permits comment text only, and must be cited in the commit message. Any `src/` change beyond that comment is out
+  of scope and a reason to stop.
+- `A91`: **the popup checkbox gets no label string in v1.** It has no caption today; its accessible name comes from the
+  wrapping `<label>`, which is the author name. Adding a Russian caption would be a new user-visible string needing a spec
+  line, a constant and a test, and would change what the popup renders — for an accessibility nicety no user has asked for.
+  The README therefore describes the real shape. Recorded as accepted v1 debt; a future a11y task may overturn it.
+
+- Remark 4 is a **PM shape miss, not engineer work**: the card had no `Carried-fix checklist` line, which
+  `docs/specs/code-review-flow.md` requires. Closed by the "Carried fixes for attempt 2" section above.
 
 ## Open questions
 

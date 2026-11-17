@@ -53,7 +53,7 @@ is confirmed on a real browser.
 | `t4-02-options-name` | **accepted** (`1cee49a`+`b872d4a`, attempt 1, 650 tests, 0 blocking findings) — Angular options: name field, validation, first-run random name; **confirmed on a real browser**, which unblocked the whole Stage 3 loop | overlay AC9, model AC9 |
 | `t4-03-spa-refresh-docs` | **accepted** (`adfc8e9`+`79acb74`+`e0ae2ec`+`c2d74ab`, 778 tests, 0 blocking findings) — SPA/history re-resolve with a 1000 ms address poll, `storage.onChanged` repaint per record, options-name pickup on a loaded page, CF1 closed; `A87`/`A88` upheld by the reviewer | overlay AC8, model AC1 |
 | `t4-03b-watch-pins` | **accepted** (`a35e46f`, 789 tests, +11, comment-only `src/` diff, 0 blocking findings) — the trigger set is now a closed set (exact listener list + runtime `attachments`/`intervals` equality), `pageKeyOfPass()`'s `null` states pinned, the totality boundary named honestly | overlay AC8 pins |
-| `t4-04-readme-final-verification` | **delivered, review running** (`e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`, 790 tests, no `src/` file touched) — Russian README a stranger can follow, R2/R3/R4 closed, honest status with the browser run named as pending | overlay AC9–AC10 surface, model docs |
+| `t4-04-readme-final-verification` | **changes requested → attempt 2 running** (attempt 1: `e6e7918`+`414e72b`+`e097166`+`5993ac7`+`88c8303`, 790 tests, no `src/` change) — 24 of 25 README claims pinned to code, one false claim found («адреса страниц никуда не записываются» vs the stored `pageKey`); attempt 2 fixes four README clauses + one stale code comment under `A90` | overlay AC9–AC10 surface, model docs |
 
 ## Harness decisions taken by the PM during Stage 1
 
