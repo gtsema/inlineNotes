@@ -70,13 +70,22 @@ the cross-tab race, Firefox/Edge.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the reviewer).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2**. No further child on this card; its three open remarks
+live in `t4-03b-watch-pins`.
 
 ## Verdicts
 
 - engineer report: delivered, copied to `docs/state/t4-03-engineer.md` — AC1–AC3 + CF1 answered by number, 7 deviations
   declared (including the one `src/core/` addition), 5 residual risks, no blocking open question
-- reviewer verdict: not started
+- reviewer verdict: **accepted**, 0 blocking findings, 7 non-blocking remarks (`docs/state/t4-03-review.md`). AC1 (incl. the
+  per-tick cost claim), AC2, AC3, CF1 all `pass`; no main-world patching and no page-DOM mutation confirmed; the `src/core/`
+  addition judged by the reviewer as core vocabulary (`A87` upheld); all five engineer residual risks judged acceptable v1 debt.
+  Checker re-run by the reviewer (0 errors / 86 INFO); counts corroborated read-only (41 files, 778 declarations vs 734,
+  no `.skip`/`.only`).
+- **task status: accepted** (`adfc8e9`+`79acb74`+`e0ae2ec`+`c2d74ab`); 2 of 4 children used.
+- **remark triage**: 1 (the "never torn down" clause) and 3 (the `pages:v1` consequence of `A88`) closed by the PM as
+  single-clause spec edits; 6 and 7 accepted as known shape; **2, 4, 5 moved to `t4-03b-watch-pins`** (two missing pins plus
+  one overstated comment) rather than stacked onto `t4-04`, which already carries R2–R4.
 - **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **778/778** over 41 files (+44),
   `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 86 INFO, `npm run typecheck` exit 0, tree clean
 
