@@ -136,6 +136,15 @@ must **not** touch, unless a numbered ruling names the file. Recorded in `docs/r
 - Remark 4 is a **PM shape miss, not engineer work**: the card had no `Carried-fix checklist` line, which
   `docs/specs/code-review-flow.md` requires. Closed by the "Carried fixes for attempt 2" section above.
 
+- `A92`: **attempt 2 traded one over-claim for another, and the PM fixed the clause personally.** The rewritten permissions
+  paragraph said «ключи хранилища адрес не содержат». That is false: a storage key is `notes:v1:<slotKey>`, and `slotKeyFor`
+  percent-escapes the page key so that `decodeURIComponent(slotKeyFor(pageKey)) === pageKey` for every untruncated key
+  (`src/core/slot-key.ts:8-11`, `src/core/storage-keys.ts:6-9`) — the raw URL never appears, but the address is there in an
+  escaped, reversible form. The README clause now says exactly that. Shape: a single truth clause in a documentation file,
+  same authority the PM used for the `t4-03` spec clauses; the engineer's commit `70cd3d6` is otherwise untouched.
+  Lesson recorded for the re-review: **a wording fix that removes one false claim must be re-read for the claim it replaces**,
+  because the fixer is allowed to be confidently wrong twice.
+
 ## Open questions
 
 - None blocking. If the user overturns `A84` (a message for a refused popup write), the string + spec line + test belong
