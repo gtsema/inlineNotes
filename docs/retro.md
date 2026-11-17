@@ -91,3 +91,14 @@
 - What went right: the **fix-slice** move (`t3-01b`) closed a blocking finding without a forbidden third attempt on the
   parent task, and its review answered the parent's AC re-check explicitly — that is the first time the process closed a
   loop through a review artifact rather than through a conversation.
+- What failed: the **PM session died of an uncompactable context** mid-`t3-02`, and the running engineer child died with
+  it, leaving a whole slice **uncommitted** (5 modules, 4 test files, 5 red tests, no report). Root cause: the parent kept
+  pulling large child artifacts and full test logs into its own context. Fix encoded (`A73`): PM reads artifacts by
+  section and copies child reports with `cp`; children must pipe gates through `--reporter=basic` + `grep`/`tail` and read
+  big files by range; every brief orders an **interim commit at each green checkpoint**. The attempt-2 brief repeated the
+  attempt-1 tree inventory instead of asking the child to rediscover it.
+- What failed: a **completion brief shipped four clean commits and silently dropped two carried fixes** listed in its own
+  text, and the engineer report neither delivered nor declared them (`t3-02` findings 1–3, all three of that one shape).
+  Size was not the cause — AC1–AC5 and every boundary check passed. Fix encoded (`A72`): briefs carry a numbered
+  carried-fix checklist, the report answers each number `done`/`skipped`, and the reviewer lists carried fixes one line
+  per number; a missing named deliverable is blocking regardless of the AC verdict.

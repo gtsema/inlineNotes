@@ -57,6 +57,15 @@ metadata:
 - Put the work order into every brief, not into a follow-up message: the child session does not see the negotiation.
 - Carry review findings forward by name (`N2`, `R6`, residual risk 4): the next brief repeats them, because the next
   engineer session has no memory of the previous review.
+- **A completion brief numbers its carried fixes and demands an answer for each one.** The `t3-02` attempt-2 run shipped
+  four commits, passed every AC and every boundary check, and **silently dropped two carried fixes** that its own brief
+  had listed in prose — and the report did not say they were skipped. Rule: the brief carries a numbered
+  `Carried fixes checklist`; the report must answer every number with `done` + file:line or `skipped` + reason; the
+  reviewer treats an unanswered number as a blocking finding even when all ACs pass.
+- **Crash-safety (a host session can die mid-task, and takes its child with it).** Every brief orders an interim commit at
+  each green checkpoint, not one at the end; children never print a full test log (`--reporter=basic` plus `grep`/`tail`)
+  and read large files by range; the PM reads report and review artifacts by section, never whole files over ~15 KB, and
+  copies child artifacts with `cp` instead of through its own context.
 - Copy each review artifact into `docs/state/<task-id>-review.md`; a brief may only name paths that exist in the repo.
 
 ## Not for:

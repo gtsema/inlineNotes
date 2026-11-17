@@ -40,7 +40,7 @@ is confirmed on a real browser.
 | `t3-01-content-create-card` | **accepted** (`43dd131`+`5f4b82d`, AC2 closed by `ec4ee45` in `t3-01b`) — shadow host, capture, create card, counter, message map | overlay AC1, AC9, AC11, model AC9 |
 | `t3-04-content-anchor-hardening` | **accepted** (`20cf8be`+`5aaa777`, attempt 1) — `A36` liveness, `A35` table cells, scan hygiene (`A51`/`A58`), 437 tests | closes `t2-02` + `t3-01` remarks |
 | `t3-01b-content-offset-domain-fix` | **accepted** (`ec4ee45`+`e1f0f94`, attempt 1, 548 tests) — code-point-domain trim, astral-before-selection fixtures, `A63`–`A65` | closes the `t3-01` card blocking finding |
-| `t3-02-content-highlight-tooltip` | CSS Highlight painting, frame, hover tooltip, mine vs foreign header | overlay AC2, AC3 |
+| `t3-02-content-highlight-tooltip` | **changes requested, card held open** (`bc2106c`+`0f1e496`+`bd9ac81`+`ebb8caa`, attempt 2 after a host crash killed attempt 1) — paint pass over one stream, per-entry highlight names, hover tooltip, ownership header; AC1–AC5 and every boundary check pass, **two carried fixes vanished** → closure proposed as `t3-02b` | overlay AC2, AC3 |
 | `t3-03-content-editor` | editor for existing entry, save/cancel/delete, overlap message, re-select | overlay AC4, AC5, AC6, model AC7, AC8, AC11 |
 
 ## Stage 4 — extension UI + refresh + docs. Done-criterion: the full loop works offline on an arbitrary article.
@@ -185,3 +185,19 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A70` (PM correction, before delegating `t3-02`): painting uses **one named highlight per entry**
   (`inlinenotes-<entryId>`), as `content-overlay-ui.md` line 47 and rulings `A38`/`A39` already say. The `t3-02` brief
   had been written with "a single highlight name", which contradicted the spec; the spec wins, the brief was fixed.
+- `A71` (**accepted PM decision**, `t3-02` review remark 2 context): the engineer split `content-overlay-ui.md` AC3 and
+  Flow 4 into "shipped half" (hover → opaque) and "editor half → `t3-03`, not shipped" instead of deleting the promise.
+  Accepted: the editor promise moves into the `t3-03` spec slice, which must mark AC4/AC5 and Flow 5/6 as shipped in the
+  commit that ships them. A spec that describes unshipped behavior as current is debt, not a lie — but it must be labeled.
+- `A72` (**process fix**): every brief carries a numbered **carried-fix checklist**, and the engineer report must answer
+  each number with `done` + `path:line` or `skipped` + reason. A named deliverable missing from the diff is a blocking
+  finding even when all ACs pass; a report silent about it is a finding of its own. Encoded in
+  `.pi/skills/delivery-planning/SKILL.md` and `.pi/skills/code-review-checklist/SKILL.md`.
+- `A73` (**process fix, host crash**): the Stage 3 PM session died because its context became uncompactable, and the
+  running engineer child died with it, leaving an uncommitted slice. Three rules now hold: an **interim commit at every
+  green checkpoint** (not one at the end); children never print a full test log and read large files by range; the PM
+  reads artifacts by section and copies child reports with `cp` instead of through its own context.
+- **Open budget question (asked, unanswered at the time of writing):** closing `t3-02` findings 1–2 needs a 4th child on
+  that card and its re-review a 5th, above the ×2 ceiling, and a third attempt on the task is forbidden. Proposed:
+  `t3-02b-carried-test-fixes` (tests/spec only, own budget) + a narrow parent-closure re-check, the way `t3-01` was
+  closed. Alternative: the user raises the `t3-02` ceiling to 5.

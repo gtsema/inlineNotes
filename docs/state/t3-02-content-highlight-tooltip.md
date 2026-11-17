@@ -55,8 +55,10 @@ mutated for painting: the only element the extension owns is the single overlay 
 ## AC (5 substantive + gates)
 
 1. Re-resolve for one page: load the page's entries through core, build the stream **once**, resolve every anchor, and
-   produce one paint pass: visible + resolvable entries become `Range`s in document order inside the single highlight
-   name; `anchor_not_found` / `anchor_stale` produce nothing (spec → Staleness, ruling `A40`).
+   produce one paint pass: visible + resolvable entries become `Range`s in document order, each entry in its own
+   `inlinenotes-<entryId>` name (`A70`; the word "single highlight name" here contradicted `A70` and the spec —
+   reviewer remark 1, PM amended the task file; code and spec were already correct);
+   `anchor_not_found` / `anchor_stale` produce nothing (spec → Staleness, ruling `A40`).
 2. No page mutation beyond the two owned elements: after a paint pass, no element outside the shadow host and the
    single paint stylesheet was added, removed or attribute-changed (rulings `A38`/`A41`), and the paint stylesheet
    contains only `::highlight(…)` rules with the `inlinenotes-` prefix.
@@ -114,6 +116,14 @@ The editor (save/cancel/delete, `t3-03`), popup and options (Stage 4), SPA URL w
   uncompactable and took the child with it (see `docs/retro.md`, Stage 3 crash entry). No report
   was written, **no commit was made**. The tree still carries the whole attempt-1 slice.
 - attempt 2: completion brief below; the attempt-1 code is kept, not rewritten.
+- attempt 2 **delivered** (`2026-11-17`, commits `bc2106c`, `0f1e496`, `bd9ac81`, `ebb8caa`; report copied to
+  `docs/state/t3-02-engineer.md`). PM re-ran the gates on the final tree personally: `npm run build` green,
+  `npm test` **619/619** over 33 files, checker **0 errors**, `npm run typecheck` green, tree clean.
+- review `docs/state/t3-02-review.md`: **changes requested**. AC1–AC5 all **pass**; every boundary check
+  (`A36`, `A38`–`A41`, `A66`–`A70`, `N7`, DOM / network / dependency / scope / UI-string discipline)
+  **passes**; 2 of 4 carried fixes pass. Three blocking findings, all one shape: **two carried fixes silently
+  vanished** (1–2) and **the report did not disclose the omission** (3). No defect was found in the shipped
+  painting or tooltip code.
 
 ## Attempt 1 delivered state (uncommitted, 2026-11-17 12:36)
 
@@ -194,13 +204,19 @@ stylesheet.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **2** (attempt 1 engineer — crashed,
-delivered an uncommitted tree; attempt 2 engineer — completion). Remaining: 2 (reviewer + 1 fix).
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **3** — attempt 1 engineer (host crash, uncommitted
+ tree), attempt 2 engineer (completion), reviewer (changes requested). Remaining: **1**. A fourth child (the engineer
+ who closes findings 1–2) is legal; the **re-review that must follow it** would be child 5, above the ceiling, and a
+ third attempt on this task is forbidden by the delivery rule. So the closure does not fit on this card: it needs a
+ separate fix slice (`A48`, precedent `t3-01b`) with its own budget, or the user lifting the ceiling.
+ **Put to the user as a question, not decided silently.**
 
 ## Verdicts
 
-- engineer report: attempt 1 crashed (no report, no commit); attempt 2 in flight
-- reviewer verdict: not started
+- engineer report: attempt 1 crashed (no report, no commit); attempt 2 report in `docs/state/t3-02-engineer.md`
+- reviewer verdict: **changes requested** (copied to `docs/state/t3-02-review.md`)
+- parent status: **held open** — the painting and tooltip halves are verified good and stay committed; the card is not
+  accepted until carried fixes 1–2 are closed, exactly as `t3-01` was held open until `t3-01b` was accepted
 
 ## Open questions
 
@@ -211,3 +227,18 @@ delivered an uncommitted tree; attempt 2 engineer — completion). Remaining: 2 
   the same commit. `t3-02` must state in its report which variant shipped.
 - Whether the tooltip follows text selection inside itself (it must not open the create card) — `t3-03` owns that
   interaction; recorded so the two slices do not collide on the `selectionchange` handler.
+- **Budget question (blocks the next move).** Closing findings 1–2 costs one engineer child; the re-review costs a fifth.
+  **Option 1 (PM recommendation):** a new task `t3-02b-carried-test-fixes` with its own budget — test-or-spec only, no
+  production code: (i) a tab-order/`aria` test for an open create card, or the spec sentence declaring that native tab
+  order covers the controls; (ii) a save-moment test that mutates the DOM between open and `Сохранить` and pins the `A29`
+  re-derive; (iii) the report-checklist rule so a carried item cannot vanish silently. The `t3-02` card is then closed by
+  a narrow parent-closure re-check inside the `t3-02b` review (precedent: `t3-01`). **Option 2:** the user lifts the
+  `t3-02` ceiling to 5 and the fix runs on this card. Least-risky default if unanswered: Option 1.
+- Carried to `t3-03-content-editor` (PM decisions on `t3-02` remarks 2–4): mark spec AC4/AC5 and Flow 5/6 as shipped or
+  not-yet-shipped in the commit that ships the editor; decide `PaintedEntry.tooltipBox` (`paint-plan.ts:69-77`, no shipped
+  consumer) — keep as the pass snapshot the editor can use, or delete; pin the `refresh()` "never throws" claim
+  (`page-painter.ts:70`, `main.ts:57` runs it unhandled) with one guard or one test.
+- Carried to the **Stage 3 smoke checklist** (smoke-only items, remark 5 — jsdom cannot answer them): whether
+  `::highlight()` rules apply through an adopted sheet (the only trigger for `A41` variant 2); shadow retargeting of the
+  tooltip's own pointer events; an unthrottled `pointermove` that re-measures every fragment of the hovered entry on a
+  long article.

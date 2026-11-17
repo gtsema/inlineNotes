@@ -16,6 +16,9 @@ metadata:
 - Produce one line per acceptance criterion: `pass`, `fail`, or `not covered by tests`.
 - Separate blocking findings from non-blocking remarks and number the blocking ones.
 - Check that tests exist for every rule the spec marks testable, and that the gates were run.
+- Check the brief's **carried-fix checklist** one line per numbered item. A deliverable the brief names and the diff does
+  not contain is a **blocking finding even when every AC passes**, and a report that neither delivers nor declares the
+  item is a finding of its own (`t3-02` findings 1–3: four clean commits, two carried fixes vanished, report silent).
 - Check repo boundaries that this project cares about, listed below.
 - Record the verdict as `accepted`, `changes requested`, or `blocked`.
 
@@ -48,6 +51,8 @@ metadata:
 
 ## Output style
 
-- Artifact sections: Verdict, AC check (one line per numbered criterion), Blocking findings (numbered, with `path:line` or spec section), Non-blocking remarks, Evidence (paths and commands quoted).
+- Artifact sections: Verdict, AC check (one line per numbered criterion), Carried fixes (one line per numbered item from
+  the brief), Blocking findings (numbered, with `path:line` or spec section), Non-blocking remarks, Evidence (paths and
+  commands quoted).
 - No diff restating, no praise padding, no suggestions without a referenced finding.
 - If evidence is missing, say which artifact or command output is missing and stop.
