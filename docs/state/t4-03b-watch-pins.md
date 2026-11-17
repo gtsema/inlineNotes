@@ -35,15 +35,20 @@ any change to a core rule; the popup, options, README; the browser verification 
 ## Attempts log
 
 - attempt 1: not started. Card opened by the `t4-03` acceptance.
+- **2026-11-17: delivered in one commit** `a35e46f` — `src/core/storage-keys.ts` comment-only (+10/−2), four test files
+  extended; every other shipped module byte-identical to `4d05bdf`.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: **1**. Remaining: 1 (the narrow review).
 
 ## Verdicts
 
-- engineer report: not started
+- engineer report: delivered, copied to `docs/state/t4-03b-engineer.md` — three items answered by number, the load-bearing
+  proof for AC1 named, **no behavior change** (verified by the PM: the only `src/` diff is a comment block)
 - reviewer verdict: not started
+- **PM gates re-run personally** (`A77`): `npm run build` green (10 files), `npm test` **789/789** over 41 files (+11),
+  `node scripts/check-agent-config.mjs` 0 errors / 0 warnings / 86 INFO, `npm run typecheck` exit 0, tree clean
 
 ## PM work already done for this task
 
