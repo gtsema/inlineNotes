@@ -74,3 +74,20 @@
 - What went right: the completion-brief pattern converted both timeouts on attempt 2 without losing code, and review
   artifacts copied into `docs/state/` became the actual hand-off contract (`t2-02` → the selection-to-stream contract in
   `t3-01`, `t2-03` → the `ResolvedSpans` shape), which is what the process was supposed to produce.
+
+## Stage 3 (interim, recorded before the stage closes)
+
+- What failed: a **whole class of offset-domain bugs survived 523 green tests** because the astral fixture put the emoji
+  *inside* the selection instead of before it. Fix encoded: review briefs now ask per fixture "would this have failed on
+  the pre-fix code?" and the reviewer answers it as a finding if not (`t3-01b` check list).
+- What failed: the **PM brief contradicted the spec** — `t3-02` was written with "a single highlight name" while
+  `content-overlay-ui.md` line 47 and `A38`/`A39` say one named highlight per entry (`A70`). Fix encoded: a brief quotes
+  the spec line it implements; where they disagree, the spec wins and the brief is corrected *before* delegation.
+- What failed: a **doc-comment asserted the opposite of the code** for the second time (`t3-01b` remark 1, after the
+  `t3-01` finding was exactly that). Fix encoded: a fix commit rewrites the comment of the function it fixes, and the
+  inaccurate clause is tracked as accepted debt, not left in a remark list.
+- What failed: the engineer report's per-file test counts did not add up to the quoted total. Fix encoded: the report
+  format now requires per-file counts that sum to the total (`t3-02` brief onward).
+- What went right: the **fix-slice** move (`t3-01b`) closed a blocking finding without a forbidden third attempt on the
+  parent task, and its review answered the parent's AC re-check explicitly — that is the first time the process closed a
+  loop through a review artifact rather than through a conversation.
