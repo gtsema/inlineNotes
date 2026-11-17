@@ -67,16 +67,24 @@ measurement, manifest, dependencies, `.pi/`, `docs/project-profile.md`, `docs/st
 
 ## Attempts log
 
-- attempt 1: brief prepared; delegated immediately (parent task is blocked on this slice).
+- attempt 1 (`67e2ea5e`): delivered in two commits as ordered — `ec4ee45` (9 files, +739/−55) and `e1f0f94`
+  (3 files, +45/−10). Tree clean. PM gates on `e1f0f94` in the `A62` order: build green (self-contained `dist/`,
+  10 files), `npm test` **548 passed**, checker `0 / 0 / 28 INFO`, `npm run typecheck` clean.
+  Shape of the fix: `trimStreamRange` crosses the offset domain once in each direction with the existing core helpers
+  (`utf16IndexAt` out, `codePointOffsetAt` back), no new model, no `src/core/` change; the false doc-comment was
+  rewritten. `firstFragmentBox` became `placementFragmentBox` (skips zero-area boxes, `A65`) and `fragmentBox` is
+  exported as the one measurement seam the paint pass must reuse; the anchor box is now measured **before** anything is
+  mounted, with "threw" and "no box" kept as distinct answers (`A64`); `placeCardInViewport` reuses `placeCard` rather
+  than adding a second placement model.
 
 ## Delegation count
 
-expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 0.
+expected 1 engineer + 1 reviewer = 2; ceiling (×2) = 4. Used: 2 (engineer ×1 + reviewer ×1 in flight).
 
 ## Verdicts
 
-- engineer report: not started
-- reviewer verdict: not started
+- engineer report: copied to `docs/state/t3-01b-engineer.md`.
+- reviewer verdict: running (`edd47b33`), range `64274e4..e1f0f94`; the review must also answer whether the parent task's AC2 can be re-verified as `pass`.
 
 ## Open questions
 
