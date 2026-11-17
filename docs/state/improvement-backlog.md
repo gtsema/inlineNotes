@@ -64,3 +64,41 @@ B6 (the host line):
 
 Not started. The browser run (`docs/state/browser-verification-run.md`) finishes first. B6 was added by the user during the run
 on the same date.
+
+## Answers and rulings (2026-11-18, the user answered the pool)
+
+The user's word on process: «Делай все задачи и привлекай меня только для проверки после реализации всего. Если какие-то вопросы
+в процессе — решай сам, но зафиксируй.» So the PM rules on the open questions below and does not interrupt the user until the
+whole set is implemented and needs a browser check.
+
+- `A93` (**B1**, answers 1–2 = defaults): the overlap and duplicate checks become **per author**. Author identity is exact
+  `authorName` string equality, the same identity the edit-rights rule uses; two people named «Я» are one author. A candidate
+  span is rejected only when it intersects or duplicates an entry **whose `authorName` equals the current name**. Selections over
+  foreign text stay legal and may overlap foreign entries.
+- `A94` (**B2**, answers 3–5 = defaults): one highlight name **per author**, colored from a fixed **6-color palette** chosen by
+  a deterministic hash of `authorName`, so the same author keeps the same color across pages and reloads. Own notes get **no**
+  extra page marker (the tooltip header already says «Вы»). Where an own highlight and a foreign highlight overlap, the blend the
+  CSS Highlight API produces is accepted; no z-order control is invented.
+- `A95` (**B3**, answers 6–9): the popup renders **one row per author on this page** — the author name (own row «Вы») plus the
+  count of that author's entries («Вася — 10»). The row checkbox toggles **all** of that author's entries on the page; it reads as
+  checked only when every one of them is visible. `Удалить` on a popup row deletes **every entry of that author on this page**;
+  `Удалить` inside the note card deletes **only that note**. The group does not expand: the popup has no second level in v1.
+  Shape decision: `visible` stays on the entry (no storage migration); the group checkbox is an **aggregate write** over that
+  author's entries, and the core gains one named operation for a by-author delete so the popup does not loop deletes itself.
+- `A96` (**B4**, answers 10–11): the hover tooltip is **opaque from the first hover**; clicking the tooltip **opens the editor of
+  that note**. And, per the user's sentence «выделение подсвеченной части не делает ничего»: selecting text inside **one's own**
+  highlighted note opens **nothing**. **Flow 6 and the `claimSelection` handover are retired** — its pins go with it. Foreign
+  highlighted text is not special: selecting it opens the create card (allowed by `A93`). The tooltip keeps hiding on scroll and
+  keeps not blocking text under the cursor; only the opacity and the click answer change. `src/content/overlay/tooltip-style.ts:65`
+  already carries `pointer-events: auto`, so the click is reachable without touching the host's `pointer-events: none`.
+- `A97` (**B5**, answers 12–13): opening the create card **and** the editor moves focus into their `textarea`. **`A74` is
+  overturned** — the user asked for the intrusion. Two guard rails: the page must not scroll when focus moves (the overlay host is
+  fixed-position, verify in the browser), and `Esc` / `Ctrl/Cmd+Enter` keep answering an open card. The keyboard-path debt from
+  browser item 1 disappears with this ruling.
+- `A98` (**B6**, answer 14): the popup's page-host line is removed entirely. The active-tab address **read** stays (`A49`), so the
+  `tabs` permission stays; the popup contract spec line loses its host half.
+
+## Status
+
+Ruled and **scheduled**: Stage 5 = `t5-01-author-overlap`, `t5-02-author-colors`, `t5-03-tooltip-click-editor`; Stage 6 =
+`t5-04-focus-on-open`, `t5-05-popup-host-line`, `t5-06-popup-author-groups`. See `docs/state/plan-implementation.md`.
