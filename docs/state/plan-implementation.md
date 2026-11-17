@@ -160,3 +160,16 @@ Stage 3 is 4 tasks by agreement, not by a silent PM override. Order: `t3-01-sett
 - `A60` (t4-03): `storage.onChanged` triggers a re-read and repaint only for this page's slot key and `settings:v1`; it
   is not a merge, the cross-tab race stays a documented v1 limitation.
 - `A61` (t4-03): stale entries keep their popup row and stay deletable; only the Russian wording is added here.
+- `A59` still **unanswered by the user** (t4-03): SPA detection. The default (poll `location.href` every 1000 ms plus
+  `popstate`/`visibilitychange`) is applied as an assumption; one constant to revert.
+- `A62` (t3-04 review remark 1): the green gate is an **ordered** sequence — `npm run build`, then `npm test`, then
+  `node scripts/check-agent-config.mjs` — because one test fails when `dist/` is missing. Recorded in the profile.
+- `A63` (t3-01 card review remark 3): a user-visible timing may not live only in code — the `settle delay` value is
+  pinned in the spec Terms and asserted against the constant.
+- `A64` (**user confirmed 2026-11-16**): if measuring the selection throws during the settle, the card closes; no card
+  without coordinates.
+- `A65` (**user confirmed 2026-11-16**): zero-area fragment boxes do not participate in placement; all-zero falls back to
+  the viewport rule.
+- The user chose a **separate fix slice `t3-01b`** instead of spending the parent task's last child on a third engineer
+  attempt, which the delivery rule forbids. Stage 3 is 6 tasks; `t3-01-content-create-card` stays `changes requested`
+  until `t3-01b` is accepted.
