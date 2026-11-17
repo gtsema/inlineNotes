@@ -65,8 +65,13 @@ export interface PaintedEntry {
   /** Every fragment of the span, in document order (ruling `A36`). */
   readonly fragments: readonly PaintedFragment[];
   /**
-   * The box the tooltip is placed against: the first fragment box that has an area,
-   * or `null` when no fragment has one (ruling `A67`).
+   * The paint pass's own answer to the tooltip-anchor rule: the first fragment box
+   * that has an area, or `null` when no fragment has one (ruling `A67`).
+   *
+   * It is a record of what this pass measured, not the box the visible tooltip is
+   * placed against: the tooltip of `t3-02` measures its anchor again at hover time,
+   * because every box measured here stops describing the text it was measured against
+   * as soon as the page scrolls.
    */
   readonly tooltipBox: Box | null;
 }
@@ -189,6 +194,10 @@ function measureFragments(
  * way the create card is (ruling `A65`), because a tooltip describes a span the
  * reader is pointing at, and there is nothing to point at. The entry stays stored,
  * stays in the popup list and stays deletable.
+ *
+ * The shipped tooltip reaches the same answer by the same walk at hover time
+ * (`placementFragmentBox` in `capture/fragment-rect.ts`); this is the pass's snapshot
+ * of that rule, and the place where `A67` is pinned for the plan itself.
  */
 export function tooltipAnchorOf(fragments: readonly PaintedFragment[]): Box | null {
   for (const fragment of fragments) {

@@ -35,7 +35,21 @@
  * the two offset domains are crossed.
  */
 
-import type { TextFragment } from '../anchor/text-stream';
+/**
+ * What a measurement needs of a `text fragment`: the text node and the node-local
+ * UTF-16 offsets inside it.
+ *
+ * `TextFragment` of `text-stream.ts` satisfies this shape, and so does the
+ * `PaintedFragment` of the paint pass, so the create card, the paint pass and the
+ * tooltip anchor are measured by one function over one seam. The shape deliberately
+ * has no `streamStart` / `streamEnd`: those are code points, and a measurement module
+ * that could see them is a module that can hand one to `Range.setStart`.
+ */
+export interface FragmentOffsets {
+  readonly node: Text;
+  readonly start: number;
+  readonly end: number;
+}
 
 /** A viewport-aligned box in CSS pixels. */
 export interface Box {
@@ -72,7 +86,7 @@ export type DocumentRangeForFragment = (node: Text, start: number, end: number) 
  * paint pass (`t3-02`) is expected to reuse: the numbers it hands the range factory
  * are the node-local UTF-16 offsets of the clipped fragment.
  */
-export function fragmentBox(fragment: TextFragment, rangeFor: RangeForFragment): Box {
+export function fragmentBox(fragment: FragmentOffsets, rangeFor: RangeForFragment): Box {
   const box = rangeFor(fragment.node, fragment.start, fragment.end).getBoundingClientRect();
   return { left: box.left, top: box.top, width: box.width, height: box.height };
 }
@@ -96,7 +110,7 @@ export function fragmentBox(fragment: TextFragment, rangeFor: RangeForFragment):
  * owns that decision (ruling `A64`: the card closes).
  */
 export function placementFragmentBox(
-  fragments: readonly TextFragment[],
+  fragments: readonly FragmentOffsets[],
   rangeFor: RangeForFragment,
 ): Box | null {
   for (const fragment of fragments) {

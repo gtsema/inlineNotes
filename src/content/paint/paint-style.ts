@@ -48,8 +48,9 @@ import { PAINT_NAME_PREFIX } from './highlight-name';
  * inherited property and is not applied there, which is why the frame is drawn as an
  * underline instead of a border. Both colours are `rgba`, and neither depends on the
  * entry, its author or its `visible` flag: own and foreign entries look identical, and
- * the only place the two are told apart is the tooltip header (ruling `A43` of
- * `docs/specs/content-overlay-ui.md` -> "Ownership").
+ * the only place the two are told apart is the tooltip header
+ * (`docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Own entries and
+ * foreign entries are visually distinguished only in the tooltip header").
  */
 export const PAINT_DECLARATIONS: readonly string[] = [
   'background-color: rgba(122, 162, 247, 0.26);',

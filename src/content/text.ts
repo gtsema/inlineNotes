@@ -40,6 +40,15 @@ export const CONTENT_STRINGS = {
   save: 'Сохранить',
   /** Cancel button of the create card and of the editor. */
   cancel: 'Отмена',
+  /**
+   * Header of a tooltip or editor over the reader's own entry (`content-overlay-ui.md`
+   * -> Rules -> "Own entries and foreign entries are visually distinguished only in
+   * the tooltip header"). A foreign entry prints its stored author name instead, and
+   * that name is data, not a string of this layer.
+   */
+  ownEntry: 'Вы',
+  /** Accessible name of the hover tooltip (task `t3-02` AC3). */
+  tooltipLabel: 'Заметка',
 } as const;
 
 /**
