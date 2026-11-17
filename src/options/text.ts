@@ -10,9 +10,11 @@
  * the map cover each other and no call site can invent wording.
  *
  * One wording per surface, never a third variant (`t3-01` review hand-over):
- * the options page says `Имя обязательно` for a refused name — the wording the
- * overlay spec already fixes for this surface — while the popup and the page card
- * keep their own `Укажите имя в настройках` for the same state. `quota` reuses the
+ * `name_required` is the total-map answer to a core refusal no shipped control of
+ * this page can produce (overlay spec, "Options message map": `Сохранить` is
+ * disabled for an empty trimmed value and the input refuses the code point past the
+ * cap), while the popup and the page card keep their own
+ * `Укажите имя в настройках` for the same state. `quota` reuses the
  * sentence `inline-comment-model.md` fixes for a full store. `tests/` pins both
  * sentences verbatim and pins that this module holds no second name-refusal
  * wording.
