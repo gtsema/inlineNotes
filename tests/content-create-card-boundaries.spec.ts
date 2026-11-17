@@ -118,8 +118,15 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
   });
 
   it('asks core for a page read in exactly one module', () => {
+    // Task `t3-02` widens this pin deliberately: the load-time paint pass
+    // (`docs/specs/inline-comment-model.md` -> Flow / Sequence 6) is the second
+    // legitimate reader of a page, because painting has to know which entries the
+    // page holds. Widening is the honest answer here, not a second reader that
+    // invents its own storage keys: both readers go through core `loadEntries`, and
+    // `tests/content-page-painter.spec.ts` pins that the paint pass performs no write.
     expect(contentFilesImporting('src/core/entry-store-read.ts')).toEqual([
       'src/content/create/create-note.ts',
+      'src/content/paint/page-painter.ts',
     ]);
   });
 
@@ -185,9 +192,23 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
     // `locateAnchorInStream` is the one-stream form `A37` requires; `locateAnchor`
     // rebuilds a stream per call and would give the candidate and a stored entry
     // numbers taken from two different page states.
-    expect(contentFilesMatching(/\blocateAnchorInStream\(/).filter(excludeLocatorDefinition)).toEqual([
+    //
+    // Task `t3-02` widens this pin deliberately for the paint pass, which is the
+    // second legitimate user of the one-stream form (`N7` allows
+    // `locateAnchorInStream` exactly when the stream was built in the same pass from
+    // the same root, which is what `paint-plan.ts` does). The count below is the
+    // teeth of that condition: one `buildTextStream` call in the pass means one
+    // stream for every anchor of the page, and the behavioural proof of the same
+    // property lives in `tests/content-paint-plan.spec.ts` (the same-shape rewrite).
+    const streamReusers = contentFilesMatching(/\blocateAnchorInStream\(/).filter(excludeLocatorDefinition);
+    expect(streamReusers).toEqual([
       'src/content/create/create-note.ts',
+      'src/content/paint/paint-plan.ts',
     ]);
+    for (const file of streamReusers) {
+      const builds = (codeOnly(path.join(ROOT, file)).match(/\bbuildTextStream\(/g) ?? []).length;
+      expect(builds, file).toBe(1);
+    }
     const rebuilds = contentFilesMatching(/\blocateAnchor\(/).filter(excludeLocatorDefinition);
     expect(rebuilds).toEqual([]);
   });

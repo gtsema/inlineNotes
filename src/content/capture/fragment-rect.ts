@@ -54,6 +54,18 @@ export interface MeasuredRange {
 export type RangeForFragment = (node: Text, start: number, end: number) => MeasuredRange;
 
 /**
+ * The same signature typed to the real object it answers with.
+ *
+ * `RangeForFragment` is deliberately structural, so no test needs page layout: a
+ * test injects a box-only recorder and the measurement rule stays verifiable. The
+ * paint surface of `t3-02` cannot use that structural type, because `CSS.highlights`
+ * registers ranges and not boxes, so it needs the object `createRange` returned.
+ * This alias says so, and `documentRangeForFragment` below satisfies both, which
+ * keeps the measurement seam and the paint seam one factory (`one seam rule`).
+ */
+export type DocumentRangeForFragment = (node: Text, start: number, end: number) => Range;
+
+/**
  * The box of one fragment of a resolved span, in viewport coordinates.
  *
  * This is the only DOM read in the placement path, and it is the measurement the
@@ -99,8 +111,8 @@ export function placementFragmentBox(
 /** The range factory of a real page. */
 export function documentRangeForFragment(
   doc: Document,
-): RangeForFragment {
-  return (node: Text, start: number, end: number): MeasuredRange => {
+): DocumentRangeForFragment {
+  return (node: Text, start: number, end: number): Range => {
     const range = doc.createRange();
     range.setStart(node, start);
     range.setEnd(node, end);
@@ -113,7 +125,14 @@ export function documentRangeForFragment(
  * shape a `display: none` subtree, an empty text box or a detached node measures as
  * (ruling `A65`), and a negative size is not something a page reports; both answer
  * "there is nothing here to place against".
+ *
+ * One predicate for three jobs: the placement walk above stops at the first box that
+ * passes, the paint pass of `t3-02` keeps every fragment regardless (ruling `A36`)
+ * and uses this predicate only to pick the tooltip anchor (ruling `A67`), and the
+ * hover hit-test of the tooltip ignores a box that fails it. A module that
+ * re-derived `width > 0 && height > 0` could pick `>=` or a threshold, and then the
+ * card and the tooltip would disagree about whether a span has a position at all.
  */
-function hasArea(box: Box): boolean {
+export function hasArea(box: Box): boolean {
   return box.width > 0 && box.height > 0;
 }
