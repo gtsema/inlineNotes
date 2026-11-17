@@ -30,6 +30,16 @@ mutated for painting: the only element the extension owns is the single overlay 
   (it rebuilds the stream); `locateAnchorInStream` may be used only when the stream was built in the same pass from the
   same `root`, otherwise a same-shape in-place `node.data` rewrite passes the shape check.
 
+## Handover from `t3-04-content-anchor-hardening` (`docs/state/t3-04-content-anchor-hardening.md`)
+
+- `locateAnchor` is now **all-or-nothing** (`A36`): any detached mapped node ⇒ `anchor_stale`, never a partial range.
+  Painting therefore has exactly two states per entry: full set of fragments, or nothing (`A40`).
+- A false `anchor_stale` has a cost beyond painting: an entry that resolves to nothing is **absent from `byEntryId`**,
+  which frees its span for a new overlapping note (`A24`). Do not "repair" a stale entry by deleting or hiding it — the
+  entry stays in the popup and stays deletable, and the overlap map is rebuilt from a fresh resolve on every create.
+- The stream now treats `td`/`th` as boundaries (`A35`), so a table-heavy article streams differently than before
+  `t3-04`; any smoke fixture with tables must be re-checked rather than trusted.
+
 ## AC (5 substantive + gates)
 
 1. Re-resolve for one page: load the page's entries through core, build the stream **once**, resolve every anchor, and
