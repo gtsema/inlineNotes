@@ -25,10 +25,10 @@
  * overlap question. What a *successful* re-selection writes is narrower than "move the
  * note": core `updateEntryComment` takes `comment` and `updatedAt` and keeps `anchor`
  * and `text` (accepted in `t1-05`), so a re-selection decides the `overlap` answer and
- * nothing else, and moving a note to other words stays a delete plus a create until the
- * PM rules otherwise. That open question is recorded in
- * `docs/specs/content-overlay-ui.md` -> "Open question: what a successful re-selection
- * stores"; it is not resolved in this file.
+ * nothing else, and moving a note to other words stays a delete plus a create. That is
+ * ruling `A78`, recorded in
+ * `docs/specs/content-overlay-ui.md` -> "Ruling `A78`: what a successful `re-selection`
+ * stores", and pinned by `tests/content-editor-controller.spec.ts` -> AC5.
  *
  * When there is a re-selection, the check is the same core check the create path
  * uses, and the self-exclusion is done the only way that is correct without a core
@@ -126,8 +126,11 @@ export async function saveEntryComment(input: EditNoteInput): Promise<EditNoteRe
     // throws `InvalidAccessError` in a real engine once a boundary node the editor kept
     // and the fragments of a freshly built stream no longer share a root — the site
     // re-rendered the paragraph while the editor stood open. A test-only DOM
-    // implementation answers `false` for that state, so the throw is injected in
-    // `tests/content-editor-edit-path.spec.ts` rather than coaxed out of a fake engine.
+    // implementation answers `false` for that state instead of throwing, and no test
+    // injects the throw on the edit path, so this `catch` is **named, not driven by a
+    // throw**: the AC5 case of `tests/content-editor-controller.spec.ts` reaches the
+    // sibling `span === null` branch below with a `Range` the stream rebuilt at the press
+    // resolves no span for.
     let stream: TextStream;
     let span: CapturedSpan | null;
     try {

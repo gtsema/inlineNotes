@@ -782,13 +782,14 @@ describe('AC5: a re-selection inside the editor answers the overlap rule, with t
   });
 
   it('writes comment and updatedAt for a re-selection of a free span, and keeps the anchor', async () => {
-    // The narrow half of the open question recorded in
-    // `docs/specs/content-overlay-ui.md` -> "Open question: what a successful
-    // re-selection stores": core `updateEntryComment` keeps `anchor` and `text`
+    // The narrow half of ruling `A78`, recorded in
+    // `docs/specs/content-overlay-ui.md` -> "Ruling `A78`: what a successful
+    // `re-selection` stores": core `updateEntryComment` keeps `anchor` and `text`
     // (accepted in `t1-05`), so a valid re-selection changes the `overlap` answer and
-    // nothing else. Pinned here rather than fixed here, because a core write that took
-    // an anchor is a PM ruling and it re-opens the `text`/`anchor` consistency rule of
-    // `t1-06`; neither is this task's call.
+    // nothing else. Pinned here rather than decided here: the alternative — a core write
+    // that carries an anchor — is a `src/core/` change that re-opens the `text`/`anchor`
+    // consistency rule accepted in `t1-06`, and overturning the ruling changes that write
+    // plus this pin, never the content layer on its own.
     const fixture = await boot();
     openOwn(fixture);
     const before = (await stored(port))[0];

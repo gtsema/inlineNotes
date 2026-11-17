@@ -24,6 +24,10 @@
  *   zero area is placed by the viewport rule (`A65`), and a page that carries an
  *   astral character before the selection still opens a card, stores the whole word
  *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1);
+ * - the Flow 6 `selection claim` handover of `t3-03` (`t3-03` review finding 1): the
+ *   controller honours a `true` answer with **no card, no span capture and no core
+ *   read or write**, and a `false` answer with the unchanged Flow 1 card — the hook
+ *   lives in this module, so it is pinned here and not in the `main.ts` wiring;
  * - the two carried findings of `t3-01` that `t3-02` did not close, now pinned at
  *   the only call site where they exist: the keyboard contract of an **open** card
  *   (`t3-01` remark 4, task `t3-02b` AC1, ruling `A74`) and the ruling-`A29`
@@ -58,6 +62,7 @@ import {
 import {
   createCreateCardController,
   type CreateCardController,
+  type CreateCardOptions,
 } from '../src/content/overlay/create-card-controller';
 import { CONTENT_STRINGS, REFUSAL_TEXT, refusalText } from '../src/content/text';
 import { CARD_VIEWPORT_GUTTER_PX } from '../src/content/overlay/card-placement';
@@ -91,10 +96,15 @@ interface Fixture {
   readonly created: Entry[];
   /** Offsets the controller handed to the range factory, in call order. */
   readonly measured: Array<{ node: Node; start: number; end: number }>;
+  /** Flow 6 claims the controller put to the hook, in call order. */
+  readonly claims: Array<{ selection: CapturedSelection; authorName: string }>;
 }
 
 /** What a measuring seam answers for one fragment, or a throw (`A64`). */
 type RectOf = (node: Node, start: number, end: number) => Box;
+
+/** What the Flow 6 hook answers for one capture: `true` = the editor took it. */
+type ClaimOf = (selection: CapturedSelection, authorName: string) => boolean;
 
 /** Preact flushes on a microtask and the write chain awaits the port a few times. */
 async function settle(rounds: number = 10): Promise<void> {
@@ -152,8 +162,14 @@ const COLLAPSED_BOX: Box = { left: 500, top: 400, width: 0, height: 0 };
  * `rectOf` replaces only the box the fragment measurement reports, which is how a
  * test drives the two rulings about measurement: a zero-area box (`A65`) and a
  * measurement that throws because the page shrank the text node (`A64`).
+ *
+ * `claim` installs the Flow 6 `claimSelection` hook the shipped wiring gives in
+ * `src/content/main.ts`; without it the option stays absent, which is what every
+ * other case of this file runs with. Every call the controller puts to the hook is
+ * recorded in `claims`, so a test can assert the handover happened **and** that the
+ * card path stopped at it.
  */
-function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
+function mount(captured: CapturedSelection | null, rectOf?: RectOf, claim?: ClaimOf): Fixture {
   const overlay = ensureOverlayHost();
   if (overlay === null) {
     throw new Error('jsdom is the top frame, so the host must exist');
@@ -161,12 +177,13 @@ function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
   const port = new MemoryStoragePort();
   const created: Entry[] = [];
   const measured: Array<{ node: Node; start: number; end: number }> = [];
+  const claims: Array<{ selection: CapturedSelection; authorName: string }> = [];
   const rangeFor: RangeForFragment = (node, start, end) => {
     measured.push({ node, start, end });
     const rect = rectOf === undefined ? FRAGMENT_BOX : rectOf(node, start, end);
     return { getBoundingClientRect: () => rect };
   };
-  const controller = createCreateCardController(document, overlay, {
+  const cardOptions: CreateCardOptions = {
     port,
     pageUrl: () => PAGE_URL,
     clock: () => STAMP,
@@ -177,8 +194,18 @@ function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
     onCreated: (entry: Entry): void => {
       created.push(entry);
     },
-  });
-  return { overlay, port, controller, created, measured };
+  };
+  if (claim !== undefined) {
+    // Absent unless a test asks for it; the shipped wiring of `main.ts` always
+    // supplies the hook and lets `editor-controller.tsx` answer it. Every call the
+    // controller puts to it is recorded as well as answered.
+    cardOptions.claimSelection = (selection, authorName): boolean => {
+      claims.push({ selection, authorName });
+      return claim(selection, authorName);
+    };
+  }
+  const controller = createCreateCardController(document, overlay, cardOptions);
+  return { overlay, port, controller, created, measured, claims };
 }
 
 /** The one card element inside the shadow root, or `null`. */
@@ -410,6 +437,73 @@ describe('the settings gate before the card (AC5, ruling A31)', () => {
     expect(counter === null ? null : counter.textContent).toBe('0/256');
     expect(saveButtonOf(fixture.overlay).disabled).toBe(true);
     expect(fixture.overlay.host.hidden).toBe(false);
+  });
+});
+
+describe('the Flow 6 selection claim handover (task t3-03 AC1, overlay Flow 6)', () => {
+  it('mounts no card, captures no span and asks core for nothing when the claim answers true (Flow 6, AC1)', async () => {
+    // The same capture the next case lets through: the only difference between the
+    // two cases is the hook's answer, which is the whole of the rule (`t3-03` review
+    // finding 1 — deleting the hook call must break something here).
+    const captured = selection('p1', 4, 15);
+    const fixture = mount(captured, undefined, (): boolean => true);
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+
+    // One claim, after the `settings gate`, with the selection and the name the gate
+    // answered with: that is the entire handover the editor controller of
+    // `editor-controller.tsx` is wired to answer.
+    expect(fixture.claims).toHaveLength(1);
+    expect(fixture.claims[0]?.selection).toBe(captured);
+    expect(fixture.claims[0]?.authorName).toBe(AUTHOR);
+
+    // No create card is mounted: the wrapper element exists from the first `mount`
+    // call (one wrapper per shadow root, AC1) but holds nothing, was never placed,
+    // and the host is still hidden.
+    expect(fixture.controller.isOpen()).toBe(false);
+    expect(cardOf(fixture.overlay)).toBeNull();
+    const wrapper = wrapperOf(fixture.overlay);
+    if (wrapper === null) {
+      throw new Error('expected the single card wrapper inside the shadow root');
+    }
+    expect(wrapper.childElementCount).toBe(0);
+    expect(wrapper.style.left).toBe('');
+    expect(wrapper.style.top).toBe('');
+    expect(fixture.overlay.host.hidden).toBe(true);
+
+    // No span capture: the `rangeFor` seam is the only measurement the open path
+    // uses after `captureSpan`, and it never ran — the capture stopped at the claim.
+    expect(fixture.measured).toEqual([]);
+
+    // One core read (the `settings gate` that came first, ruling `A31`) and no write
+    // of any kind: the reader who selected an existing note is not invited to write a
+    // second one, and nothing about the page changed.
+    expect(fixture.port.calls.filter((call) => call.op === 'get')).toHaveLength(1);
+    expect(writesOtherThanSettings(fixture.port)).toHaveLength(0);
+    expect(fixture.port.storedKeys()).toEqual([SETTINGS_KEY]);
+    expect(fixture.created).toEqual([]);
+  });
+
+  it('opens the card normally when the claim answers false (Flow 6, AC1)', async () => {
+    const captured = selection('p1', 4, 15);
+    const fixture = mount(captured, undefined, (): boolean => false);
+    await seedAuthor(fixture.port);
+
+    await fixture.controller.capture();
+
+    // The claim was put and answered `false` — a selection that only *crosses* an
+    // entry boundary, or one no entry covers — so the rest of Flow 1 runs unchanged.
+    expect(fixture.claims).toHaveLength(1);
+    expect(fixture.claims[0]?.selection).toBe(captured);
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(inputOf(fixture.overlay).getAttribute('aria-label')).toBe(
+      CONTENT_STRINGS.commentInput,
+    );
+    expect(fixture.overlay.host.hidden).toBe(false);
+    // The span capture and the placement did run for this very selection, which is
+    // what makes the empty `measured` list in the case above a real assertion.
+    expect(fixture.measured).toEqual([{ node: textOf('p1'), start: 4, end: 15 }]);
   });
 });
 
