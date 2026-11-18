@@ -145,6 +145,15 @@ function storedRecords(port: MemoryStoragePort, storageKey: string): unknown[] |
   return Array.isArray(entries) ? entries : undefined;
 }
 
+/** The `entries` array of a stored slot, or a failing test when the slot is not a slot. */
+function requireStoredRecords(port: MemoryStoragePort, storageKey: string): unknown[] {
+  const records = storedRecords(port, storageKey);
+  if (!Array.isArray(records)) {
+    throw new Error(`assertion target missing: no stored slot at '${storageKey}'`);
+  }
+  return records;
+}
+
 function storedRaw(port: MemoryStoragePort, storageKey: string): unknown {
   return port.snapshot()[storageKey];
 }
@@ -1040,8 +1049,11 @@ describe('the resolved-span steps of a create through the write API (t2-04, A46)
       spans: spansOf({ start: 10, end: 20 }, onOwnSpan),
     });
     expect(created).toMatchObject({ ok: true, entry: { authorName: NAME, comment: 'my note' } });
-    expect(storedRecords(foreignPort, SLOT_A)).toHaveLength(2);
-    expect(storedRecords(foreignPort, SLOT_A)[1]).toMatchObject({
+    const foreignRecords = requireStoredRecords(foreignPort, SLOT_A);
+    expect(foreignRecords).toHaveLength(2);
+    const storedReaderRecord = foreignRecords[1];
+    expect(storedReaderRecord).toBeDefined();
+    expect(storedReaderRecord).toMatchObject({
       authorName: NAME,
       comment: 'my note',
     });
