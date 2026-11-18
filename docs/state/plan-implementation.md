@@ -371,3 +371,11 @@ visual-selection half, and Run 3 item 9 re-measured now that typing can move the
 item 2 stays unmeasured by design. Stage totals: 2 tasks, both accepted with 0 blocking findings; 907 → 935 tests over 44 files;
 checker 0/0/115; typecheck exit 0; `dist/` 10 files. Two comment/test debt items are handed to the next stage
 (`docs/state/t6-02-typing-enters-card.md` → Carried-fix checklist).
+
+## Stage 8 — the card gets compact (ruling `A114`, user's request)
+
+| Task | Slice | Spec / AC anchor | Children |
+|---|---|---|---|
+| `t7-01-card-compact-actions` | `Отмена` removed from both widgets; save and delete become 24×24 inline-SVG icon buttons with `aria-label`/`title` in Russian; popup and options untouched | `content-overlay-ui.md` (controls, keyboard order, editor AC) + `A114` | engineer, reviewer |
+
+One task. It carries the two debt items `t6-02` left (`card-events.ts` comment, the restore-options assertion).

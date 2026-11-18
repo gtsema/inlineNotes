@@ -228,3 +228,14 @@ These three name the shape, so the engineer's only job is to implement and test 
   commits and a full report, and the run still ended as `failed` because its acceptance-report used a field the harness does not
   accept (`tests-added-or-updated`). The tree was measured, gates were re-run and the task was reviewed and accepted on its own
   merits. Rule kept: when a child dies in harness plumbing, judge the committed tree and never spend an attempt on the plumbing.
+
+- `A114` (**the card's actions become icons; `Отмена` dies; the user's request of 2026-11-18, all eight defaults accepted with
+  «всё дефолт»**): (1) the `cancel` control is removed from **both** the create card and the editor — closing stays a
+  `pointerdown` outside the overlay host, `Esc`, and the editor's event-driven closes; (2) save and delete become **icon-only**
+  inline SVG in `currentColor` (check mark = save, trash can = delete), no emoji, no glyph, no image, no dependency; (3) the word
+  leaves only the visible text — each icon button keeps `aria-label` **and** `title` with the existing Russian string; (4) a
+  **24×24 px** minimum hit box per icon button, tighter actions-row padding, everything else about the card's look unchanged;
+  (5) popup and options keep their words; (6) `src/content/text.ts` loses `cancel`, and every pin that quoted `Отмена` is
+  **rewritten** to the surviving close path, never deleted; (7) tab order becomes card `textarea` → save, editor `textarea` → save
+  → delete, still no `tabindex`; (8) unchanged by this ruling and still pinned: save disabled while the trimmed comment is empty or
+  over the cap, `Ctrl/Cmd+Enter` saves, `Esc` writes nothing, no delete affordance for a foreign entry.
