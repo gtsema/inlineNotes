@@ -210,3 +210,16 @@ These three name the shape, so the engineer's only job is to implement and test 
   Consequence recorded honestly: the "selection survives the card opening" half **cannot be pinned in jsdom** (jsdom does not drop
   a selection on focus), so it is a browser-verification item, and the jsdom proof is the negative one — the card path performs
   **no** focus call at all.
+
+| B8 | «после выделения фокус не переходит на окно» (по `Tab`) | Run 3 item 2 `failed`. `A111` left the keyboard with no working door: the card is last in tree order (the overlay host hangs off `document.documentElement`), so the reader's `Tab` must pass every focusable of the article first — and the spec was already claiming `Tab` was "the only way in". Cause between `H1` order / `H2` host-outside-`body` / `H3` page trap is still unmeasured | `A112` | **asked and answered** — the user chose `S4`: typing enters the field. `Tab` is not intercepted, the host is not moved, the page keeps its key |
+
+- `A112` (**`B8`: typing is the way in; the user chose `S4` on 2026-11-18**): the create card still makes **no focus call on open**
+  (`A111` intact). While the card is open and the document's active element is outside the overlay host, a `keydown` whose `key` is
+  one printable character (`key.length === 1`, so any layout works) focuses the card's `textarea` through
+  `focus-handoff.ts` + `FIELD_FOCUS_OPTIONS`. Never a trigger: a key with `ctrlKey`/`metaKey`/`altKey`, `Space` (the article keeps
+  its scroll), and every non-printable key. The handler **never calls `preventDefault()`** — the character lands in the field
+  because the focus moved during `keydown`, and the page is not robbed of its key. Consequence accepted and recorded as
+  `Assumption:` a page that binds a single-letter shortcut may act on the same keystroke; host-page respect outranks exclusivity,
+  so the fix is not to swallow keys. Once the card has taken the caret this way, the `A105` restore applies to its closes.
+  Rejected in the same block: intercepting `Tab` (swallows a page key), focusing the non-editable host at open (unproven that
+  Chrome keeps the selection there), and moving the host into `<body>` (treats the order, not the door).

@@ -230,3 +230,24 @@ describes the shipped build any more. Record each item as `passed` / `failed` / 
    hand the caret back to what was focused before the open, and force nothing when that element is gone.
 9. **A page that owns its own focus** (a search box, autofocus, page keyboard shortcuts): with the card standing the page keeps its
    focus and its shortcuts, and the event-driven closes still close the card without writing while the caret stays on the page.
+
+### Run 3 outcome (2026-11-18, Chrome 157.0.8103.38, unpacked `dist/`)
+
+The user reported "everything ok" with one exception, the `Tab` item. Recorded per item, nothing inferred:
+
+| Item | Result | Note |
+|---|---|---|
+| 1 selection survives the slow selection (`B7`, `A111`) | **passed** | the card appears and the selection stays painted — the Run 2 defect is gone |
+| 2 first `Tab` reaches the card's `textarea` | **failed** | after a mouse selection `Tab` does not move focus into the card. Cause not yet measured: the overlay host hangs off `document.documentElement` (`src/content/overlay/host.ts:47`), so the card is last in tree order behind every focusable of the article (`H1`), or a host outside `<body>` is skipped by sequential navigation (`H2`), or the page traps `Tab` (`H3`) |
+| 3 tab order inside the live shadow tree | **not verified** | unreachable while item 2 fails; the jsdom order pin is not claimed as a browser fact |
+| 4 `Esc` / `Ctrl+Enter` answer the open card | **passed** | the keys answered while the card stood; the `Tab`-then-key variant could not be reached, see item 2 |
+| 5 slow selection → type → save lands on the selected words | **passed** | |
+| 6 does the reader's own `Tab` drop the visual selection | **not verified** | depends on item 2; already stated in `docs/specs/content-overlay-ui.md` AC17 as an either-way claim |
+| 7 editor: caret in the prefilled field, no page scroll | **passed** | the `preventScroll` claim now belongs to the editor alone |
+| 8 editor close paths hand the caret back | **passed** | |
+| 9 a page that owns its own focus keeps it while the card stands | **passed** | |
+
+- Items passed: 6. **Failed: item 2.** Not verified: items 3 and 6, both because they stand behind item 2.
+- Item 2 became backlog **B8** and is ruled **`A112`** (the user chose the "typing is the way in" shape, `S4`); task `t6-02`.
+- The spec sentence "`Tab` is now the only way in" (`docs/specs/content-overlay-ui.md` AC17) was **false in Chrome** as of this
+  run; `t6-02` AC7 forbids leaving it in place.
