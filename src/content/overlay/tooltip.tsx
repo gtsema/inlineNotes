@@ -1,12 +1,12 @@
 /**
  * The hover tooltip: the small card that names the author of a painted note and shows
- * its comment (task `t3-02` AC3, AC4).
+ * its comment (task `t3-02` AC3, AC4; the click of task `t5-03` AC1-AC3).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 3-4, Rules /
  * Semantics -> "Own entries and foreign entries are visually distinguished only in
  * the tooltip header (the reader's own word against the author name); the highlight
- * style is identical",
- * "Tooltip default opacity: semi-transparent (about 0.75); after click: 1.0".
+ * style is identical", "Tooltip opacity: **1.0** from the first hover", "Tooltip
+ * lifetime".
  *
  * This component is presentation only. It is handed strings that were read from an
  * entry record, and it renders them:
@@ -19,20 +19,21 @@
  * - **the header is the only place own and foreign entries differ** (the spec rule
  *   above). The class `is-foreign` changes the typography of the header only; the
  *   highlight itself is one shared style (`paint-style.ts`);
- * - **there is no edit affordance here at all.** No comment field, no save button, no
- *   cancel button, no delete control (the three Russian labels of this layer are in
- *   `src/content/text.ts`, and none of them belongs to a tooltip): a click on the
- *   tooltip makes it opaque and nothing else
- *   (task `t3-02` brief). The editor those controls belong to is shipped by `t3-03`
- *   and is opened by **selecting the entry's text** (overlay Flow 6), never from this
- *   component: the tooltip-to-editor hand-over the old sentence of Flow 4 described is
- *   still not shipped. An entry the reader did not write is read-only in the editor too
- *   (`inline-comment-model.md` -> edit rights), and `visible` is not part of that
- *   rule (ruling `A1`), so nothing in this component depends on visibility: a hidden
- *   entry is not painted and therefore has nothing to hover.
+ * - **there is no edit affordance rendered here.** No comment field, no save button,
+ *   no cancel button, no delete control (the three Russian labels of this layer are in
+ *   `src/content/text.ts`, and none of them belongs to a tooltip): the whole of what
+ *   the click does is decided by `tooltip-controller.tsx`, which hands the painted
+ *   entry to the editor controller (ruling `A96`, Flow 4). A foreign entry gets no
+ *   editor from that click and no hint of one here (`A25`);
+ * - **opacity is not a state of this component.** `tooltip-style.ts` carries one
+ *   opacity declaration for one class, and this component writes no opacity and no
+ *   click class: a hovered tooltip is opaque from the first hover (ruling `A96`, task
+ *   `t5-03` AC7).
  *
- * The opacity itself is not written here: `tooltip-style.ts` owns the two numbers, and
- * this component only decides whether the `is-pinned` class is present.
+ * An entry the reader did not write is read-only in the editor too
+ * (`inline-comment-model.md` -> edit rights), and `visible` is not part of that rule
+ * (ruling `A1`), so nothing in this component depends on visibility: a hidden entry is
+ * not painted and therefore has nothing to hover.
  */
 
 import { CONTENT_STRINGS } from '../text';
@@ -41,7 +42,6 @@ import {
   TOOLTIP_COMMENT_CLASS,
   TOOLTIP_FOREIGN_CLASS,
   TOOLTIP_HEADER_CLASS,
-  TOOLTIP_PINNED_CLASS,
 } from './tooltip-style';
 
 export interface TooltipProps {
@@ -51,15 +51,13 @@ export interface TooltipProps {
   readonly isOwnEntry: boolean;
   /** The stored comment of the entry, verbatim. */
   readonly comment: string;
-  /** `true` after a click on the tooltip: fully opaque. */
-  readonly pinned: boolean;
 }
 
 /** The tooltip element tree, rendered into the shadow root by the controller. */
 export function Tooltip(props: TooltipProps) {
   return (
     <div
-      class={classes(TOOLTIP_CLASS, props.pinned ? TOOLTIP_PINNED_CLASS : null)}
+      class={TOOLTIP_CLASS}
       role="tooltip"
       aria-label={CONTENT_STRINGS.tooltipLabel}
     >

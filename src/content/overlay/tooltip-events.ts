@@ -4,9 +4,11 @@
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 3-4, Edge Cases
  * ("A tooltip near the viewport edge flips to the opposite side; it never covers the
- * range it describes"), Rules / Semantics -> "Card lifetime" (ruling `A32`, whose
- * scroll logic the tooltip reuses), and the task `t3-02` constraint that hover
- * hit-testing must not open the create card.
+ * range it describes", "A `tooltip` click on a `foreign entry`", "A `tooltip` click the
+ * page refuses to measure"), Rules / Semantics -> "Card lifetime" (ruling `A32`, whose
+ * scroll logic the tooltip reuses), "Tooltip lifetime", and the task `t3-02`
+ * constraint that hover hit-testing must not open the create card. Task `t5-03` AC1,
+ * AC2, AC3, AC9; rulings `A96`, `A104`.
  *
  * The four events, and why each one is the only one of its kind:
  *
@@ -19,9 +21,12 @@
  *   would make the tooltip impossible to click. Shadow retargeting is why the check
  *   uses `isInsideOverlayHost` rather than `host.contains(target)`;
  * - **pointerdown** — two answers, one event. Inside the host it is the Flow 4 click:
- *   the tooltip becomes opaque and *nothing else* happens (task `t3-02`; the editor
- *   that a click used to open is task `t3-03`). Outside the host it is a dismissal: a
- *   press on the page is the reader leaving the note;
+ *   the controller hands the entry of the open tooltip to `onEntryClick`, which in the
+ *   shipped wiring opens the editor of that entry or answers nothing (ruling `A96`).
+ *   While a tooltip is open the tooltip is the only widget the host can be showing —
+ *   the `A68` host rule hides a tooltip the moment the card or the editor takes the
+ *   host — so this branch cannot press a different widget. Outside the host it is a
+ *   dismissal: a press on the page is the reader leaving the note;
  * - **scroll** — hide. The tooltip is a fixed box over a box that just moved, and the
  *   overlay spec's answer to that situation is the close, not a chase (ruling `A32`);
  * - **Escape** — hide. A keyboard user has to be able to get rid of the card without
@@ -62,7 +67,7 @@ export function attachTooltipEvents(
 
   const onPointerDown = (event: Event): void => {
     if (isOverWidget(event, host)) {
-      controller.pin();
+      controller.activate();
       return;
     }
     controller.hide();

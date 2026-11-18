@@ -3,10 +3,12 @@
  * shadow root shows about it (task `t3-02` AC3, AC4, AC5).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 3-4, Rules /
- * Semantics -> "Tooltip default opacity", "Own entries and foreign entries … only in
- * the tooltip header", the tooltip anchor of ruling `A67`, the paint-path measurement
- * rule of ruling `A66`, and the paint-ownership rule of ruling `A68`; task `t3-02`
- * AC3, AC4.
+ * Semantics -> "Tooltip opacity: **1.0** from the first hover", "Tooltip lifetime",
+ * "Own entries and foreign entries … only in the tooltip header", the tooltip anchor
+ * of ruling `A67`, the paint-path measurement rule of ruling `A66`, and the
+ * paint-ownership rule of ruling `A68`; task `t3-02` AC3, AC4, and task `t5-03` AC1,
+ * AC2, AC3, AC7, AC9 for the click of ruling `A96`. Rulings `A66`, `A67`, `A68`, `A96`,
+ * `A104`.
  *
  * What this machine owns, and nothing else:
  * - **the open tooltip**, one at a time, and the host's visible state *for this
@@ -17,8 +19,13 @@
  * - **nothing about the highlights.** It never calls `CSS.highlights`, never re-runs a
  *   resolve, never writes storage. It reads the output of the last paint pass
  *   (`paintedEntries`) and the author name that pass read (`authorName`);
- * - **no edit affordance.** A click sets `pinned`, which `tooltip-style.ts` renders as
- *   opacity 1, and that is the whole of it — the editor is task `t3-03`.
+ * - **no editing, and no idea who may be edited.** The Flow 4 click is answered by
+ *   handing the clicked `PaintedEntry` to `onEntryClick` — in the shipped wiring the
+ *   editor controller, which owns the author rule and the measurement ruling (`A104`)
+ *   that decides the range the editor opens over. This module decides nothing of that:
+ *   it never hides the tooltip on its own behalf, because a click that opens nothing —
+ *   a `foreign entry`, an entry the page will not measure — must leave the card the
+ *   reader is looking at exactly where it was (ruling `A96`, task `t5-03` AC2, AC3).
  *
  * Two rules that are easy to get wrong, stated where they are implemented:
  *
@@ -68,18 +75,27 @@ export interface TooltipControllerOptions {
    * host (ruling `A68`: the widgets do not own each other's visibility).
    */
   isHostBusy?: () => boolean;
+  /**
+   * Flow 4 (ruling `A96`): asked with the entry the clicked tooltip describes, which is
+   * the very `PaintedEntry` of the last `paint pass` — the range ruling `A104` opens an
+   * editor over. Its return value is not this module's business: an editor that refuses
+   * to open leaves the tooltip in place.
+   */
+  onEntryClick?: (entry: PaintedEntry) => void;
 }
 
 /** The tooltip state machine. */
 export interface TooltipController {
   /** Answers one pointer position: shows, moves or hides the tooltip. */
   hoverAt(x: number, y: number): void;
-  /** A click on the tooltip: opaque, and nothing else (task `t3-02` brief). */
-  pin(): void;
-  /** Takes the tooltip away and unpins it. */
+  /**
+   * The Flow 4 click on the open tooltip: hands its entry to `onEntryClick` and changes
+   * nothing else (task `t5-03` AC1, AC2, AC3).
+   */
+  activate(): void;
+  /** Takes the tooltip away. */
   hide(): void;
   isOpen(): boolean;
-  isPinned(): boolean;
   /** The entry the open tooltip describes, `null` when nothing is open. */
   openEntryId(): string | null;
 }
@@ -102,7 +118,6 @@ export function createTooltipController(
   const isHostBusy = options.isHostBusy ?? ((): boolean => false);
 
   let open: PaintedEntry | null = null;
-  let pinned = false;
   /** The last rendered content, so a pointer move inside one entry re-renders nothing. */
   let renderedKey: string | null = null;
 
@@ -129,12 +144,16 @@ export function createTooltipController(
     show(entry, anchor);
   }
 
-  function pin(): void {
-    if (open === null) {
+  /**
+   * The click of Flow 4 (ruling `A96`). The only thing a click does to this machine is
+   * ask; the tooltip is dismissed by the widget that opens, through `onOpened` of the
+   * editor and the `A68` host rule, and it survives a click that opened nothing.
+   */
+  function activate(): void {
+    if (open === null || options.onEntryClick === undefined) {
       return;
     }
-    pinned = true;
-    show(open, null);
+    options.onEntryClick(open);
   }
 
   function hide(): void {
@@ -142,7 +161,6 @@ export function createTooltipController(
       return;
     }
     open = null;
-    pinned = false;
     renderedKey = null;
     const wrapper = tooltipWrapper(overlay.root);
     if (wrapper !== null) {
@@ -155,14 +173,14 @@ export function createTooltipController(
     }
   }
 
-  /** Mounts or reuses the widget, then places it. `anchor === null` keeps the place. */
-  function show(entry: PaintedEntry, anchor: Box | null): void {
+  /** Mounts or reuses the widget, then places it against the anchor measured now. */
+  function show(entry: PaintedEntry, anchor: Box): void {
     ensureTooltipStyle(doc, overlay.root);
     const wrapper = ensureTooltipWrapper(doc, overlay.root);
     setOverlayHostHidden(overlay, false);
 
     const header = ownershipHeaderOf(entry.entry, options.authorName());
-    const key = `${entry.entry.id}|${header}|${entry.entry.comment}|${pinned ? 'pinned' : 'hover'}`;
+    const key = `${entry.entry.id}|${header}|${entry.entry.comment}`;
     if (key !== renderedKey) {
       renderedKey = key;
       render(
@@ -170,15 +188,12 @@ export function createTooltipController(
           header={header}
           isOwnEntry={isOwnEntry(entry.entry, options.authorName())}
           comment={entry.entry.comment}
-          pinned={pinned}
         />,
         wrapper,
       );
     }
 
-    if (anchor !== null) {
-      position(wrapper, anchor);
-    }
+    position(wrapper, anchor);
   }
 
   /**
@@ -196,10 +211,9 @@ export function createTooltipController(
 
   return {
     hoverAt,
-    pin,
+    activate,
     hide,
     isOpen: (): boolean => open !== null,
-    isPinned: (): boolean => pinned,
     openEntryId: (): string | null => (open === null ? null : open.entry.id),
   };
 }

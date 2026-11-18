@@ -13,9 +13,15 @@
  * Pinned behaviour:
  * - AC3: the caret inside a painted fragment opens a card showing the stored
  *   `comment` and the author, and those strings exist nowhere in the page;
- * - AC3: hover is semi-transparent, a click is opaque, and the click changes the
- *   opacity class and nothing else — no `textarea`, no button, no storage write, no
- *   change to the painted names;
+ * - AC3 of `t3-02` and AC7 of `t5-03` (ruling `A96`): the tooltip is opaque from the
+ *   first hover — the stylesheet carries exactly one `opacity` declaration, the
+ *   controller chooses no click class, and the number is pinned against the spec
+ *   sentence the way the `settle delay` of `A63` is;
+ * - AC1, AC2, AC3, AC9 of `t5-03`: a click hands the clicked `PaintedEntry` to the
+ *   `onEntryClick` hook and does nothing else in this module — no `textarea`, no
+ *   button, no storage write, no change to the painted names — and the tooltip stays
+ *   standing, because the widget that opens is the one that dismisses it (`A68`) and a
+ *   click that opens nothing has no right to take the card away;
  * - AC4: the header is `Вы` for the current reader and the stored author name for
  *   anybody else, and neither state offers an edit affordance in this task;
  * - `A40` / staleness: an entry that is not painted cannot be hovered, and hovering
@@ -44,7 +50,7 @@ import { ensureOverlayHost } from '../src/content/overlay/host';
 import type { OverlayHost } from '../src/content/overlay/host';
 import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PagePainter } from '../src/content/paint/page-painter';
-import type { PaintedFragment } from '../src/content/paint/paint-plan';
+import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-plan';
 import type { PaintSurface } from '../src/content/paint/paint-surface';
 import { createTooltipController } from '../src/content/overlay/tooltip-controller';
 import type { TooltipController } from '../src/content/overlay/tooltip-controller';
@@ -56,8 +62,6 @@ import {
   TOOLTIP_FOREIGN_CLASS,
   TOOLTIP_HEADER_CLASS,
   TOOLTIP_OPACITY,
-  TOOLTIP_PINNED_CLASS,
-  TOOLTIP_PINNED_OPACITY,
   TOOLTIP_ROOT_CLASS,
   TOOLTIP_CSS,
 } from '../src/content/overlay/tooltip-style';
@@ -208,6 +212,8 @@ let overlay: OverlayHost;
 let painter: PagePainter;
 let tooltip: TooltipController;
 let hostBusy: boolean;
+/** What the shipped Flow 4 hook was handed: the editor controller in `main.ts`. */
+let clicks: PaintedEntry[];
 
 /** The caret seam: one fixed answer, whatever the coordinates are. */
 const caretAt: CaretAtPoint = () => caret;
@@ -233,6 +239,7 @@ async function boot(options: {
   });
   await painter.refresh();
   hostBusy = false;
+  clicks = [];
   tooltip = createTooltipController(document, overlay, {
     paintedEntries: painter.paintedEntries,
     authorName: painter.authorNameOfPass,
@@ -240,6 +247,9 @@ async function boot(options: {
     rangeFor,
     viewport: () => VIEWPORT,
     isHostBusy: () => hostBusy,
+    onEntryClick: (entry): void => {
+      clicks.push(entry);
+    },
   });
 }
 
@@ -323,36 +333,36 @@ describe('the tooltip of painted text (AC3)', () => {
     expect(document.body.textContent).not.toContain(FOREIGN_COMMENT);
   });
 
-  it('is semi-transparent on hover and opaque after a click, by the spec numbers', async () => {
-    expect(TOOLTIP_OPACITY).toBe(0.75);
-    expect(TOOLTIP_PINNED_OPACITY).toBe(1);
+  it('is opaque from the first hover, by the number the spec pins (t5-03 AC7)', async () => {
+    expect(TOOLTIP_OPACITY).toBe(1);
+    // One opacity rule in the stylesheet, and no click state to switch to: the
+    // two-state design of the pre-`A96` tooltip is gone, class and number together.
+    expect(TOOLTIP_CSS.match(/opacity: /g)).toHaveLength(1);
+    expect(TOOLTIP_CSS).toContain(`opacity: ${String(TOOLTIP_OPACITY)};`);
     await boot();
 
     tooltip.hoverAt(20, 84);
-    const hovered = tooltipElement();
-    expect(hovered?.classList.contains(TOOLTIP_PINNED_CLASS)).toBe(false);
-    expect(TOOLTIP_CSS).toContain(`opacity: ${String(TOOLTIP_OPACITY)};`);
 
-    tooltip.pin();
-    const clicked = tooltipElement();
-    expect(clicked?.classList.contains(TOOLTIP_PINNED_CLASS)).toBe(true);
-    expect(TOOLTIP_CSS).toContain(`opacity: ${String(TOOLTIP_PINNED_OPACITY)};`);
-    expect(tooltip.isPinned()).toBe(true);
+    const hovered = tooltipElement();
+    expect(hovered).not.toBeNull();
+    expect(hovered?.classList.contains(TOOLTIP_CLASS)).toBe(true);
+    expect(hovered?.className).toBe(TOOLTIP_CLASS);
   });
 
-  it('makes the click opaque and nothing else: no editor, no write, no repaint', async () => {
+  it('opens nothing of its own on a click: no editor, no write, no repaint (t5-03 AC9)', async () => {
     await boot();
     const namesBefore = [...surface.heldNames()];
 
     tooltip.hoverAt(20, 84);
-    tooltip.pin();
+    tooltip.activate();
 
     const root = overlay.root;
     expect(root.querySelector('textarea')).toBeNull();
     expect(root.querySelector('button')).toBeNull();
-    expect(root.querySelector(`.${TOOLTIP_PINNED_CLASS}`)).not.toBeNull();
     expect(entryWrites()).toEqual([]);
     expect([...surface.heldNames()]).toEqual(namesBefore);
+    // The tooltip is dismissed by the widget that opens (`A68`), not by the click.
+    expect(tooltip.isOpen()).toBe(true);
   });
 
   it('answers a caret outside every painted fragment with nothing', async () => {
@@ -388,6 +398,70 @@ describe('the tooltip of painted text (AC3)', () => {
   });
 });
 
+describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8)', () => {
+  it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
+    await boot();
+
+    tooltip.hoverAt(20, 84);
+    tooltip.activate();
+
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].entry.id).toBe('a1b2c3d4e5f6');
+    expect(clicks[0].entry.comment).toBe(OWN_COMMENT);
+  });
+
+  it('hands over the entry of the paint pass itself, so the editor opens over that range (AC8)', async () => {
+    await boot();
+
+    tooltip.hoverAt(20, 84);
+    tooltip.activate();
+
+    // The very object the last pass produced: same fragments, same node-local offsets
+    // the `::highlight()` rule was registered with. Ruling `A104` opens the editor over
+    // this range, so no second resolve and no moved stored range are possible.
+    const painted = painter.paintedEntries();
+    expect(clicks[0]).toBe(painted[0]);
+    expect(clicks[0].fragments).toBe(painted[0].fragments);
+  });
+
+  it('hands a foreign entry over as well: the author rule is the editor\u2019s answer, not this one', async () => {
+    await boot();
+    caret = { node: textOf('p1'), offset: 20 };
+
+    tooltip.hoverAt(20, 84);
+    tooltip.activate();
+
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].entry.id).toBe('b2c3d4e5f6a1');
+    expect(clicks[0].entry.authorName).toBe(FOREIGN_NAME);
+  });
+
+  it('asks nothing when no tooltip is open', async () => {
+    await boot();
+
+    tooltip.activate();
+    caret = null;
+    tooltip.hoverAt(400, 400);
+    tooltip.activate();
+
+    expect(tooltip.isOpen()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+
+  it('keeps the hidden-entry and stale answers of the paint pass out of the click', async () => {
+    // `A40`: an entry that is not painted has no tooltip, so it can never be the entry
+    // a click hands over (`t5-03` AC8 says the click opens the editor of a *painted*
+    // entry, and a hidden one is reachable again through its checkbox).
+    await boot({ records: [recordFor('a1b2c3d4e5f6', 'quick brown', { visible: false })] });
+
+    tooltip.hoverAt(20, 84);
+    tooltip.activate();
+
+    expect(tooltip.isOpen()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+});
+
 describe('the ownership header (AC4)', () => {
   it('says `Вы` for an entry of the current reader', async () => {
     await boot();
@@ -405,7 +479,7 @@ describe('the ownership header (AC4)', () => {
     caret = { node: textOf('p1'), offset: 20 };
 
     tooltip.hoverAt(20, 84);
-    tooltip.pin();
+    tooltip.activate();
 
     const header = overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}`);
     expect(header?.textContent).toBe(FOREIGN_NAME);
@@ -549,7 +623,7 @@ describe('the tooltip and the page (AC2, A41, A68)', () => {
     const pageStyles = document.querySelectorAll('style').length;
 
     tooltip.hoverAt(20, 84);
-    tooltip.pin();
+    tooltip.activate();
 
     // The page's own subtree, not the extension's host element, which the overlay
     // owns and shows and hides on purpose.
@@ -586,16 +660,16 @@ describe('the tooltip and the page (AC2, A41, A68)', () => {
 });
 
 describe('the page wiring of the tooltip', () => {
-  it('shows, pins and dismisses through browser events', async () => {
+  it('shows, asks for the editor and dismisses through browser events', async () => {
     await boot();
     const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
     pointerMove(20, 84);
     expect(tooltip.isOpen()).toBe(true);
-    expect(tooltip.isPinned()).toBe(false);
 
     pressOnWidget();
-    expect(tooltip.isPinned()).toBe(true);
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].entry.id).toBe('a1b2c3d4e5f6');
     expect(tooltip.isOpen()).toBe(true);
 
     pressOnPage();

@@ -1,22 +1,27 @@
 // @vitest-environment jsdom
 /**
  * The editor of an existing entry, driven through a real shadow host, a real paint
- * pass and an in-memory storage seam (task `t3-03` AC1-AC5; rulings `A25`, `A42`,
- * `A43`, `A44`, `A45`, `A68`, `A74`).
+ * pass and an in-memory storage seam (task `t3-03` AC1-AC5, and the opening half of
+ * task `t5-03` AC1, AC2, AC3, AC7, AC8; rulings `A25`, `A42`, `A43`, `A44`, `A45`,
+ * `A68`, `A74`, `A96`, `A104`).
  *
  * The fixture is the shipped path, not a mock of it: the page is stored through core,
- * read and resolved by the real `paint pass` onto a recording `paint surface`, and the
- * controller is then handed exactly what `src/content/main.ts` hands it —
- * `painter.paintedEntries`. Only the seams a headless DOM cannot supply are injected:
- * the box seam, the viewport seam and the page-selection seam (jsdom has no user
- * selection). Everything else is the shipped module, so an editor that invented its
- * own idea of "which entry is this selection" or its own storage shape fails here.
+ * read and resolved by the real `paint pass` onto a recording `paint surface`, and a
+ * test then does exactly what the Flow 4 hook of `src/content/main.ts` does — take the
+ * `PaintedEntry` the pass produced and hand it to `openFromPaintedEntry` with the name
+ * that pass read (ruling `A104`). Only the seams a headless DOM cannot supply are
+ * injected: the box seam, the viewport seam and the page-selection seam (jsdom has no
+ * user selection). Everything else is the shipped module, so an editor that resolves an
+ * anchor of its own, invents its own idea of which entry to edit, or keeps its own
+ * storage shape fails here.
  *
  * Pinned behaviour, per acceptance criterion:
- * - **AC1** — selecting the text of one's own painted entry opens the editor
- *   prefilled with the stored comment; selecting a foreign entry's text opens **no
- *   widget at all** and claims the selection, so no create card appears either; a
- *   selection that only crosses an entry's boundary is not a claim;
+ * - **AC1 of `t3-03` + AC1 of `t5-03`** — the click on an own entry's `tooltip` opens
+ *   the editor prefilled with the stored comment, **with no page selection at all**;
+ *   **AC2 of `t5-03`** — the same click on a foreign entry opens **no widget at all**,
+ *   answers `false`, and writes nothing; **AC3 of `t5-03`** — the editor is never opened
+ *   by a selection, and the only entry it can open is one the paint pass produced
+ *   (**AC8**), including the entry that is not painted at all;
  * - **AC2** — `Сохранить` writes through core and nothing else: the stored record is
  *   read back through core `loadEntries`, `comment` and `updatedAt` move, `createdAt`
  *   and the `anchor` do not (ruling `A45`), and the port saw one slot write;
@@ -71,7 +76,6 @@ import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PagePainter } from '../src/content/paint/page-painter';
 import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-plan';
 import type { PaintSurface } from '../src/content/paint/paint-surface';
-import { entryOwningSelection } from '../src/content/editor/painted-selection';
 import { CONTENT_STRINGS, REFUSAL_TEXT } from '../src/content/text';
 import { CARD_VIEWPORT_GUTTER_PX } from '../src/content/overlay/card-placement';
 import type { Viewport } from '../src/content/overlay/card-placement';
@@ -237,6 +241,8 @@ interface Fixture {
   readonly surface: RecordingSurface;
   /** The entries the real paint pass put on the page. */
   paintedEntries: () => readonly PaintedEntry[];
+  /** The author name that pass read — the name the shipped Flow 4 hook pairs with it. */
+  authorNameOfPass: () => string | null;
   /** The page selection the controller reads at the save moment. */
   setPageSelection: (next: CapturedSelection | null) => void;
   /** A selection the page no longer contains: a detached node, not a stream node. */
@@ -314,7 +320,6 @@ async function boot(options: BootOptions = {}): Promise<Fixture> {
     port,
     pageUrl: () => PAGE_URL,
     clock: () => SAVED_AT,
-    paintedEntries: painter.paintedEntries,
     rangeFor,
     viewport: () => VIEWPORT,
     isHostBusy: options.isHostBusy ?? NEVER_BUSY,
@@ -341,6 +346,7 @@ async function boot(options: BootOptions = {}): Promise<Fixture> {
     saved,
     deleted,
     paintedEntries: painter.paintedEntries,
+    authorNameOfPass: painter.authorNameOfPass,
     setPageSelection: (next): void => {
       pageSelection = next;
     },
@@ -410,12 +416,34 @@ async function stored(portRef: MemoryStoragePort): Promise<Entry[]> {
   return page.entries;
 }
 
-/** Opens the editor over the own entry's words. */
-function openOwn(fixture: Fixture): boolean {
-  return fixture.editor.openFor(selection('p1', 4, 15), OWN_NAME);
+/**
+ * The Flow 4 click exactly as `src/content/main.ts` wires it: take the `PaintedEntry`
+ * the last paint pass produced, pair it with the name that pass read, hand it over.
+ * Ruling `A104` gives the editor its range this way, so the test cannot pass a range,
+ * an anchor or a selection to it at all.
+ */
+function clickEntry(fixture: Fixture, entryId: string): boolean {
+  const owner = fixture.paintedEntries().find(
+    (painted: PaintedEntry) => painted.entry.id === entryId,
+  );
+  if (owner === undefined) {
+    throw new Error(`the fixture paints no entry ${entryId}`);
+  }
+  const authorName = fixture.authorNameOfPass();
+  if (authorName === null) {
+    // The `settings gate` of the shipped wiring: with no usable name every entry of the
+    // page is foreign to the reader, so the click asks for nothing (`A25`).
+    return false;
+  }
+  return fixture.editor.openFromPaintedEntry(owner, authorName);
 }
 
-describe('AC1: selecting an existing entry opens its editor, not a create card', () => {
+/** The click on the own entry's `tooltip`. */
+function openOwn(fixture: Fixture): boolean {
+  return clickEntry(fixture, 'a1b2c3d4e5f6');
+}
+
+describe('AC1: the tooltip click opens the editor of the entry, and nothing else does', () => {
   it('opens the editor prefilled with the stored comment for one own entry', async () => {
     const fixture = await boot();
 
@@ -443,17 +471,44 @@ describe('AC1: selecting an existing entry opens its editor, not a create card',
       (button: HTMLButtonElement) => button.textContent === CONTENT_STRINGS.delete,
     );
     expect(deleteButton?.classList.contains(CARD_DELETE_CLASS)).toBe(true);
-    // The claim takes the overlay host, and the coordinator is told to dismiss the
+    // The click takes the overlay host, and the coordinator is told to dismiss the
     // tooltip (`A68`): a widget never turns off a host another widget is using.
     expect(overlay.host.hidden).toBe(false);
     expect(fixture.opened).toEqual(['opened']);
   });
 
-  it('opens nothing and claims the selection for a foreign entry (AC1, AC4, A25)', async () => {
+  it('opens with no page selection at all (t5-03 AC1, A104)', async () => {
+    const fixture = await boot();
+    fixture.setPageSelection(null);
+
+    expect(openOwn(fixture)).toBe(true);
+    expect(fixture.editor.isOpen()).toBe(true);
+    expect(fieldOf(overlay).value).toBe(OWN_COMMENT);
+    // The click of a page that holds no selection is the ordinary state of Flow 4, not
+    // an edge case: the editor is opened by the click, the range it stands over is the
+    // `resolved span` the paint pass registered, and a selection is one of the things a
+    // reader may do afterwards (`A96`, `A104`). So the save that follows is the ordinary
+    // comment-only write of ruling `A78`, and `anchor` is proof that no range moved.
+    const before = (await stored(port))[0];
+    await typeDraft(overlay, 'edited without selecting anything');
+    await press(overlay, CONTENT_STRINGS.save);
+
+    const after = await stored(port);
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe('edited without selecting anything');
+    expect(edited?.anchor).toEqual(before?.anchor);
+    expect(edited?.text).toBe(before?.text);
+    expect(edited?.updatedAt).toBe(SAVED_AT);
+    expect(fixture.editor.isOpen()).toBe(false);
+  });
+
+  it('opens nothing for a foreign entry, and asks for no create card either (t5-03 AC2, A25)', async () => {
     const fixture = await boot();
 
-    // `'fox jumps'` is the foreign entry's span.
-    expect(fixture.editor.openFor(selection('p1', 16, 25), OWN_NAME)).toBe(true);
+    // The reader clicked the `tooltip` of somebody else's note: the tooltip stays where
+    // it is (the coordinator dismisses only a widget that opened), the editor does not
+    // come, and a click is not a selection, so no create card is possible either.
+    expect(clickEntry(fixture, 'b2c3d4e5f6a1')).toBe(false);
     expect(fixture.editor.isOpen()).toBe(false);
     expect(editorElementOf(overlay)).toBeNull();
     expect(overlay.root.querySelectorAll(`.${CARD_INPUT_CLASS}`)).toHaveLength(0);
@@ -465,17 +520,47 @@ describe('AC1: selecting an existing entry opens its editor, not a create card',
     expect(fixture.port.calls.filter((call) => call.op !== 'get')).toEqual([]);
   });
 
-  it('does not claim a selection that only crosses the entry boundary', async () => {
+  it('is not openable through a selection at all (t5-03 AC3, A96)', async () => {
     const fixture = await boot();
+    fixture.setPageSelection(selection('p1', 4, 15));
 
-    // Starts before `'quick brown'` and ends inside it: the overlap rule owns this
-    // state, and it answers it at the write where the reader sees the sentence.
-    expect(fixture.editor.openFor(selection('p1', 0, 12), OWN_NAME)).toBe(false);
+    // The route the pre-`A96` design opened the editor with is gone from the shipped
+    // surface: the controller exposes no selection-shaped opening at all, so a selection
+    // cannot reach it even by accident. The names are matched as a shape, not as a list
+    // of retired identifiers, so the retired hand-over names are not revived here.
+    const exposed = fixture.editor as unknown as Record<string, unknown>;
+    const keys = Object.keys(exposed);
+    expect(keys.filter((key: string) => key.startsWith('open')).sort()).toEqual([
+      'openEntryId',
+      'openFromPaintedEntry',
+    ]);
+    expect(keys.filter((key: string) => /claim|select/i.test(key))).toEqual([]);
+    // The whole shipped surface of the editor controller, sorted: one opening, and it
+    // is asked with the `PaintedEntry` of the last pass plus the name that pass read.
+    expect(keys.sort()).toEqual([
+      'close',
+      'isOpen',
+      'openEntryId',
+      'openFromPaintedEntry',
+      'remove',
+      'submit',
+    ]);
     expect(fixture.editor.isOpen()).toBe(false);
     expect(editorElementOf(overlay)).toBeNull();
   });
 
-  it('claims nothing for a collapsed caret or for a stale entry', async () => {
+  it('refuses a second widget while an editor stands', async () => {
+    const fixture = await boot();
+    expect(openOwn(fixture)).toBe(true);
+
+    // One editor at a time, whichever click asked for it: the second answer is `false`
+    // and the first widget keeps its draft.
+    await typeDraft(overlay, 'a draft');
+    expect(openOwn(fixture)).toBe(false);
+    expect(fieldOf(overlay).value).toBe('a draft');
+  });
+
+  it('opens nothing for an entry the paint pass does not hold (t5-03 AC8, A24, A66)', async () => {
     const staleRecord = storedEntry({
       id: 'cccccccccccc',
       pageKey: PAGE_KEY,
@@ -488,37 +573,16 @@ describe('AC1: selecting an existing entry opens its editor, not a create card',
     });
     const fixture = await boot({ records: [ownRecord(), staleRecord] });
 
-    expect(fixture.editor.openFor(selection('p1', 4, 4), OWN_NAME)).toBe(false);
-    expect(fixture.editor.isOpen()).toBe(false);
-    expect(editorElementOf(overlay)).toBeNull();
-    // A stale entry is not painted, so its text is not claimable and a new note may be
-    // written over it (ruling `A24`). The record is still stored.
+    // A stale entry is not painted, so it has no tooltip and no click: its text is free
+    // for a new note (ruling `A24`), and the record is still stored and deletable.
+    expect(() => clickEntry(fixture, 'cccccccccccc')).toThrow(
+      'the fixture paints no entry cccccccccccc',
+    );
     expect(fixture.surface.heldNames()).toEqual(['inlinenotes-a1b2c3d4e5f6']);
     expect((await stored(port)).map((entry: Entry) => entry.id)).toEqual([
       'a1b2c3d4e5f6',
       'cccccccccccc',
     ]);
-  });
-
-  it('answers the claim from the paint pass, not from a second resolve', async () => {
-    const fixture = await boot();
-    const painted = fixture.paintedEntries();
-    expect(painted).toHaveLength(2);
-
-    // The same node-local offsets the highlights were registered with answer the
-    // question, which is what keeps the claim from offering to edit text that has no
-    // highlight (overlay -> "The `selection claim`").
-    expect(entryOwningSelection(painted, rangeIn(textOf('p1'), 6, 10))?.entry.id).toBe(
-      'a1b2c3d4e5f6',
-    );
-    expect(entryOwningSelection(painted, rangeIn(textOf('p1'), 18, 22))?.entry.id).toBe(
-      'b2c3d4e5f6a1',
-    );
-    // One boundary outside the span: the overlap rule owns that state, not the claim.
-    expect(entryOwningSelection(painted, rangeIn(textOf('p1'), 0, 12))).toBeNull();
-    expect(entryOwningSelection(painted, rangeIn(textOf('p1'), 4, 4))).toBeNull();
-    // A span the paint pass does not hold answers nothing at all.
-    expect(entryOwningSelection([], rangeIn(textOf('p1'), 4, 15))).toBeNull();
   });
 });
 
@@ -696,15 +760,15 @@ describe('AC3: one cancel path, and no write in it', () => {
     expect(parseFloat(collapsedWrapper.style.top)).toBe(CARD_VIEWPORT_GUTTER_PX);
   });
 
-  it('opens no editor when the entry cannot be measured, and still claims the selection', async () => {
+  it('opens no editor when the page refuses the fragment of the clicked entry', async () => {
     // The page measured the entry in the paint pass and refuses the same fragment at the
-    // press: `Range.setStart` rejects when the text node was replaced in between
+    // click: `Range.setStart` rejects when the text node was replaced in between
     // (rulings `A64`, `A66`, `A75`).
     const switchable = switchableSeam();
     const fixture = await boot({ rangeFor: switchable.rangeFor });
     switchable.refuse();
 
-    expect(fixture.editor.openFor(selection('p1', 4, 15), OWN_NAME)).toBe(true);
+    expect(clickEntry(fixture, 'a1b2c3d4e5f6')).toBe(false);
     expect(fixture.editor.isOpen()).toBe(false);
     expect(editorElementOf(overlay)).toBeNull();
     expect(overlay.host.hidden).toBe(true);
@@ -713,12 +777,12 @@ describe('AC3: one cancel path, and no write in it', () => {
 
   it('is not painted at all when the page refused the fragment in the paint pass', async () => {
     // The other half of the same page state: an entry the page will not measure is
-    // absent from the page (ruling `A66`), so there is nothing to claim and the create
-    // card is free to open over those words.
+    // absent from the page (ruling `A66`), so there is no tooltip to click and the
+    // create card is free to open over those words.
     const fixture = await boot({ rangeFor: refusingSeam() });
 
     expect(fixture.surface.heldNames()).toEqual([]);
-    expect(fixture.editor.openFor(selection('p1', 4, 15), OWN_NAME)).toBe(false);
+    expect(fixture.paintedEntries()).toEqual([]);
     expect(fixture.editor.isOpen()).toBe(false);
   });
 });
@@ -866,7 +930,7 @@ describe('AC5: a re-selection inside the editor answers the overlap rule, with t
 
   it('leaves a foreign entry out of reach, so no delete is possible through the editor', async () => {
     const fixture = await boot();
-    fixture.editor.openFor(selection('p1', 16, 25), OWN_NAME);
+    clickEntry(fixture, 'b2c3d4e5f6a1');
     await settle(2);
 
     expect(buttonsOf(overlay)).toEqual([]);

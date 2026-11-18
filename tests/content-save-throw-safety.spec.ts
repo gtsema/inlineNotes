@@ -150,6 +150,10 @@ function mount(captured: CapturedSelection, port: MemoryStoragePort = new Memory
     clock: () => STAMP,
     rng: () => 0.5,
     readSelection: () => captured,
+    // This file pins the two `catch`es of the create path, not the page: it stores no
+    // entry, so the page holds nothing painted and the `contained own selection` silence
+    // of ruling `A103` answers `false` for every capture here.
+    paintedEntries: () => [],
     rangeFor: (node, start, end) => {
       measured.push({ node, start, end });
       return { getBoundingClientRect: () => FRAGMENT_BOX };

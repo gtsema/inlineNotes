@@ -1,44 +1,53 @@
 /**
  * The editor controller: the state machine that owns one open editor over an
- * existing entry (task `t3-03`).
+ * existing entry (task `t3-03`, and the opening half of task `t5-03`).
  *
- * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 5-6, Rules /
- * Semantics -> "The editor is opened by a selection, never by a foreign entry",
- * "The editor keeps its range unless the reader re-selects", "Editor lifetime",
- * "Card placement" (rulings `A30`, `A64`, `A65`, reused), "The card and the editor
- * must be reachable by keyboard" (ruling `A74`), and the `A68` coexistence rule;
- * task `t3-03` AC1-AC5.
+ * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 4-5, Rules /
+ * Semantics -> "The `editor widget` is opened by a click on the `tooltip`", "Editor
+ * placement", "Editor lifetime", "The editor keeps its range unless the reader
+ * re-selects", "Ruling `A78`: what a successful `re-selection` stores", "Settings name
+ * picked up without a reload", "Page-boundary throws", plus "Card placement" (rulings
+ * `A30`, `A64`, `A65`, reused), "The card and the editor must be reachable by
+ * keyboard" (ruling `A74`) and the `A68` coexistence rule; and
+ * `docs/specs/inline-comment-model.md` -> "Edit rights", "Overlap", "Staleness".
+ * Task `t3-03` AC2-AC5 for the editor itself, and task `t5-03` AC1, AC2, AC3, AC7,
+ * AC8, AC9 for the half ruling `A96` and ruling `A104` changed; rulings `A42`, `A43`,
+ * `A44`, `A45`, `A64`, `A65`, `A74`, `A78`, `A96`, `A104`.
  *
  * One editor at a time, and this controller is the only writer of the widget's open
  * state. It never repositions an open editor: the overlay spec's answer to moved text
  * is the close, not the chase (ruling `A32`).
  *
- * **The claim, which is the whole of Flow 6.** `openFor` answers a yes/no question to
- * the create-card controller: *does this selection belong to an existing entry?* It
- * answers `true` — "no create card here" — in three states, and only one of them
- * opens a widget:
- * - the selection lies inside the reader's own painted entry → the editor opens;
- * - it lies inside **somebody else's** entry → nothing opens. `A25` and model AC8
- *   give a foreign record no edit affordance at all, and a create card would be
- *   refused by core as an overlap, so opening one would promise a note the reader is
- *   not allowed to write. The read-only `tooltip` of Flow 3 is the whole of what a
- *   foreign entry offers;
- * - it lies inside the reader's own entry but the entry's fragments cannot be
- *   measured → the editor does not open (the `A64` rule of the create card applied
- *   here): a widget without coordinates is a widget the reader cannot reach, and the
- *   alternative — mounting it and then failing — is what `t3-01` ruling `A64` closed
- *   for the card.
+ * **How the editor opens is the whole of what task `t5-03` changed here.**
+ * `openFromPaintedEntry` is asked by the `tooltip` controller at the Flow 4 click, and
+ * it is asked with the entry that entry was painted from — the output of the last
+ * `paint pass` — because ruling `A104` chose the paint pass as the range of the editor:
+ * no page selection is required, no anchor is resolved a second time, and no stored
+ * range moves. `measureEntryBox` is a placement measurement, not a derivation.
+ * - the entry is the reader's own → the editor opens, prefilled with the stored
+ *   `comment`;
+ * - it is **somebody else's** entry → `false`, and nothing opens. `A25` and model AC8
+ *   give a foreign record no edit affordance at all, and the read-only `tooltip` the
+ *   reader is already looking at is the whole of what a foreign entry offers;
+ * - it is the reader's own but its fragments cannot be measured → `false` and nothing
+ *   opens (the `A64` rule of the create card applied to the click): a widget without
+ *   coordinates is a widget the reader cannot reach, and the `tooltip` that was clicked
+ *   simply stays where it was.
  *
- * `true` is also the answer while an editor is already open, so a re-selection made
- * inside an open editor can never open a create card next to it.
+ * `false` is also the answer while an editor is already open, and a click that hears
+ * `false` opens nothing else either: a click is not a selection, so no create card is
+ * waiting behind it.
  *
  * **The range rule, and where it is decided.** Saving an unchanged selection is a
- * comment edit: the entry keeps the span it has (ruling `A45`). The controller
- * therefore keeps the boundary points of the selection that opened the editor and
- * compares them with the page selection at the moment the save button is pressed;
- * only a
- * difference is a re-selection, and only a re-selection is handed to the edit path as
- * a new span to check. The comparison is identity plus offsets — the same comparison
+ * comment edit: the entry keeps the span it has (ruling `A45`). The baseline of that
+ * comparison is the `resolved span` the editor was opened over — the fragment set the
+ * `paint pass` registered (ruling `A104`) — and it is compared with the page selection
+ * at the moment the save button is pressed; only a difference is a `re-selection`, and
+ * only a `re-selection` is handed to the edit path as a new span to check. So the reader
+ * who clicks the `tooltip`, selects the note's own words again (a selection that opens
+ * nothing, ruling `A103`) and then saves has changed the comment and nothing else, while
+ * a reader who selects other text has moved the note's subject and gets the `overlap`
+ * answer of ruling `A78`. The comparison is identity plus offsets — the same comparison
  * `sameSelectionBoundaries` performs for the card's `A32` rule — because comparing a
  * remembered *range* with a freshly resolved one is the failure the `A37` contract
  * warns about: two measurements of two different page states.
@@ -61,7 +70,6 @@ import {
 import type { CapturedSelection, SelectionBoundaries } from '../capture/page-selection';
 import { saveEntryComment, removeEntryFromPage } from '../editor/edit-entry';
 import type { EditNoteResult } from '../editor/edit-entry';
-import { entryOwningSelection } from '../editor/painted-selection';
 import type { PaintedEntry } from '../paint/paint-plan';
 import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
@@ -82,9 +90,11 @@ export interface EditorControllerOptions {
   pageUrl: () => string;
   /** One ISO stamp per write (ruling `A9`). */
   clock: () => string;
-  /** The entries the last paint pass put on the page, in paint order. */
-  paintedEntries: () => readonly PaintedEntry[];
-  /** Test seam: which selection to read at open time and again at save time. */
+  /**
+   * Test seam: which page selection to read at save time, where the `re-selection`
+   * question of ruling `A45` is asked. Ruling `A104`: the click brings no selection, so
+   * this read is never what decides *which* entry the editor belongs to.
+   */
   readSelection?: (doc: Document, host: HTMLElement) => CapturedSelection | null;
   /** Test seam: how a fragment is measured. */
   rangeFor?: RangeForFragment;
@@ -107,11 +117,12 @@ export interface EditorControllerOptions {
 /** The controller the page wiring talks to. */
 export interface EditorController {
   /**
-   * Flow 6: takes the selection if it belongs to an existing entry, opening the
-   * editor when the reader is allowed to edit it. `true` means the caller must not
-   * open a create card.
+   * Flow 4: opens the editor of the entry the reader clicked the `tooltip` of, asked
+   * with the `PaintedEntry` the last `paint pass` produced (ruling `A104`). `false` is
+   * the answer for a `foreign entry`, for an entry the page will not measure, and while
+   * another editor is open — and the caller opens nothing else in that case.
    */
-  openFor(selection: CapturedSelection, authorName: string): boolean;
+  openFromPaintedEntry(owner: PaintedEntry, authorName: string): boolean;
   /** The save button: writes through core and closes on success only. */
   submit(comment: string): Promise<EditNoteResult>;
   /** The delete button: removes the entry at once (ruling `A44`). */
@@ -129,7 +140,12 @@ interface EditorSession {
   /** Subtree the re-selection is resolved against — the root of the open moment. */
   readonly root: Node;
   readonly authorName: string;
-  /** The boundary points of the selection that opened the editor. */
+  /**
+   * The boundary points of the `resolved span` this editor was opened over — the
+   * fragments the last `paint pass` registered (ruling `A104`). It is the baseline the
+   * `re-selection` question of ruling `A45` is asked against: a page selection on those
+   * very points is the same selected text, not a move.
+   */
   readonly boundaries: SelectionBoundaries;
 }
 
@@ -151,39 +167,48 @@ export function createEditorController(
 
   let session: EditorSession | null = null;
 
-  function openFor(selection: CapturedSelection, authorName: string): boolean {
+  function openFromPaintedEntry(owner: PaintedEntry, authorName: string): boolean {
     if (session !== null) {
-      return true;
-    }
-    const owner = entryOwningSelection(options.paintedEntries(), selection.range);
-    if (owner === null) {
       return false;
     }
     if (!isOwnEntry(owner.entry, authorName)) {
-      // Claimed and left closed: a foreign entry has no editor (`A25`, model AC8).
-      return true;
+      // Nothing opens: a foreign entry has no editor (`A25`, model AC8), and the
+      // `tooltip` the reader clicked is the whole of what that entry offers.
+      return false;
     }
     const measured = measureEntryBox(owner.fragments);
     if (!measured.ok) {
       // The page would not measure the entry: no coordinates, so no widget, and the
-      // selection is still not the create card's (`A64` applied to the editor).
-      return true;
+      // `tooltip` that was clicked stays where it was (`A64` applied to the click).
+      return false;
     }
-    open(owner, selection, authorName, measured.box);
+    const openedOver = spanBoundariesOf(owner.fragments);
+    if (openedOver === null) {
+      // An entry the pass carries no fragment for has no span to open over, so ruling
+      // `A104` has nothing to answer and the click opens nothing.
+      return false;
+    }
+    open(owner, authorName, openedOver, measured.box);
     return true;
   }
 
+  /**
+   * Mounts the editor over the entry's own `resolved span` (ruling `A104`): the only
+   * range this module ever sees is the fragment set the `paint pass` registered, and
+   * the only thing the measurement above decided is where the widget stands. No page
+   * selection is read here — the click is the whole of the opening argument.
+   */
   function open(
     owner: PaintedEntry,
-    selection: CapturedSelection,
     authorName: string,
+    openedOver: SelectionBoundaries,
     anchorBox: Box | null,
   ): void {
     session = {
       entryId: owner.entry.id,
-      root: selection.root,
+      root: doc.body,
       authorName,
-      boundaries: selectionBoundaries(selection.range),
+      boundaries: openedOver,
     };
     render(
       <EntryEditor
@@ -206,10 +231,12 @@ export function createEditorController(
    * The save button. The re-selection question is answered here, at the moment of the
    * press, and never from a span remembered at open time.
    *
-   * A page selection that is gone (`null`) or that has the same boundary points as the
-   * one that opened the editor is not a re-selection: the entry keeps its range
-   * (ruling `A45`), and no overlap question is asked. A selection inside the overlay
-   * host is `null` by the capture rule of `page-selection.ts`, which is what keeps a
+   * A page selection that is gone (`null`) or that sits on the very boundary points of
+   * the span the editor was opened over is not a re-selection: the entry keeps its range
+   * (ruling `A45`), and no overlap question is asked — which is the ordinary case of an
+   * editor a `tooltip` click opened and a reader then selected the same words in again
+   * (rulings `A104`, `A103`). A selection inside the overlay host is `null` by the
+   * capture rule of `page-selection.ts`, which is what keeps a
    * caret moving inside the editor's own textarea from looking like a moved note.
    *
    * On a refusal the editor stays open with its draft and the widget shows the
@@ -244,7 +271,7 @@ export function createEditorController(
    * paint and the tooltip (task `t3-03` AC4). No confirmation is asked (ruling `A44`),
    * and no
    * authorship is checked here: `A25` puts that rule in the UI, and the UI half is
-   * `openFor` refusing to open for a foreign entry at all.
+   * `openFromPaintedEntry` answering `false` for a foreign entry at all.
    */
   async function remove(): Promise<EntryWriteResult> {
     if (session === null) {
@@ -315,10 +342,11 @@ export function createEditorController(
    * mounted**, and guarded at the call site (task `t3-05` AC1, ruling `A75`).
    *
    * `Range.setStart` / `setEnd` reject when the page replaced the text node under a
-   * fragment between the paint pass and this press. The answer is the same per-entry
+   * fragment between the paint pass and this click. The answer is the same per-entry
    * degradation rulings `A64` and `A66` give everywhere else: this entry gets no
-   * widget, nothing else changes, nothing is written, and the next settled selection is
-   * a fresh claim attempt.
+   * widget, the `tooltip` that was clicked stays where it was, nothing is written, and
+   * the next `paint pass` is what reconciles the page. No create card follows the
+   * refusal, because a click is not a selection.
    */
   function measureEntryBox(fragments: readonly FragmentOffsets[]): AnchorMeasurement {
     try {
@@ -329,7 +357,7 @@ export function createEditorController(
   }
 
   return {
-    openFor,
+    openFromPaintedEntry,
     submit,
     remove,
     close,
@@ -340,6 +368,32 @@ export function createEditorController(
 
 /** The outcome of one measurement attempt (`A64`, not `A65`). */
 type AnchorMeasurement = { ok: true; box: Box | null } | { ok: false };
+
+/**
+ * The boundary points of an entry's `resolved span` as the paint pass holds it: the
+ * first fragment's start and the last fragment's end, in the document order the pass
+ * stores them in.
+ *
+ * These are the same node-local offsets the `paint name` was registered with, so the
+ * baseline of the `re-selection` question and the highlight on the screen cannot
+ * disagree — which is the whole of ruling `A104`. `null` answers only for a fragment set
+ * the pass does not carry, which is no span an editor can open over.
+ */
+function spanBoundariesOf(
+  fragments: readonly FragmentOffsets[],
+): SelectionBoundaries | null {
+  const first = fragments[0];
+  const last = fragments[fragments.length - 1];
+  if (first === undefined || last === undefined) {
+    return null;
+  }
+  return {
+    startNode: first.node,
+    startOffset: first.start,
+    endNode: last.node,
+    endOffset: last.end,
+  };
+}
 
 /** The one wrapper element of the editor inside a shadow root. */
 function ensureEditorWrapper(doc: Document, root: ShadowRoot): HTMLElement {

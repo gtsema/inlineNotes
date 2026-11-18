@@ -518,15 +518,21 @@ describe('the card and the paint do not own each other (A68)', () => {
     if (overlay === null) {
       throw new Error('jsdom is the top frame, so the host must exist');
     }
+    // The selection is deliberately **not** the painted entry's own words: since ruling
+    // `A103` a selection wholly inside the reader's own painted entry opens no card at
+    // all, and this case needs a card that really opens and really closes.
     const range = document.createRange();
-    range.setStart(textOf('p1'), 4);
-    range.setEnd(textOf('p1'), 15);
+    range.setStart(textOf('p1'), 16);
+    range.setEnd(textOf('p1'), 25);
     const controller = createCreateCardController(document, overlay, {
       port,
       pageUrl: () => PAGE_URL,
       clock: () => '2026-01-02T03:04:05.006Z',
       rng: () => 0.5,
       readSelection: () => ({ range, root: document.body }),
+      // The paint pass of this fixture really ran, so the card is given that pass's own
+      // answer to the `contained own selection` question rather than an empty list.
+      paintedEntries: painter.paintedEntries,
       // Task `t3-02`: the selection and the document are real, but a headless test DOM
       // reports no layout for a `Range`, so the shipped measurement seam throws and
       // ruling `A64` correctly opens no card. The box seam is injected so this fixture

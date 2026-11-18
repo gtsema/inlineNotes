@@ -34,9 +34,10 @@
  * - **AC3** — a settings-name change written in options is visible to an already loaded
  *   page: the `ownership header` comparison follows the new name after the repaint the
  *   settings key triggers, the entry that became the reader's own opens its editor on
- *   the next selection, and the create card the missing name refused opens once a name
- *   exists — that last half needs no repaint at all, because one capture attempt is one
- *   fresh core read, and the watch correctly does nothing to widgets.
+ *   the next `tooltip` click (ruling `A96`), and the create card the missing name
+ *   refused opens once a name exists — that last half needs no repaint at all, because
+ *   one capture attempt is one fresh core read, and the watch correctly does nothing to
+ *   widgets.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -51,7 +52,7 @@ import { PAGE_INDEX_KEY, SETTINGS_KEY, entryStorageKey } from '../src/core/stora
 import { codePointOffsetAt } from '../src/core/text-normalize';
 import { buildTextStream } from '../src/content/anchor/text-stream';
 import type { RangeForFragment } from '../src/content/capture/fragment-rect';
-import { entryOwningSelection } from '../src/content/editor/painted-selection';
+import { entryContainingSelection } from '../src/content/overlay/contained-own-selection';
 import { CARD_CLASS } from '../src/content/overlay/card-style';
 import { createCreateCardController } from '../src/content/overlay/create-card-controller';
 import { createEditorController } from '../src/content/overlay/editor-controller';
@@ -462,15 +463,13 @@ describe('AC3 — a settings name written in options reaches a loaded page', () 
     expect(isOwnEntry(entry, wiring.authorNameOfPass())).toBe(true);
   });
 
-  it('opens the editor of an entry that became the reader’s own on the next selection', async () => {
+  it('opens the editor of an entry that became the reader’s own on the next tooltip click', async () => {
     const overlay = freshHost();
     const wiring = await boot({ records: [recordOf('b2c3d4e5f6a1', 'fox jumps', FOREIGN_NAME)] });
 
-    const claims: boolean[] = [];
     const editor = createEditorController(document, overlay, {
       port: wiring.port,
       pageUrl: () => PAGE_URL,
-      paintedEntries: wiring.paintedEntries,
       clock: () => WRITTEN_AT,
       // jsdom measures no range, so the box arrives through the shipped seam: without
       // it the editor would refuse for `A64` and the test would pin nothing about
@@ -484,36 +483,50 @@ describe('AC3 — a settings name written in options reaches a loaded page', () 
       clock: () => WRITTEN_AT,
       rng: () => 0.5,
       rangeFor: seam(),
-      claimSelection: (selection, authorName) => {
-        // Exactly the shipped hook of `src/content/main.ts`: the card hands the
-        // selection and the name its own capture just read to the editor, so the
-        // ownership answer is the name of this attempt, not of the last paint pass.
-        const claimed = editor.openFor(selection, authorName);
-        claims.push(claimed);
-        return claimed;
-      },
+      paintedEntries: wiring.paintedEntries,
     });
 
-    // Before: the entry belongs to another reader. Flow 6 still claims the selection —
-    // no create card over somebody else's note — but no editor opens.
-    selectPageText('p1', 16, 25);
-    await card.capture();
-    expect(claims).toEqual([true]);
-    expect(editor.isOpen()).toBe(false);
-    expect(card.isOpen()).toBe(false);
+    /** The shipped Flow 4 hook of `src/content/main.ts`: the name is the pass's own. */
+    const clickTooltipOf = (entryId: string): boolean => {
+      const owner = wiring.paintedEntries().find((p) => p.entry.id === entryId);
+      if (owner === undefined) {
+        throw the('fixture entry is not painted');
+      }
+      const authorName = wiring.authorNameOfPass();
+      if (authorName === null) {
+        return false;
+      }
+      return editor.openFromPaintedEntry(owner, authorName);
+    };
 
-    // After the name moved in options, the very same selection gets the editor. The
-    // page is the shipped one: the watch is told about the settings key, so the paint
-    // pass re-reads the name as well.
+    // Before: the entry belongs to another reader. Its `tooltip` click opens nothing
+    // (`A25`), while a selection of those same words opens the create card, because the
+    // `contained own selection` silence is per author and creating over a foreign note
+    // is legal since ruling `A93`.
+    selectPageText('p1', 16, 25);
+    expect(clickTooltipOf('b2c3d4e5f6a1')).toBe(false);
+    expect(editor.isOpen()).toBe(false);
+    await card.capture();
+    expect(card.isOpen()).toBe(true);
+    card.close();
+
+    // After the name moved in options, the very same painted entry gets the editor from
+    // its `tooltip` click. The page is the shipped one: the watch is told about the
+    // settings key, so the paint pass re-reads the name as well and the entry the click
+    // hands over is the one the repaint produced (rulings `A31`, `A25`, `A96`, `A104`).
     const saved = await saveSettings(wiring.port, { name: FOREIGN_NAME });
     if (!saved.ok) {
       throw the(`fixture settings write refused with ${saved.code}`);
     }
     await wiring.fire([SETTINGS_KEY]);
     expect(wiring.authorNameOfPass()).toBe(FOREIGN_NAME);
-    await card.capture();
-    expect(claims).toHaveLength(2);
+    expect(clickTooltipOf('b2c3d4e5f6a1')).toBe(true);
     expect(editor.isOpen()).toBe(true);
+
+    // The same words are now the reader's own, so the selection that created a card a
+    // moment ago opens nothing at all (ruling `A103`).
+    card.close();
+    await card.capture();
     expect(card.isOpen()).toBe(false);
   });
 
@@ -526,6 +539,11 @@ describe('AC3 — a settings name written in options reaches a loaded page', () 
       clock: () => WRITTEN_AT,
       rng: () => 0.5,
       rangeFor: seam(),
+      // This case pins the `settings gate` of ruling `A31` and nothing about painting:
+      // it reports no painted entry, so the answer under test is the one the missing
+      // name refused and not the `contained own selection` silence of ruling `A103`,
+      // which has its own pins in `tests/content-create-card-controller.spec.ts`.
+      paintedEntries: (): readonly PaintedEntry[] => [],
     });
 
     selectPageText('p1', 4, 15);
@@ -553,10 +571,10 @@ describe('AC3 — a settings name written in options reaches a loaded page', () 
 });
 
 describe('the entry the selection points at is the entry the watch repainted', () => {
-  it('claims the entry as the repaint left it, not as the load found it', async () => {
+  it('answers with the entry as the repaint left it, not as the load found it', async () => {
     const wiring = await boot({ records: [recordOf('a1b2c3d4e5f6', 'quick brown', OWN_NAME)] });
     const range = rangeIn(textOf('p1'), 4, 15);
-    expect(entryOwningSelection(wiring.paintedEntries(), range)).not.toBeNull();
+    expect(entryContainingSelection(wiring.paintedEntries(), range)).not.toBeNull();
 
     const written = await updateEntryComment(wiring.port, {
       url: PAGE_URL,
@@ -570,7 +588,7 @@ describe('the entry the selection points at is the entry the watch repainted', (
     }
     await wiring.fire([entryStorageKey(PAGE_KEY), PAGE_INDEX_KEY]);
 
-    const claimed = entryOwningSelection(wiring.paintedEntries(), range);
-    expect(claimed?.entry.comment).toBe(NEW_COMMENT);
+    const owner = entryContainingSelection(wiring.paintedEntries(), range);
+    expect(owner?.entry.comment).toBe(NEW_COMMENT);
   });
 });

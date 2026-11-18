@@ -3,8 +3,9 @@
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 1-2, Rules /
  * Semantics -> "Card placement" (ruling `A30`), "Card lifetime" (ruling `A32`),
- * "Settings gate before the card" (ruling `A31`), "Refusal message map" (ruling
- * `A33`); task `t3-01` AC1, AC3, AC4, AC5.
+ * "Settings gate before the card" (ruling `A31`), "The `contained own selection`"
+ * (ruling `A103`), "Refusal message map" (ruling `A33`); task `t3-01` AC1, AC3, AC4,
+ * AC5 and task `t5-03` AC4, AC5, AC6.
  *
  * One card at a time, and the controller is the only writer of the host's visible
  * state for this widget: it opens, it closes, and it never repositions an open card
@@ -33,16 +34,17 @@
  * name the author rule refuses means no card at all — not a card with a disabled
  * button, because the user would have no way to see why.
  *
- * The handover of Flow 6 (`t3-03`): the `claimSelection` hook is asked after the
- * settings gate and before anything is measured. It answers "this selection lies
- * inside an existing entry's range", and the answer is given by the editor
- * controller of `editor-controller.tsx`, because that is the module that knows what
- * lies on the page. A claimed selection opens no card: the reader who selects the
- * text of an existing note gets that note's editor, or — for somebody else's note —
- * nothing but the tooltip, and a card there would only be refused by core as an
- * overlap. The hook is asked **after** the author gate on purpose: with no usable
- * name every entry of the page is foreign, no editor can open, and `A31` already
- * answers with no widget at all.
+ * The `contained own selection` (ruling `A103`, task `t5-03` AC4): a settled selection
+ * whose whole range lies inside the `resolved span` of one of the reader's own painted
+ * entries opens **no widget at all**. The question is answered by
+ * `contained-own-selection.ts` from the output of the last paint pass, and it is asked
+ * after the author gate on purpose: with no usable name every entry of the page is
+ * foreign, nothing of it is the reader's, and `A31` already answers with no widget. A
+ * selection inside somebody else's entry is not one — the card opens there, because
+ * creating over a foreign note is legal since ruling `A93` — and so is a selection that
+ * only crosses one boundary of an own entry, which the `overlap` rule answers at the
+ * write. Nothing is measured and no core write is attempted for a contained selection:
+ * the page already shows the note that selection describes.
  *
  * Everything the controller reads from the environment arrives either through the
  * injected options or through the `Document` it is given, so the whole machine runs
@@ -66,9 +68,11 @@ import type { CreateNoteResult } from '../create/create-note';
 import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
 import { CARD_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
+import { isContainedOwnSelection } from './contained-own-selection';
 import { CreateCard } from './create-card';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
+import type { PaintedEntry } from '../paint/paint-plan';
 import type { Entry } from '../../core/entry';
 import type { RandomSource } from '../../core/entry-rules';
 import type { StoragePort } from '../../core/storage-port';
@@ -93,12 +97,11 @@ export interface CreateCardOptions {
   /** Handover to the painting stage (`t3-02`): the entry that was just stored. */
   onCreated?: (entry: Entry) => void;
   /**
-   * Flow 6 handover (`t3-03`): `true` when another widget owns this selection — the
-   * editor of an existing entry — so no create card opens. The hook may open that
-   * other widget as a side effect, and it is asked only after the `settings gate`
-   * answered with a usable name.
+   * The entries the last `paint pass` put on the page, in paint order — the only
+   * description of the page this controller consults for the `contained own selection`
+   * silence of ruling `A103`. It never resolves an anchor to answer it.
    */
-  claimSelection?: (selection: CapturedSelection, authorName: string) => boolean;
+  paintedEntries: () => readonly PaintedEntry[];
 }
 
 /** The open card, or nothing. */
@@ -251,6 +254,10 @@ export function createCreateCardController(
     }
   }
 
+  /**
+   * One capture attempt: settings gate, the `contained own selection` silence, capture,
+   * placement, mount.
+   */
   async function capture(): Promise<void> {
     if (session !== null) {
       return;
@@ -263,9 +270,10 @@ export function createCreateCardController(
     if (authorName === null) {
       return;
     }
-    if (options.claimSelection?.(selection, authorName) === true) {
-      // Flow 6: the selection is an existing entry's, and the editor controller took
-      // it — or refused to open anything for a foreign entry. Either way, no card.
+    if (isContainedOwnSelection(options.paintedEntries(), selection.range, authorName)) {
+      // `A103`: the page already says everything this selection would say — the note is
+      // painted there and its `tooltip` answers a pointer inside it. No card, and no
+      // editor either: a selection is not the click that opens one (ruling `A96`).
       return;
     }
     const span = captureFromPage(selection);

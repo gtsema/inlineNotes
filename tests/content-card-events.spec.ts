@@ -163,6 +163,10 @@ async function wire(): Promise<Wiring> {
     clock: () => '2026-01-02T03:04:05.006Z',
     rng: () => 0.5,
     rangeFor: () => ({ getBoundingClientRect: () => FRAGMENT_BOX }),
+    // This file wires the **events**, not the page: it stores no entry and runs no
+    // `paint pass`, so the page holds no painted entry and the `contained own
+    // selection` silence of ruling `A103` answers `false` for every capture here.
+    paintedEntries: () => [],
   });
   const dispose = attachCreateCardEvents(controller, document, window, overlay.host, SETTLE_MS);
   active = dispose;
