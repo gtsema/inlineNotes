@@ -48,7 +48,9 @@ import type { CapturedSelection } from '../src/content/capture/page-selection';
 import { createNote } from '../src/content/create/create-note';
 import { ensureOverlayHost, OVERLAY_HOST_ID } from '../src/content/overlay/host';
 import type { OverlayHost } from '../src/content/overlay/host';
-import type { PaintedEntry } from '../src/content/paint/paint-plan';
+import { createPagePainter } from '../src/content/paint/page-painter';
+import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-plan';
+import type { PaintSurface } from '../src/content/paint/paint-surface';
 import {
   CARD_CLASS,
   CARD_COUNTER_CLASS,
@@ -97,6 +99,14 @@ interface Fixture {
   readonly created: Entry[];
   /** Offsets the controller handed to the range factory, in call order. */
   readonly measured: Array<{ node: Node; start: number; end: number }>;
+  /**
+   * Runs the real `paint pass` over this fixture's stored page and hands its output to
+   * the card. It is the only way a case can answer the `contained own selection`
+   * question of ruling `A103` with the page described the way the page describes it.
+   * A fixture that never calls it keeps an empty painted list, which is what most cases
+   * of this file want: they pin the card, not the painting.
+   */
+  readonly paint: () => Promise<readonly PaintedEntry[]>;
 }
 
 /** What a measuring seam answers for one fragment, or a throw (`A64`). */
@@ -150,8 +160,25 @@ function selectionAcross(
  */
 const COLLAPSED_BOX: Box = { left: 500, top: 400, width: 0, height: 0 };
 
-/** The painted page of a fixture that runs no `paint pass`: nothing to be inside of. */
-const EMPTY_PAINTED = (): readonly PaintedEntry[] => [];
+/** A paint surface that only remembers its names: a headless DOM has no Highlight API. */
+class RecordingSurface implements PaintSurface {
+  private readonly held = new Map<string, readonly PaintedFragment[]>();
+
+  paint(name: string, fragments: readonly PaintedFragment[]): void {
+    if (fragments.length > 0) {
+      this.held.set(name, fragments);
+    }
+  }
+
+  clear(name: string): void {
+    this.held.delete(name);
+  }
+
+  heldNames(): readonly string[] {
+    return [...this.held.keys()];
+  }
+}
+
 
 /**
  * Builds the controller for one host. `readSelection` is the shipped seam, so the
@@ -164,8 +191,9 @@ const EMPTY_PAINTED = (): readonly PaintedEntry[] => [];
  *
  * The `paintedEntries` option is the output of the last `paint pass` — the only page
  * description the controller consults for the `contained own selection` silence of
- * ruling `A103`. No case of this file paints anything, so the answer is an empty list
- * and every capture here behaves as Flow 1 always did.
+ * ruling `A103`. A fixture runs that pass only when its case asks for it (`paint()`), so
+ * every other case here answers with an empty painted list and behaves as Flow 1 always
+ * did.
  */
 function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
   const overlay = ensureOverlayHost();
@@ -180,13 +208,24 @@ function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
     const rect = rectOf === undefined ? FRAGMENT_BOX : rectOf(node, start, end);
     return { getBoundingClientRect: () => rect };
   };
+  // The card is handed the output of a real pass over this fixture's own port, and the
+  // pass runs only when a case asks for it. Its measurement seam is deliberately not the
+  // recording one above: `measured` is the card's span capture, and a case that asserts
+  // "the capture measured exactly this range" must not be polluted by a paint pass.
+  let painted: readonly PaintedEntry[] = [];
+  const painter = createPagePainter(document, {
+    port,
+    url: () => PAGE_URL,
+    surface: new RecordingSurface(),
+    rangeFor: () => ({ getBoundingClientRect: () => FRAGMENT_BOX }),
+  });
   const cardOptions: CreateCardOptions = {
     port,
     pageUrl: () => PAGE_URL,
     clock: () => STAMP,
     rng: () => 0.5,
     readSelection: () => captured,
-    paintedEntries: EMPTY_PAINTED,
+    paintedEntries: (): readonly PaintedEntry[] => painted,
     rangeFor,
     viewport: () => VIEWPORT,
     onCreated: (entry: Entry): void => {
@@ -194,7 +233,18 @@ function mount(captured: CapturedSelection | null, rectOf?: RectOf): Fixture {
     },
   };
   const controller = createCreateCardController(document, overlay, cardOptions);
-  return { overlay, port, controller, created, measured };
+  return {
+    overlay,
+    port,
+    controller,
+    created,
+    measured,
+    paint: async (): Promise<readonly PaintedEntry[]> => {
+      await painter.refresh();
+      painted = painter.paintedEntries();
+      return painted;
+    },
+  };
 }
 
 /** The one card element inside the shadow root, or `null`. */
@@ -652,6 +702,81 @@ describe('Сохранить goes through the core write path (AC4)', () => {
     const page = await loadEntries(fixture.port, PAGE_URL);
     expect(page.entries).toHaveLength(2);
     expect(fixture.created).toHaveLength(1);
+  });
+});
+
+describe('the contained own selection opens nothing (t5-03 AC4, AC5, AC6; ruling `A103`)', () => {
+  it('opens no card, and asks the store for no write, for a selection wholly inside the reader’s own painted note', async () => {
+    const fixture = mount(selection('p1', 5, 12));
+    await seedAuthor(fixture.port);
+    await seedEntry(fixture.port, rangeIn(textOf('p1'), 4, 15), 'the note I wrote here');
+    const painted = await fixture.paint();
+    // The page really holds the note: without this the case would pass because nothing
+    // is painted, which is a different answer from "this selection is inside your own".
+    expect(painted.map((paintedEntry: PaintedEntry) => paintedEntry.entry.text)).toEqual([
+      'quick brown',
+    ]);
+    const callsBeforeCapture = fixture.port.calls.length;
+
+    await fixture.controller.capture();
+
+    expect(fixture.controller.isOpen()).toBe(false);
+    expect(cardOf(fixture.overlay)).toBeNull();
+    // The silence comes before the mount and before the create path: the host is not
+    // taken, the span is not measured a second time, and no `set` of any kind runs.
+    expect(fixture.overlay.host.hidden).toBe(true);
+    expect(fixture.measured).toEqual([]);
+    const asked = fixture.port.calls.slice(callsBeforeCapture);
+    expect(asked.filter((call) => call.op !== 'get')).toEqual([]);
+    const after = await loadEntries(fixture.port, PAGE_URL);
+    expect(after.entries).toHaveLength(1);
+    expect(after.entries[0]?.comment).toBe('the note I wrote here');
+  });
+
+  it('opens the card for a selection wholly inside a foreign note, because the silence is per author (AC5, A103, A93)', async () => {
+    const fixture = mount(selection('p1', 5, 12));
+    await seedAuthor(fixture.port);
+    await seedEntry(
+      fixture.port,
+      rangeIn(textOf('p1'), 4, 15),
+      'a note somebody else wrote',
+      FOREIGN_AUTHOR,
+    );
+    const painted = await fixture.paint();
+    expect(painted.map((paintedEntry: PaintedEntry) => paintedEntry.entry.authorName)).toEqual([
+      FOREIGN_AUTHOR,
+    ]);
+
+    await fixture.controller.capture();
+
+    // Ruling `A93` stands: the foreign note is neither a blocker nor an owner of these
+    // words for this reader, so the card opens exactly as it did before `A103`.
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(cardOf(fixture.overlay)).not.toBeNull();
+  });
+
+  it('opens the card for a selection that only crosses the boundary of the reader’s own note, and its save is refused by the own-author overlap rule (AC6, A103, A100)', async () => {
+    // `'The quick'` from offset 2 to 10 against an own note at 4 to 15: the selection is
+    // not contained, so the card opens; it intersects the own note, so the save is
+    // refused. The two rules stay separate, and AC6 is pinned by the pair: opening does
+    // not imply storing.
+    const fixture = mount(selection('p1', 2, 10));
+    await seedAuthor(fixture.port);
+    await seedEntry(fixture.port, rangeIn(textOf('p1'), 4, 15), 'the note I wrote here');
+    const painted = await fixture.paint();
+    expect(painted).toHaveLength(1);
+
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+
+    await typeAndSave(fixture.overlay, 'a draft that crosses my own note');
+
+    expect(refusalLineOf(fixture.overlay)).toBe(REFUSAL_TEXT.overlap);
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(fixture.created).toEqual([]);
+    const after = await loadEntries(fixture.port, PAGE_URL);
+    expect(after.entries).toHaveLength(1);
+    expect(after.entries[0]?.comment).toBe('the note I wrote here');
   });
 });
 

@@ -13,15 +13,22 @@
  * Pinned behaviour:
  * - AC3: the caret inside a painted fragment opens a card showing the stored
  *   `comment` and the author, and those strings exist nowhere in the page;
- * - AC3 of `t3-02` and AC7 of `t5-03` (ruling `A96`): the tooltip is opaque from the
+ * - AC3 of `t3-02` and AC1 of `t5-03` (ruling `A96`): the tooltip is opaque from the
  *   first hover — the stylesheet carries exactly one `opacity` declaration, the
  *   controller chooses no click class, and the number is pinned against the spec
- *   sentence the way the `settle delay` of `A63` is;
+ *   sentence the way the `settle delay` of `A63` is, together with the one
+ *   `pointer-events` declaration AC8 of `t5-03` says did not change;
  * - AC1, AC2, AC3, AC9 of `t5-03`: a click hands the clicked `PaintedEntry` to the
  *   `onEntryClick` hook and does nothing else in this module — no `textarea`, no
  *   button, no storage write, no change to the painted names — and the tooltip stays
  *   standing, because the widget that opens is the one that dismisses it (`A68`) and a
  *   click that opens nothing has no right to take the card away;
+ * - Flow 4 end to end (`t5-03` AC2, AC3): with a real editor controller mounted over the
+ *   same host, the click on the `tooltip` of an own entry renders the editor widget in
+ *   the shadow root, prefilled, and dismisses the tooltip (`A68`), while the click on a
+ *   foreign entry renders nothing, writes nothing and leaves the tooltip standing
+ *   (`A25`); the fixture wires the `A68` host-busy read the way `main.ts` does, which is
+ *   what the first of those two cases caught on the way in;
  * - AC4: the header is `Вы` for the current reader and the stored author name for
  *   anybody else, and neither state offers an edit affordance in this task;
  * - `A40` / staleness: an entry that is not painted cannot be hovered, and hovering
@@ -48,6 +55,8 @@ import { buildTextStream } from '../src/content/anchor/text-stream';
 import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect';
 import { ensureOverlayHost } from '../src/content/overlay/host';
 import type { OverlayHost } from '../src/content/overlay/host';
+import { createEditorController } from '../src/content/overlay/editor-controller';
+import type { EditorController } from '../src/content/overlay/editor-controller';
 import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PagePainter } from '../src/content/paint/page-painter';
 import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-plan';
@@ -66,7 +75,12 @@ import {
   TOOLTIP_CSS,
 } from '../src/content/overlay/tooltip-style';
 import { CONTENT_STRINGS } from '../src/content/text';
-import { CARD_ROOT_CLASS } from '../src/content/overlay/card-style';
+import {
+  CARD_CLASS,
+  CARD_INPUT_CLASS,
+  CARD_ROOT_CLASS,
+  EDITOR_ROOT_CLASS,
+} from '../src/content/overlay/card-style';
 import type { Viewport } from '../src/content/overlay/card-placement';
 import type { Entry } from '../src/core/entry';
 import {
@@ -214,6 +228,12 @@ let tooltip: TooltipController;
 let hostBusy: boolean;
 /** What the shipped Flow 4 hook was handed: the editor controller in `main.ts`. */
 let clicks: PaintedEntry[];
+/**
+ * A real editor controller for the two cases that pin Flow 4 end to end, `null`
+ * otherwise. The hook below consults it exactly the way `main.ts` does, so those two
+ * cases read their answer out of the shadow root instead of out of a mock.
+ */
+let editor: EditorController | null;
 
 /** The caret seam: one fixed answer, whatever the coordinates are. */
 const caretAt: CaretAtPoint = () => caret;
@@ -246,9 +266,41 @@ async function boot(options: {
     caretAt,
     rangeFor,
     viewport: () => VIEWPORT,
-    isHostBusy: () => hostBusy,
+    // The `A68` coexistence read of `main.ts`: closing the tooltip does not hide a host
+    // another widget is using, so a fixture that mounted an editor has to tell the
+    // tooltip about it or the editor would stand in a hidden host.
+    isHostBusy: (): boolean => hostBusy || (editor !== null && editor.isOpen()),
     onEntryClick: (entry): void => {
       clicks.push(entry);
+      // The shipped Flow 4 hook of `src/content/main.ts`: the name is the pass's own,
+      // and the entry is the `PaintedEntry` ruling `A104` opens the editor over. A
+      // fixture that mounted no editor stops at the recording, which is what the
+      // hand-over cases of this file assert on.
+      if (editor !== null) {
+        const authorName = painter.authorNameOfPass();
+        if (authorName !== null) {
+          editor.openFromPaintedEntry(entry, authorName);
+        }
+      }
+    },
+  });
+}
+
+/**
+ * Mounts the second half of Flow 4 over the same host: the editor the tooltip click
+ * opens. Its `onOpened` is the coordinator hand-over of `main.ts` (ruling `A68`), and
+ * its widget slot is free, because no create card is part of these cases.
+ */
+function mountEditor(): void {
+  editor = createEditorController(document, overlay, {
+    port,
+    pageUrl: () => PAGE_URL,
+    clock: () => '2024-03-01T10:00:00.000Z',
+    rangeFor: seam.rangeFor,
+    viewport: () => VIEWPORT,
+    isHostBusy: () => false,
+    onOpened: (): void => {
+      tooltip.hide();
     },
   });
 }
@@ -299,6 +351,7 @@ beforeEach(async () => {
   seam = mutableSeam();
   caret = { node: textOf('p1'), offset: 6 };
   hostBusy = false;
+  editor = null;
   const host = ensureOverlayHost();
   if (host === null) {
     throw new Error('the fixture document is the top frame, so the host must exist');
@@ -333,12 +386,18 @@ describe('the tooltip of painted text (AC3)', () => {
     expect(document.body.textContent).not.toContain(FOREIGN_COMMENT);
   });
 
-  it('is opaque from the first hover, by the number the spec pins (t5-03 AC7)', async () => {
+  it('is opaque from the first hover, by the number the spec pins (t5-03 AC1, ruling A96)', async () => {
     expect(TOOLTIP_OPACITY).toBe(1);
     // One opacity rule in the stylesheet, and no click state to switch to: the
     // two-state design of the pre-`A96` tooltip is gone, class and number together.
     expect(TOOLTIP_CSS.match(/opacity: /g)).toHaveLength(1);
     expect(TOOLTIP_CSS).toContain(`opacity: ${String(TOOLTIP_OPACITY)};`);
+    // `A23` is untouched by `A96`, and the second half of `t5-03` AC8 says so out loud:
+    // the host stays `pointer-events: none` (`tests/content-overlay-host.spec.ts` pins
+    // that half) and the tooltip undoes it for itself, which is the only reason the
+    // click of Flow 4 can happen without the page noticing a hover it did not make.
+    expect(TOOLTIP_CSS.match(/pointer-events:/g) ?? []).toHaveLength(1);
+    expect(TOOLTIP_CSS).toContain('pointer-events: auto;');
     await boot();
 
     tooltip.hoverAt(20, 84);
@@ -349,7 +408,7 @@ describe('the tooltip of painted text (AC3)', () => {
     expect(hovered?.className).toBe(TOOLTIP_CLASS);
   });
 
-  it('opens nothing of its own on a click: no editor, no write, no repaint (t5-03 AC9)', async () => {
+  it('opens nothing of its own on a click: no editor, no write, no repaint (t5-03 AC3)', async () => {
     await boot();
     const namesBefore = [...surface.heldNames()];
 
@@ -398,7 +457,7 @@ describe('the tooltip of painted text (AC3)', () => {
   });
 });
 
-describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8)', () => {
+describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8; ruling A96)', () => {
   it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
     await boot();
 
@@ -459,6 +518,62 @@ describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8)', () => {
 
     expect(tooltip.isOpen()).toBe(false);
     expect(clicks).toEqual([]);
+  });
+});
+
+describe('Flow 4 end to end: the click opens the editor of the entry (t5-03 AC2, AC3)', () => {
+  it('opens the editor over the range the pass painted, prefilled, and dismisses the tooltip (AC2, A104, A68)', async () => {
+    await boot();
+    mountEditor();
+    const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+    pointerMove(20, 84);
+    expect(tooltip.openEntryId()).toBe('a1b2c3d4e5f6');
+
+    pressOnWidget();
+
+    // The answer is read out of the shadow root, not out of a mock: a `textarea` that
+    // carries the stored comment, in the editor wrapper, and the editor's own three
+    // buttons. The page held no selection at the click, which is the ordinary state of
+    // Flow 4 (rulings `A96`, `A104`).
+    expect(editor?.isOpen()).toBe(true);
+    expect(overlay.root.querySelectorAll(`.${EDITOR_ROOT_CLASS} .${CARD_CLASS}`)).toHaveLength(1);
+    // The editor's own subtree, because `comment` is a class the tooltip uses too and a
+    // bare `.comment` here would answer with the tooltip paragraph.
+    const field = overlay.root.querySelector(`.${EDITOR_ROOT_CLASS} .${CARD_INPUT_CLASS}`);
+    expect(field instanceof HTMLTextAreaElement ? field.value : null).toBe(OWN_COMMENT);
+    // The widget that opens owns the host: the coordinator dismisses the tooltip, and
+    // the host stays visible for the editor (`A68`).
+    expect(tooltipElement()).toBeNull();
+    expect(overlay.host.hidden).toBe(false);
+    detach();
+  });
+
+  it('opens nothing for a foreign entry: no editor, no message, and the tooltip stays (AC3, A25)', async () => {
+    await boot();
+    mountEditor();
+    caret = { node: textOf('p1'), offset: 20 };
+    const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+    pointerMove(20, 84);
+    expect(tooltip.openEntryId()).toBe('b2c3d4e5f6a1');
+
+    pressOnWidget();
+
+    // The click was asked, the author rule refused it, and the page shows nothing of
+    // the refusal: no widget, no line, no write, and the tooltip the reader was
+    // already reading is untouched (`A25`, `A68`).
+    expect(editor?.isOpen()).toBe(false);
+    // The wrapper element of the editor exists from the moment its controller is built,
+    // exactly as the card wrapper does: what must be absent is the rendered widget.
+    expect(overlay.root.querySelectorAll(`.${EDITOR_ROOT_CLASS} .${CARD_CLASS}`)).toHaveLength(0);
+    expect(overlay.root.querySelectorAll(`.${EDITOR_ROOT_CLASS} .${CARD_INPUT_CLASS}`)).toHaveLength(
+      0,
+    );
+    expect(entryWrites()).toEqual([]);
+    expect(tooltip.isOpen()).toBe(true);
+    expect(tooltipElement()).not.toBeNull();
+    detach();
   });
 });
 
