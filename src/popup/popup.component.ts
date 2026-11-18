@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component, InjectionToken, OnInit, inject, sig
 
 import { createChromeLocalStoragePort } from '../content/store/chrome-storage-port';
 import { activeTabUrl } from './active-tab';
-import type { EntryRowView, PageEntriesSource, PageEntriesView, PopupNoticeCode } from './page-entries-service';
+import type { AuthorRowView, PageEntriesSource, PageEntriesView, PopupNoticeCode } from './page-entries-service';
 import { PageEntriesService, rowClass } from './page-entries-service';
-import { POPUP_STRINGS, ownershipHeaderText, popupNoticeText } from './text';
+import { POPUP_STRINGS, authorRowLabel, popupNoticeText } from './text';
 
 /**
  * What the popup runs on: the one storage port adapter, the active-tab address read
@@ -31,20 +31,23 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
 );
 
 /**
- * Popup (`t4-01-popup-list`): the entries of the current page, one row each, with the
- * show/hide checkbox and `Удалить`.
+ * Popup (`t4-01-popup-list`, reshaped by `t5-06`): the authors of the current page,
+ * one row each, with one show/hide checkbox and one `Удалить` per row.
  *
  * The component is a facade, in the shape `t4-02` set for the options page: it owns
  * signals, two click handlers and the wording lookup, and every decision — which page,
- * which entries, in what order, who is the author, what is foreign — is taken by
- * `PageEntriesService` over the core API. There is no branch here worth a test, which
- * is what the grep in `tests/toolchain-contract.spec.ts` checks.
+ * which authors, in what order, how many notes each holds, who is the author, what is
+ * foreign — is taken by `PageEntriesService` over the core API. There is no branch here
+ * worth a test, which is what the grep in `tests/toolchain-contract.spec.ts` checks.
  *
- * The row is the popup contract sentence: author name as the `ownership header`
- * (ruling `A82`), one checkbox whose state is the stored `visibility flag`, and
- * `Удалить` for every row of the page, own or foreign (ruling `A25`). There is no edit
- * affordance on this surface at all: no textarea, no `Сохранить`, and the service
- * imports no comment write.
+ * The row is the popup contract sentence of rulings `A95` and `A108`: the `author row`
+ * label (`ownership header` + ` — ` + the entry count, ruling `A82` for the word), one
+ * checkbox whose state is the **aggregate** of that author's `visibility flag`s, and one
+ * `Удалить` that takes every entry of that author on this page. Both handlers pass the
+ * row's `authorName` to the service, which answers with exactly one core call: there is
+ * no id in a row to loop over, and no per-entry write is imported by this layer. There
+ * is no edit affordance and no expansion on this surface at all: no textarea, no
+ * `Сохранить`, no list of the author's notes, and the service imports no comment write.
  *
  * The notices of ruling `A83` are rendered **above** the list and the list still
  * renders below them, because stored entries that become invisible are stored entries
@@ -79,17 +82,17 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
         <p class="empty">{{ emptyState }}</p>
       } @else {
         <ul class="rows">
-          @for (row of view().rows; track row.id) {
+          @for (row of view().rows; track row.authorName) {
             <li [class]="rowClassOf(row)">
               <label class="toggle">
                 <input
                   type="checkbox"
-                  [checked]="row.visible"
-                  (change)="onToggle(row.id, $event)"
+                  [checked]="row.allVisible"
+                  (change)="onToggle(row.authorName, $event)"
                 />
-                <span class="author">{{ headerOf(row) }}</span>
+                <span class="author">{{ labelOf(row) }}</span>
               </label>
-              <button class="delete" type="button" (click)="onRemove(row.id)">
+              <button class="delete" type="button" (click)="onRemove(row.authorName)">
                 {{ deleteLabel }}
               </button>
             </li>
@@ -191,28 +194,34 @@ export class PopupComponent implements OnInit {
     return popupNoticeText(code);
   }
 
-  /** `ownership header` of a row (ruling `A82`). */
-  headerOf(row: EntryRowView): string {
-    return ownershipHeaderText(row);
+  /** The whole `author row` label: «Вы — 3», «Вася — 10» (rulings `A82`, `A108`). */
+  labelOf(row: AuthorRowView): string {
+    return authorRowLabel(row);
   }
 
   /** Ownership marker of a row: a class, never a second Russian sentence. */
-  rowClassOf(row: EntryRowView): string {
+  rowClassOf(row: AuthorRowView): string {
     return rowClass(row);
   }
 
-  /** The checkbox: core `setVisible` through the service, then a fresh read (`A50`). */
-  onToggle(id: string, event: Event): void {
+  /**
+   * The aggregate checkbox: **one** core `setVisibleForAuthor` through the service for
+   * the whole row, then a fresh read (rulings `A1`, `A50`, `A108`).
+   */
+  onToggle(authorName: string, event: Event): void {
     const box = event.target;
     if (!(box instanceof HTMLInputElement)) {
       return;
     }
-    void this.apply(this.service.setVisibility(id, box.checked));
+    void this.apply(this.service.setVisibilityForAuthor(authorName, box.checked));
   }
 
-  /** `Удалить`: core `deleteEntry` through the service, for every row (`A25`). */
-  onRemove(id: string): void {
-    void this.apply(this.service.remove(id));
+  /**
+   * `Удалить` of the row: **one** core `deleteEntriesOfAuthor` through the service, for
+   * every entry of this author on this page, own or foreign (rulings `A25`, `A108`).
+   */
+  onRemove(authorName: string): void {
+    void this.apply(this.service.removeAllOfAuthor(authorName));
   }
 
   /** Ruling `A83`: the name-required line is the navigation to the options page. */

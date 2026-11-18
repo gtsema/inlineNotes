@@ -457,7 +457,7 @@ describe('the tooltip of painted text (AC3)', () => {
   });
 });
 
-describe('the click of the tooltip (task t5-03 AC1, AC2, AC3; ruling A96)', () => {
+describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
   it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
     await boot();
 

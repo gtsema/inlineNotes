@@ -14,14 +14,18 @@
  *   `file://`, `chrome://`, the PDF viewer or an address core refuses;
  * - `ownEntry` is the `ownership header` word of ruling `A82`. A foreign row prints
  *   its stored author name, which is data and not a string of this layer;
- * - `delete` is the row control of ruling `A25`.
+ * - `delete` is the row control of ruling `A25`, now one per author row (`A108`);
+ * - the `author row` label of ruling `A108` is one format entry, `authorRowLabel`, and
+ *   `AUTHOR_ROW_COUNT_SEPARATOR` is its only punctuation. There is no plural word form
+ *   for the count: «10 заметок» would be a second way to say what the number already
+ *   says, and Russian plural agreement would need a rule this layer must not own.
  *
  * The notice map is keyed by `PopupNoticeCode`, so the compiler checks that the code
  * union and the map cover each other and no call site can invent wording (ruling
  * `A33` applied to this layer).
  */
 
-import type { EntryRowView, PopupNoticeCode } from './page-entries-service';
+import type { AuthorRowView, PopupNoticeCode } from './page-entries-service';
 
 export const POPUP_STRINGS = {
   /**
@@ -50,6 +54,13 @@ export const POPUP_STRINGS = {
 } as const;
 
 /**
+ * The separator of the `author row` label (ruling `A108`): «Вася — 10». It is a
+ * constant rather than a character inside a template so the format of the row has one
+ * address, and an em dash is what the spec's own example uses.
+ */
+export const AUTHOR_ROW_COUNT_SEPARATOR = ' — ';
+
+/**
  * Notice code to Russian wording, total over `PopupNoticeCode`.
  */
 export const POPUP_NOTICE_TEXT: Readonly<Record<PopupNoticeCode, string>> = {
@@ -63,11 +74,22 @@ export function popupNoticeText(code: PopupNoticeCode): string {
 }
 
 /**
- * The `ownership header` of a row (ruling `A82`): the reader's own word for an entry
- * core `canEdit` accepts, otherwise the stored author name. This is the shipped
- * content-layer rule restated for this surface with the same single word, and the
- * only place own and foreign rows look different.
+ * The `ownership header` part of a row (ruling `A82`): the reader's own word for an
+ * author core `canEdit` accepts, otherwise the stored author name. This is the shipped
+ * content-layer rule restated for this surface with the same single word, and the only
+ * place own and foreign rows look different.
  */
-export function ownershipHeaderText(row: EntryRowView): string {
+export function ownershipHeaderText(row: AuthorRowView): string {
   return row.isOwn ? POPUP_STRINGS.ownEntry : row.authorName;
+}
+
+/**
+ * The whole `author row` label (rulings `A95`, `A108`): «Вы — 3», «Вася — 10». One
+ * format entry for one format; the count is the plain number of that author's entries
+ * on this page, stale ones included (`A86`), because the popup resolves no anchor and
+ * cannot know what the page will refuse to paint. No tooltip, no icon, no word around
+ * the number: anything more is a ruling, not a choice of this layer.
+ */
+export function authorRowLabel(row: AuthorRowView): string {
+  return `${ownershipHeaderText(row)}${AUTHOR_ROW_COUNT_SEPARATOR}${String(row.count)}`;
 }

@@ -12,34 +12,50 @@ import {
   INJECTABLE_SCHEMES,
   OWN_ROW_CLASS,
   PageEntriesService,
+  groupsOf,
   isInjectableUrl,
   rowClass,
 } from '../src/popup/page-entries-service';
 import type { PageEntriesSource } from '../src/popup/page-entries-service';
-import { POPUP_NOTICE_TEXT, POPUP_STRINGS, ownershipHeaderText } from '../src/popup/text';
+import {
+  AUTHOR_ROW_COUNT_SEPARATOR,
+  POPUP_NOTICE_TEXT,
+  POPUP_STRINGS,
+  authorRowLabel,
+  ownershipHeaderText,
+} from '../src/popup/text';
 import type { PortCall } from './support/memory-storage-port';
 import { MemoryStoragePort, indexValue, slotValue, storedEntry, storedIndexOf } from './support/memory-storage-port';
 
 /**
- * The popup entry list (`t4-01-popup-list`, AC1-AC5 of the task card).
+ * The popup entry list (`t4-01-popup-list`, AC1-AC5 of that card) in the row shape of
+ * `t5-06` (AC1-AC10 of that card): one row per **author** of the page, one aggregate
+ * checkbox and one `Удалить` per row, each of them **one** core call.
  *
  * Everything here runs against the in-memory port and a fake active-tab read, because
  * the popup owns no rule of its own: `PageEntriesService` is the wiring of
- * `loadSettings` / `loadEntries` / `setVisible` / `deleteEntry` / `sortByCreatedAtAsc`
- * / `canEdit`, and these tests are what make AC1-AC5 observable. The Angular component
- * holds no branch, exactly like the options page of `t4-02`, so its shape is pinned by
- * the greps in `tests/toolchain-contract.spec.ts` and its behavior is pinned here.
+ * `loadSettings` / `loadEntries` / `setVisibleForAuthor` / `deleteEntriesOfAuthor` /
+ * `sortByCreatedAtAsc` / `canEdit` / `isSameAuthor`, and these tests are what make the
+ * criteria observable. The Angular component holds no branch, exactly like the options
+ * page of `t4-02`, so its shape is pinned by the greps in
+ * `tests/toolchain-contract.spec.ts` and its behavior is pinned here.
  *
  * Rulings under test: `A49` (the address comes from the active tab, `tabs`
  * permission), `A98` (that address is read but never rendered: the popup shows no
  * page address in any state), `A50` (the checkbox writes storage and messages nobody), `A25` (every
  * row is deletable, no edit affordance for a foreign one), `A1`/`A12` (a checkbox
  * never reorders the list), `A81` (the restricted-page line), `A82` (the ownership
- * header plus a row class), `A83` (notice above a list that still renders).
+ * header plus a row class), `A83` (notice above a list that still renders), and for
+ * `t5-06`: `A95` (one row per author, no expansion), `A108` (the row label, the
+ * aggregate checkbox, one commit per press, `visible` still a per-entry field), `A99`
+ * (the author filter of a group), `A86` (a stale entry is counted), `A84` (a refused
+ * write is silent).
  *
  * AC1's scan half — "no `chrome.storage` in `src/popup/`" and "permissions are exactly
  * `storage` + `tabs`" — is a source-shape claim and lives in
- * `tests/toolchain-contract.spec.ts`, next to the greps it extends.
+ * `tests/toolchain-contract.spec.ts`, next to the greps it extends. So does the pin
+ * that the popup imports neither per-entry write, which is what turns "one core call
+ * per press" from a test result into a fact of the layer.
  */
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -102,38 +118,96 @@ function storedRecords(port: MemoryStoragePort, pageKey: string = PAGE_KEY): Rec
   return (slot as { entries: Record<string, unknown>[] }).entries;
 }
 
+/**
+ * Every storage write the popup made, as `op:key` lines in port order. This is how
+ * ruling `A108` is measured here: one press of a row control must answer **two** lines
+ * (the page slot, then `pages:v1`), and a popup that looped a per-entry core write over
+ * the group would answer one pair per entry.
+ */
+function writeLines(f: Fixture): string[] {
+  return f.calls
+    .filter((call) => call.op === 'set' || call.op === 'remove')
+    .map((call) => `${call.op}:${call.keys.join(',')}`);
+}
+
 describe('AC1 the popup lists the current page through core', () => {
-  it('renders one row per entry of the page, in creation order', async () => {
+  it('renders one row per author of the page, never one row per entry (A95, A108)', async () => {
     const f = fixture({
       records: [
-        storedEntry({ id: 'ccc3c3c3c3c3', createdAt: '2026-03-03T00:00:00.000Z' }),
-        storedEntry({ id: 'aaa1a1a1a1a1', createdAt: '2026-01-01T00:00:00.000Z' }),
-        storedEntry({ id: 'bbb2b2b2b2b2', createdAt: '2026-02-02T00:00:00.000Z' }),
+        storedEntry({ id: 'ccc3c3c3c3c3', authorName: 'vasya', createdAt: '2026-03-03T00:00:00.000Z' }),
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'vasya', createdAt: '2026-02-02T00:00:00.000Z' }),
       ],
     });
 
     const view = await f.service.open();
-    expect(view.rows.map((row) => row.id)).toEqual([
-      'aaa1a1a1a1a1',
-      'bbb2b2b2b2b2',
-      'ccc3c3c3c3c3',
-    ]);
-    expect(view.rows.map((row) => row.visible)).toEqual([true, true, true]);
-    expect(view.rows.map((row) => row.authorName)).toEqual([OWN_NAME, OWN_NAME, OWN_NAME]);
+    expect(view.rows.map((row) => row.authorName)).toEqual([OWN_NAME, 'vasya']);
+    expect(view.rows.map((row) => row.count)).toEqual([1, 2]);
+    expect(view.rows.map((row) => row.allVisible)).toEqual([true, true]);
+    expect(view.rows.map((row) => row.isOwn)).toEqual([true, false]);
   });
 
-  it('orders the rows with core `sortByCreatedAtAsc`, never by the stored order', async () => {
+  it('places a row by the earliest entry of its author, never by the stored order (`A108`)', async () => {
     const records = [
-      storedEntry({ id: 'ccc3c3c3c3c3', createdAt: '2026-03-03T00:00:00.000Z' }),
-      storedEntry({ id: 'aaa1a1a1a1a1', createdAt: '2026-01-01T00:00:00.000Z' }),
+      storedEntry({ id: 'ccc3c3c3c3c3', authorName: 'vasya', createdAt: '2026-03-03T00:00:00.000Z' }),
+      storedEntry({ id: 'ddd4d4d4d4d4', authorName: 'petya', createdAt: '2026-01-05T00:00:00.000Z' }),
+      storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),
+      storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'vasya', createdAt: '2026-02-02T00:00:00.000Z' }),
     ];
     const f = fixture({ records });
 
     const view = await f.service.open();
-    const coreOrder = sortByCreatedAtAsc((await loadEntries(f.port, PAGE_URL)).entries).map(
-      (entry) => entry.id,
-    );
-    expect(view.rows.map((row) => row.id)).toEqual(coreOrder);
+    expect(view.rows.map((row) => row.authorName)).toEqual([OWN_NAME, 'petya', 'vasya']);
+    // The grouping is one walk over the core order, which is the only order this layer
+    // may read: the same walk over `sortByCreatedAtAsc` answers the same three names.
+    const coreOrder = sortByCreatedAtAsc((await loadEntries(f.port, PAGE_URL)).entries);
+    expect(view.rows).toEqual(groupsOf(coreOrder, OWN_NAME));
+  });
+
+  it('never splits one author into two rows and never merges two authors into one (`A95`)', async () => {
+    const f = fixture({
+      records: [
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: 'vasya', createdAt: '2026-01-01T00:00:00.000Z' }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'petya', createdAt: '2026-02-02T00:00:00.000Z' }),
+        storedEntry({ id: 'ccc3c3c3c3c3', authorName: 'vasya', createdAt: '2026-03-03T00:00:00.000Z' }),
+        storedEntry({ id: 'ddd4d4d4d4d4', authorName: 'petya', createdAt: '2026-04-04T00:00:00.000Z' }),
+      ],
+    });
+
+    const view = await f.service.open();
+    expect(view.rows.map((row) => [row.authorName, row.count])).toEqual([
+      ['vasya', 2],
+      ['petya', 2],
+    ]);
+  });
+
+  it('one author whose stored names differ only by a space is one row (`A99`)', async () => {
+    const f = fixture({
+      records: [
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: 'Вася ', createdAt: '2026-01-01T00:00:00.000Z' }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'Вася', createdAt: '2026-02-02T00:00:00.000Z' }),
+      ],
+    });
+
+    const view = await f.service.open();
+    expect(view.rows).toHaveLength(1);
+    // The label prints the stored name of the earliest record verbatim (`A82`): the
+    // grouping merged the two records, and the popup rewrote no name of its own.
+    expect(view.rows[0]?.authorName).toBe('Вася ');
+    expect(view.rows[0]?.count).toBe(2);
+  });
+
+  it('counts a stale entry, because the popup resolves no anchor (`A86`, `A108`)', async () => {
+    const f = fixture({
+      records: [
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, text: 'ушёл со страницы' }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: OWN_NAME, text: 'ещё здесь' }),
+      ],
+    });
+
+    const view = await f.service.open();
+    expect(view.rows.map((row) => row.count)).toEqual([2]);
+    expect(authorRowLabel(view.rows[0])).toBe(`${POPUP_STRINGS.ownEntry} — 2`);
   });
 
   it('finds the page through the stored index, so tracking noise cannot hide it (`A4`)', async () => {
@@ -261,7 +335,7 @@ describe('AC1 the popup lists the current page through core', () => {
     });
 
     const view = await f.service.open();
-    expect(view.rows.map((row) => row.id)).toEqual(['a1b2c3d4e5f6']);
+    expect(view.rows.map((row) => [row.authorName, row.count])).toEqual([[OWN_NAME, 1]]);
   });
 
   it('reads the address from the injected active-tab read, not from the popup document', async () => {
@@ -277,77 +351,112 @@ describe('AC1 the popup lists the current page through core', () => {
     });
 
     const view = await f.service.open();
-    expect(view.rows.map((row) => row.id)).toEqual(['a1b2c3d4e5f6']);
+    expect(view.rows.map((row) => row.authorName)).toEqual([OWN_NAME]);
     const asked = new Set(f.calls.flatMap((call) => call.keys));
     expect(asked.has(entryStorageKey(otherKey))).toBe(true);
     expect(asked.has(entryStorageKey(PAGE_KEY))).toBe(false);
   });
 });
 
-describe('AC2 the checkbox writes visibility through core and keeps the order', () => {
-  const three = (): unknown[] => [
-    storedEntry({ id: 'aaa1a1a1a1a1', createdAt: '2026-01-01T00:00:00.000Z' }),
-    storedEntry({ id: 'bbb2b2b2b2b2', createdAt: '2026-02-02T00:00:00.000Z' }),
-    storedEntry({ id: 'ccc3c3c3c3c3', createdAt: '2026-03-03T00:00:00.000Z' }),
+describe('AC2 the aggregate checkbox writes the visibility of a whole author group through one core call', () => {
+  /** Two records of the reader and one of another author, in creation order. */
+  const mixed = (): unknown[] => [
+    storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),
+    storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'vasya', createdAt: '2026-02-02T00:00:00.000Z' }),
+    storedEntry({ id: 'ccc3c3c3c3c3', authorName: OWN_NAME, createdAt: '2026-03-03T00:00:00.000Z' }),
   ];
 
-  it('unchecking writes `visible: false` through core and the row stays in the list', async () => {
-    const f = fixture({ records: three() });
+  it('unchecking one row writes `visible: false` for every entry of that author and for nobody else', async () => {
+    const f = fixture({ records: mixed() });
     const before = await f.service.open();
 
-    const after = await f.service.setVisibility('bbb2b2b2b2b2', false);
+    const after = await f.service.setVisibilityForAuthor(OWN_NAME, false);
 
-    expect(after.rows.map((row) => row.id)).toEqual(before.rows.map((row) => row.id));
-    expect(after.rows.map((row) => row.visible)).toEqual([true, false, true]);
-    expect(storedRecords(f.port)[1]['visible']).toBe(false);
+    expect(storedRecords(f.port).map((record) => record['visible'])).toEqual([false, true, false]);
+    expect(after.rows.map((row) => row.allVisible)).toEqual([false, true]);
+    // The rows did not move: same authors, same order, same counts.
+    expect(after.rows.map((row) => [row.authorName, row.count])).toEqual(
+      before.rows.map((row) => [row.authorName, row.count]),
+    );
   });
 
-  it('checking writes `visible: true` back', async () => {
-    const records = three();
-    (records[1] as Record<string, unknown>)['visible'] = false;
+  it('one press is one core call: one slot write and one `pages:v1` update for a two-record group (`A108`)', async () => {
+    const f = fixture({ records: mixed() });
+    await f.service.open();
+
+    await f.service.setVisibilityForAuthor(OWN_NAME, false);
+
+    // A popup that looped core `setVisible` per entry would answer four lines here and
+    // would have rewritten the index twice, which is how a page gets left half-applied.
+    expect(writeLines(f)).toEqual([`set:${entryStorageKey(PAGE_KEY)}`, `set:${PAGE_INDEX_KEY}`]);
+  });
+
+  it('a half-hidden group reads as unchecked, and one press makes every entry visible (`A108`)', async () => {
+    const records = mixed();
+    (records[2] as Record<string, unknown>)['visible'] = false;
     const f = fixture({ records });
 
-    const view = await f.service.setVisibility('bbb2b2b2b2b2', true);
-    expect(view.rows.map((row) => row.visible)).toEqual([true, true, true]);
-    expect(storedRecords(f.port)[1]['visible']).toBe(true);
+    const before = await f.service.open();
+    expect(before.rows.map((row) => row.allVisible)).toEqual([false, true]);
+
+    const after = await f.service.setVisibilityForAuthor(OWN_NAME, true);
+    expect(storedRecords(f.port).map((record) => record['visible'])).toEqual([true, true, true]);
+    expect(after.rows.map((row) => row.allVisible)).toEqual([true, true]);
   });
 
   it('a checkbox write moves nothing in the order and changes no stamp (`A1`, `A12`)', async () => {
-    const f = fixture({ records: three() });
+    const f = fixture({ records: mixed() });
     const before = await f.service.open();
+    expect(before.rows.map((row) => row.authorName)).toEqual([OWN_NAME, 'vasya']);
 
-    const after = await f.service.setVisibility('aaa1a1a1a1a1', false);
-    expect(before.rows.map((row) => row.id)).toEqual(['aaa1a1a1a1a1', 'bbb2b2b2b2b2', 'ccc3c3c3c3c3']);
-    expect(after.rows.map((row) => row.id)).toEqual(before.rows.map((row) => row.id));
-    expect(after.rows[0]?.visible).toBe(false);
+    const after = await f.service.setVisibilityForAuthor(OWN_NAME, false);
+    expect(after.rows.map((row) => row.authorName)).toEqual(
+      before.rows.map((row) => row.authorName),
+    );
 
     const record = storedRecords(f.port)[0];
     expect(record['createdAt']).toBe('2026-01-01T00:00:00.000Z');
     expect(record['updatedAt']).toBe('2026-01-02T03:04:05.006Z');
+    // `visible` is still a field of one record (`A108`): the group has no stored flag,
+    // so the reader's own two notes carry two independent flags.
+    expect(storedRecords(f.port).map((each) => each['visible'])).toEqual([false, true, false]);
   });
 
-  it('a foreign entry can be hidden too: authorship governs editing, not filtering', async () => {
+  it('a foreign group can be hidden too: authorship governs editing, not filtering', async () => {
     const records = [storedEntry({ id: 'ddd4d4d4d4d4', authorName: 'someone-else' })];
     const f = fixture({ records });
 
-    const view = await f.service.setVisibility('ddd4d4d4d4d4', false);
+    const view = await f.service.setVisibilityForAuthor('someone-else', false);
     expect(view.rows).toHaveLength(1);
     expect(storedRecords(f.port)[0]['visible']).toBe(false);
   });
 
   it('the checkbox is a storage write and nothing else (`A50`)', async () => {
-    const f = fixture({ records: three() });
+    const f = fixture({ records: mixed() });
     await f.service.open();
 
-    const view = await f.service.setVisibility('bbb2b2b2b2b2', false);
-    const writes = f.calls.filter((call) => call.op === 'set' || call.op === 'remove');
-    expect(writes.length).toBeGreaterThan(0);
-    for (const call of writes) {
-      for (const key of call.keys) {
-        expect(key === PAGE_INDEX_KEY || key === entryStorageKey(PAGE_KEY)).toBe(true);
-      }
+    const view = await f.service.setVisibilityForAuthor(OWN_NAME, false);
+    for (const line of writeLines(f)) {
+      expect(
+        line === `set:${entryStorageKey(PAGE_KEY)}` || line === `set:${PAGE_INDEX_KEY}`,
+      ).toBe(true);
     }
-    expect(view.rows).toHaveLength(3);
+    expect(view.rows).toHaveLength(2);
+  });
+
+  it('a refused group write is silent and the view is what the store says (`A84`, `A108`)', async () => {
+    const f = fixture({ records: mixed() });
+    await f.service.open();
+    f.port.failWriteOn(entryStorageKey(PAGE_KEY), 'quota');
+
+    const view = await f.service.setVisibilityForAuthor(OWN_NAME, false);
+
+    // No new Russian sentence exists for this state: the rows come back from the store,
+    // unchecked becomes checked again, and the notice set stays empty.
+    expect(view.rows.map((row) => row.allVisible)).toEqual([true, true]);
+    expect(storedRecords(f.port).map((record) => record['visible'])).toEqual([true, true, true]);
+    expect(view.notices).toEqual([]);
+    expect(Object.keys(view).sort()).toEqual(['notices', 'rows']);
   });
 });
 
@@ -370,6 +479,42 @@ describe('AC3 a foreign row is marked foreign and keeps `Удалить`', () =>
     expect(ownershipHeaderText(foreign)).not.toContain(POPUP_STRINGS.ownEntry);
     expect(rowClass(foreign)).toBe(FOREIGN_ROW_CLASS);
     expect(FOREIGN_ROW_CLASS).toBe('row row--foreign');
+  });
+
+  it('the row label is one format: the ownership word or the stored name, ` — `, the count (`A108`)', async () => {
+    const f = fixture({
+      records: [
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: OWN_NAME, createdAt: '2026-01-02T00:00:00.000Z' }),
+        storedEntry({ id: 'ccc3c3c3c3c3', authorName: OWN_NAME, createdAt: '2026-01-03T00:00:00.000Z' }),
+        storedEntry({ id: 'ddd4d4d4d4d4', authorName: 'someone-else', createdAt: '2026-02-02T00:00:00.000Z' }),
+        storedEntry({ id: 'eee5e5e5e5e5', authorName: 'someone-else', createdAt: '2026-02-03T00:00:00.000Z' }),
+      ],
+    });
+
+    const rows = (await f.service.open()).rows;
+    expect(authorRowLabel(rows[0])).toBe(`${POPUP_STRINGS.ownEntry} — 3`);
+    expect(authorRowLabel(rows[1])).toBe('someone-else — 2');
+    // Nothing but the number stands after the separator: no plural word form, no
+    // tooltip, no second sentence (`A108` fixes the format, and a Russian plural rule
+    // would be a rule of this layer).
+    expect(authorRowLabel(rows[1])).toMatch(/^someone-else — \d+$/);
+    expect(AUTHOR_ROW_COUNT_SEPARATOR).toBe(' — ');
+  });
+
+  it('a row carries no entry id and no per-entry handle, so nothing can expand it (`A95`, `A108`)', async () => {
+    const f = fixture({
+      records: [
+        storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME }),
+        storedEntry({ id: 'bbb2b2b2b2b2', authorName: OWN_NAME }),
+      ],
+    });
+
+    const rows = (await f.service.open()).rows;
+    expect(Object.keys(rows[0] ?? {}).sort()).toEqual(['allVisible', 'authorName', 'count', 'isOwn']);
+    const rendered = JSON.stringify(rows);
+    expect(rendered).not.toContain('aaa1a1a1a1a1');
+    expect(rendered).not.toContain('bbb2b2b2b2b2');
   });
 
   it('asks core who the author is, so changing the name in options re-owns the rows', async () => {
@@ -419,8 +564,8 @@ describe('AC3 a foreign row is marked foreign and keeps `Удалить`', () =>
       ],
     });
 
-    const after = await f.service.remove('ddd4d4d4d4d4');
-    expect(after.rows.map((row) => row.id)).toEqual(['aaa1a1a1a1a1']);
+    const after = await f.service.removeAllOfAuthor('someone-else');
+    expect(after.rows.map((row) => row.authorName)).toEqual([OWN_NAME]);
     expect(storedRecords(f.port).map((record) => record['id'])).toEqual(['aaa1a1a1a1a1']);
   });
 });
@@ -526,26 +671,97 @@ describe('AC4 the states that are not a list', () => {
   });
 });
 
-describe('AC5 a delete removes the row immediately', () => {
-  it('the row is gone from the list at once and the others keep their order', async () => {
-    const f = fixture({
-      records: [
-        storedEntry({ id: 'aaa1a1a1a1a1', createdAt: '2026-01-01T00:00:00.000Z' }),
-        storedEntry({ id: 'bbb2b2b2b2b2', createdAt: '2026-02-02T00:00:00.000Z' }),
-        storedEntry({ id: 'ccc3c3c3c3c3', createdAt: '2026-03-03T00:00:00.000Z' }),
-      ],
-    });
+describe('AC5 the group `Удалить` removes the row immediately', () => {
+  /** Two records of the reader, one of `vasya`, one of `petya`, in creation order. */
+  const four = (): unknown[] => [
+    storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),
+    storedEntry({ id: 'bbb2b2b2b2b2', authorName: 'vasya', createdAt: '2026-02-02T00:00:00.000Z' }),
+    storedEntry({ id: 'ccc3c3c3c3c3', authorName: OWN_NAME, createdAt: '2026-03-03T00:00:00.000Z' }),
+    storedEntry({ id: 'ddd4d4d4d4d4', authorName: 'petya', createdAt: '2026-04-04T00:00:00.000Z' }),
+  ];
 
-    const view = await f.service.remove('bbb2b2b2b2b2');
-    expect(view.rows.map((row) => row.id)).toEqual(['aaa1a1a1a1a1', 'ccc3c3c3c3c3']);
+  it('removes every entry of that author on this page in one press (`A95`, `A108`)', async () => {
+    const f = fixture({ records: four() });
+
+    const view = await f.service.removeAllOfAuthor('vasya');
+
+    expect(view.rows.map((row) => [row.authorName, row.count])).toEqual([
+      [OWN_NAME, 2],
+      ['petya', 1],
+    ]);
+    expect(storedRecords(f.port).map((record) => record['id'])).toEqual([
+      'aaa1a1a1a1a1',
+      'ccc3c3c3c3c3',
+      'ddd4d4d4d4d4',
+    ]);
   });
 
-  it('deleting the last row leaves the empty state and drops the page slot', async () => {
-    const f = fixture({ records: [storedEntry()] });
+  it('leaves every other author\'s record untouched, byte for byte (`A108`)', async () => {
+    const records = four();
+    const f = fixture({ records });
+    const untouched = [records[0], records[2], records[3]];
 
-    const view = await f.service.remove('a1b2c3d4e5f6');
-    expect(view.rows).toEqual([]);
+    await f.service.removeAllOfAuthor('vasya');
+
+    // Same objects, not copies: the write carried them through the whole-list commit,
+    // which is the difference between one commit and a rewrite of the page.
+    expect(storedRecords(f.port)).toEqual(untouched);
+    expect(storedRecords(f.port).map((record) => record['id'])).toEqual([
+      'aaa1a1a1a1a1',
+      'ccc3c3c3c3c3',
+      'ddd4d4d4d4d4',
+    ]);
+    expect(storedRecords(f.port)[2]).toBe(untouched[2]);
+  });
+
+  it('one press is one core call: one slot write and one `pages:v1` update (`A108`)', async () => {
+    const f = fixture({ records: four() });
+    await f.service.open();
+
+    await f.service.removeAllOfAuthor(OWN_NAME);
+
+    // A popup that looped core `deleteEntry` per entry would answer four lines here and
+    // rewrite the index twice, and an interrupted loop would leave half of the author's
+    // notes behind with no control left to finish the job.
+    expect(writeLines(f)).toEqual([`set:${entryStorageKey(PAGE_KEY)}`, `set:${PAGE_INDEX_KEY}`]);
+  });
+
+  it('a group that owned the whole page leaves the empty state, slot before index (`A108`)', async () => {
+    const f = fixture({ records: four(), indexed: [PAGE_KEY, 'https://other.example/post'] });
+
+    const view = await f.service.removeAllOfAuthor('vasya');
+    expect(view.rows.map((row) => row.authorName)).toEqual([OWN_NAME, 'petya']);
+
+    const own = await f.service.removeAllOfAuthor(OWN_NAME);
+    const petya = await f.service.removeAllOfAuthor('petya');
+    expect(petya.rows).toEqual([]);
+    expect(own.rows).toHaveLength(1);
+
+    expect(writeLines(f).slice(-2)).toEqual([
+      `remove:${entryStorageKey(PAGE_KEY)}`,
+      `set:${PAGE_INDEX_KEY}`,
+    ]);
     expect(f.port.snapshot()[entryStorageKey(PAGE_KEY)]).toBeUndefined();
     expect(storedIndexOf(f.port)?.pageKeys ?? []).not.toContain(PAGE_KEY);
+    // The other page of the index is untouched and keeps its position.
+    expect(storedIndexOf(f.port)?.pageKeys).toEqual(['https://other.example/post']);
+  });
+
+  it('an author with no entry on this page is answered the current list and no write (`A108`)', async () => {
+    const f = fixture({ records: four() });
+    const before = await f.service.open();
+
+    const after = await f.service.removeAllOfAuthor('такого автора нет');
+
+    expect(after.rows.map((row) => [row.authorName, row.count])).toEqual(
+      before.rows.map((row) => [row.authorName, row.count]),
+    );
+    expect(writeLines(f)).toEqual([]);
+    expect(storedRecords(f.port).map((record) => record['id'])).toEqual([
+      'aaa1a1a1a1a1',
+      'bbb2b2b2b2b2',
+      'ccc3c3c3c3c3',
+      'ddd4d4d4d4d4',
+    ]);
   });
 });

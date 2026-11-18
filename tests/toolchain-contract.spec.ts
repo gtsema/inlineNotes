@@ -345,21 +345,60 @@ describe('layer boundaries', () => {
     });
 
     it('holds no comment write and no page clear, so the popup offers no edit path (AC3, A25)', () => {
-      // The popup contract fixes the row: name + checkbox + `Удалить`. A foreign row is
+      // The popup contract fixes the row: label + checkbox + `Удалить`. A foreign row is
       // read-only because this surface has no edit affordance for any row, own or
-      // foreign, while `deleteEntry` stays ungated by authorship.
+      // foreign, while the delete stays ungated by authorship.
       for (const write of ['updateEntryComment', 'createEntryOnPage', 'clearPage']) {
         expect(popupCode()).not.toMatch(new RegExp(`\\b${write}\\b`));
       }
     });
 
-    it('renders the row contract: name, checkbox, `Удалить`, and no editor control', () => {
+    it('writes a row through the two aggregate author operations and never through a per-entry write (ruling A108; t5-06 AC7, AC9)', () => {
+      // The trap `t5-06` names is a popup that loops `setVisible` / `deleteEntry` over the
+      // entries of a row: N calls answer N `pages:v1` rewrites, and an interrupted loop
+      // leaves half of an author's notes with no control left to finish the job. The shape
+      // that makes that unreachable is the import list: the per-entry writes do not exist
+      // in this layer, so no handler can reach them.
+      const service = codeOnly(
+        readFileSync(join(projectRoot, 'src', 'popup', 'page-entries-service.ts'), 'utf8'),
+      );
+      const clause =
+        /import\s*\{([^}]*)\}\s*from\s*'\.\.\/core\/entry-store-write';/.exec(service);
+      if (clause === null) {
+        throw new Error('the popup service imports nothing from the core write module');
+      }
+      const named = clause[1]
+        .split(',')
+        .map((name: string) => name.trim())
+        .filter((name: string) => name.length > 0)
+        .sort();
+      expect(named).toEqual(['deleteEntriesOfAuthor', 'setVisibleForAuthor']);
+
+      // The per-entry names are absent from the whole layer, and they are not smuggled in
+      // behind the aggregate ones: `\b` is what tells `setVisible` from
+      // `setVisibleForAuthor`.
+      for (const write of ['setVisible', 'deleteEntry']) {
+        expect(popupCode()).not.toMatch(new RegExp(`\\b${write}\\b`));
+      }
+      expect(popupCode()).toMatch(/\bsetVisibleForAuthor\b/);
+      expect(popupCode()).toMatch(/\bdeleteEntriesOfAuthor\b/);
+    });
+
+    it('renders the row contract: label, checkbox, `Удалить`, and no editor control', () => {
       const template = componentCode();
       expect(template).toMatch(/type="checkbox"/);
-      expect(template).toMatch(/\[checked\]="row\.visible"/);
-      expect(template).toMatch(/onToggle\(row\.id,\s*\$event\)/);
-      expect(template).toMatch(/onRemove\(row\.id\)/);
+      expect(template).toMatch(/\[checked\]="row\.allVisible"/);
+      expect(template).toMatch(/onToggle\(row\.authorName,\s*\$event\)/);
+      expect(template).toMatch(/onRemove\(row\.authorName\)/);
       expect(template).toMatch(/\[class\]="rowClassOf\(row\)"/);
+      // The label of a row is the one format entry of `src/popup/text.ts` (`A108`), and
+      // the template names no entry anywhere: there is no handle here for a per-entry
+      // write, and no disclosure control that could expand the group (`A95`).
+      expect(template).toMatch(/\{\{ labelOf\(row\) \}\}/);
+      expect(template).not.toMatch(/row\.id/);
+      // Exactly two loops exist on this surface: the notices and the rows. A third one
+      // would be the expansion `A95` forbids — a list of the group's own notes.
+      expect(componentCode().split('@for (').length - 1).toBe(2);
       // The name-required notice is a real control, reachable by keyboard (A83).
       expect(template).toMatch(/<button[^>]*\(click\)="openSettings\(\)"/);
 
@@ -477,7 +516,7 @@ describe('layer boundaries', () => {
       const rowChain = blocksAround('class="delete"');
       expect(rowChain).toEqual([
         '@else',
-        '@for (row of view().rows; track row.id)',
+        '@for (row of view().rows; track row.authorName)',
       ]);
       expect(blocksAround('type="checkbox"')).toEqual(rowChain);
       expect(rowChain.filter((frame) => /own|name_required|not_injectable/i.test(frame))).toEqual(
