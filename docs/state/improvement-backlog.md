@@ -211,7 +211,7 @@ These three name the shape, so the engineer's only job is to implement and test 
   a selection on focus), so it is a browser-verification item, and the jsdom proof is the negative one — the card path performs
   **no** focus call at all.
 
-| B8 | «после выделения фокус не переходит на окно» (по `Tab`) | Run 3 item 2 `failed`. `A111` left the keyboard with no working door: the card is last in tree order (the overlay host hangs off `document.documentElement`), so the reader's `Tab` must pass every focusable of the article first — and the spec was already claiming `Tab` was "the only way in". Cause between `H1` order / `H2` host-outside-`body` / `H3` page trap is still unmeasured | `A112` | **asked and answered** — the user chose `S4`: typing enters the field. `Tab` is not intercepted, the host is not moved, the page keeps its key |
+| B8 | «после выделения фокус не переходит на окно» (по `Tab`) | Run 3 item 2 `failed`. `A111` left the keyboard with no working door: the card is last in tree order (the overlay host hangs off `document.documentElement`), so the reader's `Tab` must pass every focusable of the article first — and the spec was already claiming `Tab` was "the only way in". Cause between `H1` order / `H2` host-outside-`body` / `H3` page trap is still unmeasured | `A112` | **fixed and verified** — the user chose `S4`: typing enters the field. `Tab` is not intercepted, the host is not moved, the page keeps its key. Run 4 (2026-11-18) recorded all six items passed under one blanket statement, and the user closed the stage |
 
 - `A112` (**`B8`: typing is the way in; the user chose `S4` on 2026-11-18**): the create card still makes **no focus call on open**
   (`A111` intact). While the card is open and the document's active element is outside the overlay host, a `keydown` whose `key` is
@@ -223,3 +223,8 @@ These three name the shape, so the engineer's only job is to implement and test 
   so the fix is not to swallow keys. Once the card has taken the caret this way, the `A105` restore applies to its closes.
   Rejected in the same block: intercepting `Tab` (swallows a page key), focusing the non-editable host at open (unproven that
   Chrome keeps the selection there), and moving the host into `<body>` (treats the order, not the door).
+
+- `A113` (**a child's harness failure is not an attempt, and not a defect of the work**): `t6-02`'s engineer delivered two green
+  commits and a full report, and the run still ended as `failed` because its acceptance-report used a field the harness does not
+  accept (`tests-added-or-updated`). The tree was measured, gates were re-run and the task was reviewed and accepted on its own
+  merits. Rule kept: when a child dies in harness plumbing, judge the committed tree and never spend an attempt on the plumbing.

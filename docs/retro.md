@@ -225,3 +225,22 @@ the six-item browser list is deliberately still open (`прогон будет �
   comment must say so.
 - **What worked (process):** the reversal was offered as four labeled options with consequences and one recommendation; the user
   picked in one line. A decision block beats an open question.
+
+## Stage 7b — the stage reopened by its own browser pass (B8, `A112`, `A113`)
+
+- **What the stage proved:** a rule can be accepted by review and still be wrong in Chrome. `A111` shipped 8/8 AC and left the
+  keyboard with no door, because the spec sentence it wrote — "`Tab` is now the only way in" — was an assumption about browser
+  tab order, not an observation. Run 3 caught it as item 2 `failed`. Rule kept: a documentation claim about keyboard behavior is
+  a may-claim until a probe names it.
+- **What worked:** the fix was chosen from four labeled options in one line, and the chosen one (`A112`, typing enters the field)
+  needed no knowledge of *why* `Tab` misses. Deliberately leaving the cause unmeasured kept the slice small: no `tabindex`, no host
+  move, no key interception. Not every defect owes you its root cause before you can ship a correct behavior.
+- **What failed (harness plumbing, `A113`):** the `t6-02` engineer delivered two green commits and a complete report, and the run
+  still ended `failed` because its acceptance-report used an unsupported field name. The tree was measured and accepted on its own
+  merits. Rule kept: a child dying in plumbing spends no attempt.
+- **My own slip, same class as `A101`:** in one chained command a failing `sed` short-circuited the checker, and the `echo
+  "exit=$?"` printed `sed`'s status while the tail line shown was a stale log. A compound command is not one gate; run each gate on
+  its own line.
+- **Open debt the stage hands to the next one:** the bubble-phase comment at `src/content/overlay/card-events.ts:156-157`
+  overstates the guarantee, and the two event-driven closes of a typed card pin the restore count without its
+  `{ preventScroll: true }` option (`tests/content-create-card-controller.spec.ts:1408`).

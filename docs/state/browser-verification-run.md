@@ -265,3 +265,21 @@ door. Record each as `passed` / `failed` / `not verified`.
 4. **Live tab order (Run 3 item 3).** Once inside the field by typing: `Tab` → `Сохранить` → `Отмена`, read after typing a comment.
 5. **Close paths of a typed card.** `Отмена`, `Esc`, a save, a click outside the card and a page scroll each put the caret back\nwhere the page had it before the keystroke.
 6. **Run 3 item 9, re-measured.** Focus the page's own editable (a search box), open a card by selecting text elsewhere, then\ntype: per `A112` the caret jumps to the card. Record the behavior **and** whether the reader accepts it.
+
+### Run 4 outcome (2026-11-18, Chrome 157.0.8103.38, unpacked `dist/` rebuilt at `74df4de`)
+
+The user answered the whole run with one statement: «да, теперь всё хорошо». Recorded as a blanket pass over all six items, and
+flagged as such — no item was described individually, so this run carries less detail than Run 2 and Run 3, not more:
+
+| Item | Result |
+|---|---|
+| 1 the typing door (caret + the pressed character) | **passed** (blanket) |
+| 2 the non-triggers (`Space`, `Tab`, `Esc`, `Ctrl+Enter`) | **passed** (blanket) |
+| 3 the visual-selection half after the keystroke | **passed** (blanket) |
+| 4 live tab order inside the card | **passed** (blanket) |
+| 5 close paths of a typed card restore the caret | **passed** (blanket) |
+| 6 a focused **page** editable vs the typing door | **passed** (blanket) — the behavior is what `A112` rules, and the blanket statement is recorded as the reader accepting it |
+
+- Items passed: 6 (all under one blanket statement). Failed: 0. Not verified: 0.
+- `B8` is therefore closed as **fixed and verified**. The cause of Run 3 item 2 (`H1` / `H2` / `H3`) remains **unmeasured** by
+  design: the shipped door does not depend on it, and `Tab` reaching the card is still not a claim anywhere in the docs.

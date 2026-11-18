@@ -365,3 +365,9 @@ recorded 6 passed, **item 2 (`Tab` into the card) failed**, items 3 and 6 not ve
 **`A112`**, and `t6-02` closed it (9/9 AC, 0 blocking, **935 tests over 44 files**, checker 0/0/115, typecheck 0, `dist/` 10 files).
 Stage 7 is closed again with two tasks; the verification owed is **Run 4** — the typing door, the live tab order, the
 visual-selection half, and Run 3 item 9 re-measured now that typing can move the caret.
+
+**Stage 7 closed for good on 2026-11-18.** Run 4 recorded all six items **passed** under the user's single statement «да, теперь всё
+хорошо» (flagged as a blanket pass, less detailed than Runs 2 and 3), `B8` is closed as fixed and verified, and the cause of Run 3
+item 2 stays unmeasured by design. Stage totals: 2 tasks, both accepted with 0 blocking findings; 907 → 935 tests over 44 files;
+checker 0/0/115; typecheck exit 0; `dist/` 10 files. Two comment/test debt items are handed to the next stage
+(`docs/state/t6-02-typing-enters-card.md` → Carried-fix checklist).
