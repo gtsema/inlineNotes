@@ -377,6 +377,13 @@ checker 0/0/115; typecheck exit 0; `dist/` 10 files. Two comment/test debt items
 | Task | Slice | Spec / AC anchor | Children |
 |---|---|---|---|
 | `t7-01-card-compact-actions` | **accepted** (`922b068`+`f20ec92`+`f1a5fc0`, 954 tests over 45 files, 0 code findings) — `Отмена` gone from both widgets, save/delete are 24×24 inline-SVG icon buttons with Russian `aria-label`/`title`, every removed pin has a named replacement in the reviewer's destruction audit | `content-overlay-ui.md` + `A114`; the reviewer's **`blocked`** verdict was a spec-vs-code conflict inside a file the task was forbidden to touch, closed by PM rulings `A115`/`A116` | engineer, reviewer |
-| `t7-01b-actions-row-cleanup` | opened: an action row with **no** controls is not rendered (a foreign entry's read-only editor was showing an empty 24px band), the three frame-color declarations get their pin, and the new test file's AC labels are corrected | `content-overlay-ui.md` action-row line + `A115` | engineer, reviewer |
+| `t7-01b-actions-row-cleanup` | **accepted** (`6bb0307`+`fb44a02`, 957 tests over 45 files, 0 blocking) — an action-row container cannot outlive its controls (a state unreachable through the shipped wiring, `A117`), the three frame-color declarations get their pin, and the new test file's AC labels are corrected | `content-overlay-ui.md` action-row line + `A115` | engineer, reviewer |
 
-One task. It carries the two debt items `t6-02` left (`card-events.ts` comment, the restore-options assertion).
+Two tasks, both accepted with 0 blocking on code. `t7-01` carried the two debt items `t6-02` left (`card-events.ts` comment, the
+restore-options assertion) and answered both.
+
+**Stage 8 closed 2026-11-18.** 907 → **957 tests over 45 files**; checker 0/0/135; typecheck exit 0; `dist/` 10 files. The
+verification owed is **Run 5** (seven items, `A114`/`A115`/`A117`); it supersedes every row of Runs 1–4 that pressed `Отмена`, and
+`A116` keeps those rows byte-intact. Accepted debt handed forward: the whole-stylesheet frame pin and the "exactly **one**
+`.actions` node" half (`docs/state/t7-01b-actions-row-cleanup.md` → Closure). The ruling that mattered in this stage is not about
+icons: `A117` retracts a browser claim **I** wrote into a task card and that the engineer then carried into the spec.

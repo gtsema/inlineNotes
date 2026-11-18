@@ -131,7 +131,7 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 Each verifiable without re-reading the implementation:
 
 1. With a name set, selecting text and saving a ≤256-char comment stores exactly one entry under `notes:v1:<slotKey>` of its `pageKey`; reopening the same URL shows it again.
-2. A 257-code-point comment cannot be saved; the counter shows `256/256` at the cap and the card keeps the **Save control enabled** there, because a draft is cut to the cap as it is typed or pasted, so an over-cap value is never representable in the field; Save is disabled only while the trimmed comment is empty (ruling `A115`, which corrects a clause that the shipped build never matched — `src/content/overlay/create-card.tsx:82-88`, pinned at `tests/content-card-actions.spec.ts:395-397`).
+2. A 257-code-point comment cannot be saved; the counter shows `256/256` at the cap and the card keeps the **Save control enabled** there, because a draft is cut to the cap as it is typed or pasted, so an over-cap value is never representable in the field; Save is disabled only while the trimmed comment is empty (ruling `A115`, which corrects a clause that the shipped build never matched — `src/content/overlay/create-card.tsx:82-88`, pinned at `tests/content-card-actions.spec.ts:451-463`).
 3. The 21st entry on a page cannot be created and the refusal message is shown.
 4. An entry created on `https://example.com/a?utm_source=x#sec` is found on `https://example.com/a?utm_source=y&fbclid=1`.
 5. An entry whose text was deleted from the page shows no highlight but is still listed in the popup and can be deleted.

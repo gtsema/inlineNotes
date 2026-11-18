@@ -41,7 +41,27 @@ Stage 8, task 2. Owner: `extension-engineer`. Ruling: **`A115`** (with the revie
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (two commits), reviewer.
+
+## Closure
+
+- **review verdict: `accepted`** (`docs/state/t7-01b-review.md`) — carried items 1–3 all done, boundaries clean, 0 blocking.
+- PM-measured gates: build exit 0 → `dist/` 10 files, `npm test -- --reporter=basic` exit 0 → **957 / 45 files**, checker exit 0 →
+  0/0/135, typecheck exit 0, tree clean, diff scope 4 files.
+- **My own defect, closed by ruling `A117`.** The task card I wrote described the empty `.actions` container as "a real UI defect"
+  showing "a visible band of dead space under a read-only note", and the engineer wrote that sentence into the spec. It was never
+  reachable: a foreign entry's `tooltip` click answers `false` in `openFromPaintedEntry` and opens nothing at all (`A96`), so no
+  read-only editor exists to show a band. The code and the pin stay (an invariant plus a widget-level pin), the spec now says that
+  instead, and the sentence I told the user ("полоса уже должна исчезнуть") was retracted with Run 5.
+- **PM closed from the review:** remark 1 (the spec named `A114` and the task but never `A115` — the attribution now appears with
+  `A117`), remark 2 (the false browser consequence, above), remark 4 (a stale pointer **I** introduced in
+  `docs/specs/inline-comment-model.md:134`: `tests/content-card-actions.spec.ts:395-397` → the measured `:451-463`; the dead-pointer
+  class again, three commits after I wrote it), remark 6 (the engineer artifact claims the spec mentions "Run 5 item 6" — it did not
+  at that commit; Run 5 now exists with that item).
+- **Accepted debt, no task spent (remarks 3 and 5):** the frame pin is whole-stylesheet, so a value that also appears in another
+  rule could change in one place without failing it (`tests/content-card-actions.spec.ts:534`); and the own-entry row pin uses
+  "first match", so "exactly **one** `.actions` node" is not asserted and the row's `title` half is pinned elsewhere (`:215`,
+  `:237`). Both are one-line strengthenings for the next touch of that file.
 
 ## Attempts log
 

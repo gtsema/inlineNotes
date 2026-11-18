@@ -289,3 +289,24 @@ flagged as such — no item was described individually, so this run carries less
 - Items passed: 6 (all under one blanket statement). Failed: 0. Not verified: 0.
 - `B8` is therefore closed as **fixed and verified**. The cause of Run 3 item 2 (`H1` / `H2` / `H3`) remains **unmeasured** by
   design: the shipped door does not depend on it, and `Tab` reaching the card is still not a claim anywhere in the docs.
+
+---
+
+## Run 5 — the compact row on a real page (rulings `A114`, `A115`, `A117`)
+
+Supersedes every row that pressed `Отмена` (Runs 1–4, see the note at the top of this file, `A116`). Record each item as `passed` /
+`failed` / `not verified`.
+
+1. **The glyphs without words.** Select text: is the mark on the card read as "save" before it is read as "a mark"? Open your own
+   note's editor: is the second mark read as "delete"? Write down **your own words**, not a verdict — no test pins recognizability.
+2. **The measured hit target.** DevTools → `getBoundingClientRect()` on both icon buttons: each ≥ 24×24 CSS px. The unit test reads
+   the stylesheet **text**, never a layout box.
+3. **Hover names.** Hover the save glyph with a non-empty draft, then the delete glyph: does the native tooltip say «Сохранить» /
+   «Удалить»? Then hover the **disabled** save glyph (empty or spaces-only draft) and record what Chrome really shows — a disabled
+   button may show no tooltip at all.
+4. **Tab order in the new control set.** Card: `поле → ✓`. Editor: `поле → ✓ → корзина`. Read it after typing a comment.
+5. **Closing without a cancel control.** A `pointerdown` outside the card and `Esc` each close and write nothing; `Ctrl/Cmd+Enter`
+   still saves.
+6. **A foreign entry (`A96`, `A117`).** Click the tooltip of a note whose author is not yours: nothing opens — no field, no glyphs,
+   no message, no empty band. The band was never reachable, so this item checks the real rule, not the corrected one.
+7. **Your own verdict.** Is the window actually lighter than it was with three word-buttons? One sentence.

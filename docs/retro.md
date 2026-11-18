@@ -244,3 +244,20 @@ the six-item browser list is deliberately still open (`прогон будет �
 - **Open debt the stage hands to the next one:** the bubble-phase comment at `src/content/overlay/card-events.ts:156-157`
   overstates the guarantee, and the two event-driven closes of a typed card pin the restore count without its
   `{ preventScroll: true }` option (`tests/content-create-card-controller.spec.ts:1408`).
+
+## Stage 8 — the compact row, and a claim of mine that never existed (B-class: my own)
+
+- **What was cheap and why:** deleting a control cost one commit because the rule behind it (authorship, caps, close paths) lives in
+  `src/core/` and the widgets only render. The expensive part of such tasks is never the change, it is the **pins that referenced
+  the deleted thing** — so the review instruction was a destruction audit: name the surviving assertion for every removed `it(`.
+  That audit is now a standing review tool for any removal task.
+- **The reviewer's `blocked` was right twice over.** `t7-01` passed 9 of 10 AC and was still blocked: one rule was written in two
+  specs and only one was edited. Cheap to fix (`A115`), expensive to miss — a reader of the model spec would rebuild the button.
+- **My own defect (`A117`, the lesson of the stage).** I wrote into the task card that the empty action row produced "a visible band
+  of dead space under a read-only note", told the user the band would disappear, and the engineer faithfully moved that sentence
+  into the spec. In the shipped wiring the state is **unreachable**: a foreign entry's tooltip click opens nothing at all (`A96`).
+  A brief must not contain a browser claim that no run produced; a claim about what the reader will see needs a run number or it is
+  written as a may-claim.
+- **Dead pointers, again, mine.** `A115` put `tests/content-card-actions.spec.ts:395-397` into the model spec and the very next
+  commit moved that pin to `:451-463`. A pointer into a test file is a liability the size of the test file: name the test, keep the
+  line only when it is cheap to re-grep at the next touch.

@@ -255,3 +255,12 @@ These three name the shape, so the engineer's only job is to implement and test 
   record. Ruled: a superseding note at the top of the file names what changed and from which run, and old rows stay byte-for-byte
   intact. This is the opposite case of the `A112` fix, where a **live** spec sentence was corrected because it described the
   current build.
+
+- `A117` (**an invariant is not a browser sight — my own claim corrected**): `t7-01b` item 1 removed an empty `.actions` container,
+  and both the task card and the spec sentence I dictated described it as "a visible band of dead space under a read-only note".
+  Measured against the shipped wiring that state is **unreachable**: a `foreign entry`'s `tooltip` click answers `false` in
+  `openFromPaintedEntry` and opens nothing at all (`A96`), so there is no read-only `editor` to show a band. Ruled: the code stays
+  (the container must not outlive its controls — an invariant worth having, and the guard is one ternary), the pin stays at widget
+  level, and the spec says exactly that instead of claiming a sight the reader never gets. Run 5 item 6 therefore checks the real
+  observable: a foreign `tooltip` click opens nothing. Same family as `A110` (accepted, unreachable, pinned) and the reason the rule
+  "a documentation claim about browser UI must be pinned to an observation" exists — here the observation was mine, and it was wrong.
