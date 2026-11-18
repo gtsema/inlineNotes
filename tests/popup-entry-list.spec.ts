@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { sortByCreatedAtAsc } from '../src/core/entry-rules';
 import { loadEntries } from '../src/core/entry-store-read';
+import type { CreateEntryOnPageInput } from '../src/core/entry-store-write';
+import { createEntryOnPage } from '../src/core/entry-store-write';
 import { pageKeyFromUrl } from '../src/core/page-key';
 import { entryStorageKey, PAGE_INDEX_KEY, SETTINGS_KEY } from '../src/core/storage-keys';
 import {
@@ -49,7 +51,9 @@ import { MemoryStoragePort, indexValue, slotValue, storedEntry, storedIndexOf } 
  * `t5-06`: `A95` (one row per author, no expansion), `A108` (the row label, the
  * aggregate checkbox, one commit per press, `visible` still a per-entry field), `A99`
  * (the author filter of a group), `A86` (a stale entry is counted), `A84` (a refused
- * write is silent).
+ * write is silent), and `A110` (the empty-author row is pinned **inert debt**: such a
+ * record renders a row, neither row control writes anything, and the create path cannot
+ * store one — pinned by the last describe of this file, with no `src/` change).
  *
  * AC1's scan half — "no `chrome.storage` in `src/popup/`" and "permissions are exactly
  * `storage` + `tabs`" — is a source-shape claim and lives in
@@ -738,14 +742,19 @@ describe('AC5 the group `Удалить` removes the row immediately', () => {
     await f.service.removeAllOfAuthor('vasya');
 
     // Same objects, not copies: the write carried them through the whole-list commit,
-    // which is the difference between one commit and a rewrite of the page.
-    expect(storedRecords(f.port)).toEqual(untouched);
-    expect(storedRecords(f.port).map((record) => record['id'])).toEqual([
+    // which is the difference between one commit and a rewrite of the page. The claim
+    // is asserted for **every** survivor, because "untouched" is the whole claim of
+    // this pin: three `toBe` checks, one per surviving record, in stored order.
+    const survivors = storedRecords(f.port);
+    expect(survivors).toEqual(untouched);
+    expect(survivors.map((record) => record['id'])).toEqual([
       'aaa1a1a1a1a1',
       'ccc3c3c3c3c3',
       'ddd4d4d4d4d4',
     ]);
-    expect(storedRecords(f.port)[2]).toBe(untouched[2]);
+    expect(survivors[0]).toBe(untouched[0]);
+    expect(survivors[1]).toBe(untouched[1]);
+    expect(survivors[2]).toBe(untouched[2]);
   });
 
   it('one press is one core call: one slot write and one `pages:v1` update (`A108`)', async () => {
@@ -797,5 +806,118 @@ describe('AC5 the group `Удалить` removes the row immediately', () => {
       'ccc3c3c3c3c3',
       'ddd4d4d4d4d4',
     ]);
+  });
+});
+
+/**
+ * Ruling `A110` — the `A110` shape is **pinned accepted debt**, not a bug this task
+ * fixes: a stored record whose `authorName` is empty or whitespace-only is decoded by
+ * the core read guard, which checks the type and never the value
+ * (`src/core/entry-store-read.ts:132`), so the popup gives it a row; and because core
+ * `isSameAuthor` refuses an empty side (`src/core/entry-rules.ts:127`), that row is
+ * inert — `authorRecordsOf` (`src/core/entry-store-write.ts:535`) never lists such an
+ * author, so both row controls answer "no target" and write nothing. Nothing in `src/`
+ * changed for this pin: the point is that the shape is now written down, so a later
+ * refactor cannot start relying on it (or "fixing" it) by accident.
+ *
+ * The third half of the same ruling is why the debt is affordable at all: no shipped
+ * create can put such a record in storage, because `createEntryOnPage` runs
+ * `assertCreatable` — which answers `name_required` for a name that is empty after the
+ * trim — before it normalizes `authorName` (`src/core/entry-store-write.ts:242`), and
+ * `saveSettings` refuses to store such a name in the first place
+ * (`tests/core-settings-store.spec.ts:239`). The deeper create pins stay in
+ * `tests/core-entry-store-write.spec.ts`; the one below is here because the inert row
+ * above only exists while the create gate holds.
+ */
+describe('`A110` the empty-author record is pinned inert debt, not a reachable state', () => {
+  /** A well-formed record whose author is empty: the read guard decodes it verbatim. */
+  const blankAuthorRecord = (id: string, createdAt: string): Record<string, unknown> =>
+    storedEntry({ id, authorName: '', createdAt, updatedAt: createdAt });
+
+  /** A create that would otherwise succeed, with only the author name empty. */
+  const blankCreate = (currentName: string): CreateEntryOnPageInput => ({
+    url: PAGE_URL,
+    text: 'selected text',
+    comment: 'my note',
+    anchor: { text: 'selected text', prefix: '', suffix: '', fragmentCount: 1 },
+    currentName,
+    spans: { candidate: { start: 0, end: 13 }, byEntryId: new Map() },
+    now: '2026-05-06T07:08:09.010Z',
+    rng: () => 0,
+  });
+
+  it('decodes, renders one row, and marks that row neither own nor empty-listed', async () => {
+    const f = fixture({ records: [blankAuthorRecord('eee5e5e5e5e5', '2026-01-01T00:00:00.000Z')] });
+
+    const view = await f.service.open();
+    expect(view.rows).toHaveLength(1);
+    expect(view.rows[0]).toEqual({
+      authorName: '',
+      count: 1,
+      isOwn: false,
+      allVisible: true,
+    });
+    // The row is not hidden or filtered: it is a real line whose label has an empty name
+    // half, and the reader can neither claim it nor reach it.
+    expect(authorRowLabel(view.rows[0])).toBe(`${AUTHOR_ROW_COUNT_SEPARATOR}1`);
+  });
+
+  it('writes nothing from either control of that row, and keeps the record stored', async () => {
+    const record = blankAuthorRecord('eee5e5e5e5e5', '2026-01-01T00:00:00.000Z');
+    const f = fixture({ records: [record] });
+
+    const row = (await f.service.open()).rows[0];
+    if (row === undefined) {
+      throw new Error('fixture row is missing');
+    }
+
+    // The two controls of the row, addressed with the row's own author name — the only
+    // address the row carries.
+    const afterCheckbox = await f.service.setVisibilityForAuthor(row.authorName, false);
+    const afterDelete = await f.service.removeAllOfAuthor(row.authorName);
+
+    expect(afterCheckbox.rows).toHaveLength(1);
+    expect(afterDelete.rows).toHaveLength(1);
+    expect(writeLines(f)).toEqual([]);
+    expect(storedRecords(f.port)).toHaveLength(1);
+    expect(storedRecords(f.port)[0]).toBe(record);
+    expect(storedRecords(f.port)[0]).toEqual(record);
+  });
+
+  it('answers two such records with two rows that carry the same `track` value', async () => {
+    // `groupsOf` merges on core `isSameAuthor`, which refuses an empty side, so two
+    // blank-author records never merge: they are two rows whose `authorName` — the value
+    // `@for` tracks by in `src/popup/popup.component.ts:85` — is identical. That
+    // duplicate-key collision is part of the pinned debt, and no shipped create can
+    // produce either record.
+    const f = fixture({
+      records: [
+        blankAuthorRecord('eee5e5e5e5e5', '2026-01-01T00:00:00.000Z'),
+        blankAuthorRecord('fff6f6f6f6f6', '2026-02-02T00:00:00.000Z'),
+      ],
+    });
+
+    const rows = (await f.service.open()).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.authorName)).toEqual(['', '']);
+  });
+
+  it('refuses to store such a record from the create path, and writes nothing (`A110`)', async () => {
+    // The shipped create call of `src/content/create/create-note.ts:157`, with the name
+    // the options page cannot produce: empty, or whitespace that the trim empties.
+    const port = new MemoryStoragePort();
+    port.seed(PAGE_INDEX_KEY, indexValue([PAGE_KEY]));
+    port.seed(SETTINGS_KEY, { name: '' });
+
+    for (const currentName of ['', '   ', '\t']) {
+      expect(await createEntryOnPage(port, blankCreate(currentName))).toEqual({
+        ok: false,
+        code: 'name_required',
+      });
+    }
+
+    const writes = port.calls.filter((call) => call.op === 'set' || call.op === 'remove');
+    expect(writes).toEqual([]);
+    expect(port.snapshot()[entryStorageKey(PAGE_KEY)]).toBeUndefined();
   });
 });

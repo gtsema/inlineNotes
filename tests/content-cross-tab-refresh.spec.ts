@@ -18,7 +18,9 @@
  *   one repaint**, with no reload and no re-navigation: the entry the other writer
  *   changed is repainted with the new comment, and a visibility flag the popup wrote is
  *   the same case, which is what browser verification item 6 of `t3-02` had to step
- *   through a reopen to see;
+ *   through a reopen to see — pinned for **both** popup write shapes, the per-entry
+ *   `setVisible` and the aggregate `setVisibleForAuthor` of `t5-06` (`A108`), because
+ *   the aggregate one is what the popup performs today;
  * - **AC2** — a key belonging to a **different** page's slot, or the page index alone,
  *   triggers no work at all: no core read, no paint call, no repaint recorded
  *   (ruling `A60`);
@@ -45,7 +47,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildAnchor } from '../src/core/anchor-build';
 import type { EntryAnchor } from '../src/core/entry';
 import { codePointLength } from '../src/core/entry-rules';
-import { setVisible, updateEntryComment } from '../src/core/entry-store-write';
+import { setVisible, setVisibleForAuthor, updateEntryComment } from '../src/core/entry-store-write';
 import { pageKeyFromUrl } from '../src/core/page-key';
 import { saveSettings, settingsValueOf } from '../src/core/settings-store';
 import { PAGE_INDEX_KEY, SETTINGS_KEY, entryStorageKey } from '../src/core/storage-keys';
@@ -333,6 +335,68 @@ describe('AC2 — a write elsewhere repaints this page, with no reload', () => {
     // The record is still stored: hiding is not deleting.
     const stored = wiring.port.snapshot()[entryStorageKey(PAGE_KEY)] as { entries: unknown[] };
     expect(stored.entries).toHaveLength(1);
+  });
+
+  it('hides and re-shows every highlight of an author from one aggregate author write (`A108`)', async () => {
+    // The same repaint proof as the pin above, driven by the write the popup performs
+    // since `t5-06`: `setVisibleForAuthor` is **one** slot write for every entry of that
+    // author, so the page-layer reaction must follow the aggregate write too, not only
+    // the per-entry `setVisible` one. The foreign record of the same page is the control
+    // that proves the repaint read the stored flags instead of emptying the page.
+    const wiring = await boot({
+      records: [
+        recordOf('a1b2c3d4e5f6', 'quick brown', OWN_NAME),
+        recordOf('b2c3d4e5f6a1', 'fox jumps', FOREIGN_NAME),
+        recordOf('c3d4e5f6a1b2', 'lazy dog', OWN_NAME),
+      ],
+    });
+    const OWN_ONE = `${PAINT_NAME_PREFIX}-a1b2c3d4e5f6`;
+    const FOREIGN = `${PAINT_NAME_PREFIX}-b2c3d4e5f6a1`;
+    const OWN_TWO = `${PAINT_NAME_PREFIX}-c3d4e5f6a1b2`;
+    expect(wiring.surface.heldNames()).toEqual([OWN_ONE, FOREIGN, OWN_TWO]);
+
+    const hidden = await setVisibleForAuthor(wiring.port, {
+      url: PAGE_URL,
+      authorName: OWN_NAME,
+      visible: false,
+    });
+    if (!hidden.ok) {
+      throw the(`fixture aggregate visibility write refused with ${hidden.code}`);
+    }
+    await wiring.fire([entryStorageKey(PAGE_KEY), PAGE_INDEX_KEY]);
+
+    // One relevant change record is one repaint (`A60`), and that repaint reads the
+    // flags the aggregate write stored: both of the reader's highlights are gone while
+    // the other author's highlight keeps its place on the page.
+    expect(wiring.repaintCount()).toBe(1);
+    expect(wiring.paintedEntries().map((p) => p.entry.id)).toEqual(['b2c3d4e5f6a1']);
+    expect(wiring.surface.heldNames()).toEqual([FOREIGN]);
+
+    // The same aggregate path re-shows them, and the page follows it through storage a
+    // second time: nothing here knows which widget wrote the flag.
+    const shown = await setVisibleForAuthor(wiring.port, {
+      url: PAGE_URL,
+      authorName: OWN_NAME,
+      visible: true,
+    });
+    if (!shown.ok) {
+      throw the(`fixture aggregate re-show write refused with ${shown.code}`);
+    }
+    await wiring.fire([entryStorageKey(PAGE_KEY)]);
+
+    expect(wiring.repaintCount()).toBe(2);
+    expect(wiring.paintedEntries().map((p) => p.entry.id)).toEqual([
+      'a1b2c3d4e5f6',
+      'b2c3d4e5f6a1',
+      'c3d4e5f6a1b2',
+    ]);
+    // The recording surface is a `Map` keyed by highlight name, so a re-painted name
+    // keeps its old position: the set is what this pin is about, not the paint order.
+    expect([...wiring.surface.heldNames()].sort()).toEqual([OWN_ONE, FOREIGN, OWN_TWO].sort());
+
+    // Hiding is not deleting: all three records are still stored.
+    const stored = wiring.port.snapshot()[entryStorageKey(PAGE_KEY)] as { entries: unknown[] };
+    expect(stored.entries).toHaveLength(3);
   });
 
   it('repaints when the slot key alone is reported, as one tab writing looks to Chrome', async () => {
