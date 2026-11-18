@@ -32,14 +32,24 @@ manifest does not change. If `hostOf` has no other caller, delete the function r
 
 ## Boundaries
 
-- Allowed: `src/popup/**`, `tests/popup-*.spec.ts`, `docs/specs/content-overlay-ui.md`, `README.md`.
+- Allowed: `src/popup/**`, `tests/popup-*.spec.ts`, and — **only** for the carried items above (names, header comments, new pins,
+  never an assertion change) — `tests/content-editor-controller.spec.ts`, `tests/content-tooltip.spec.ts`,
+  `tests/content-create-card-controller.spec.ts`; plus `docs/specs/content-overlay-ui.md` and `README.md`.
 - Forbidden: `src/core/`, `src/content/**`, `src/options/`, `src/manifest.json` (the permission stays exactly as it is),
   dependencies, harness files, the other PM-owned specs (`A76`, `A89`).
 - Do not touch the task state file `docs/state/t5-05-popup-host-line.md`; write your report to your own artifact.
 
-## Carried-fix checklist
+## Carried-fix checklist (`A72`, from the `t5-04` review)
 
-None — the comment-pointer items from the `t5-03` review belong to `t5-04`.
+1. `tests/content-editor-controller.spec.ts:575` is named `(t5-03 AC3, AC9, A24, A66)` but pins "an entry the paint pass does not
+   hold has no tooltip and no click"; rename to the AC that owns that fact and reconcile it with the file's own coverage header at
+   `:5` and `:25`, which still attribute it to AC8. **Names and header comments only, no assertion.**
+2. `tests/content-tooltip.spec.ts:460` and `:512` cite `t5-03 AC8` for the click-opens-editor fact, which is AC2. **Names only.**
+3. `docs/specs/content-overlay-ui.md:44`, `:131`, `:257` speak of "both focus calls" while the code passes `preventScroll: true` on
+   the **restore** call too (`src/content/overlay/focus-handoff.ts:90`). Add the half-clause; **spec text only, no code**.
+4. Pin the focus restore on the two close paths that have no pin: outside-`pointerdown` dismissal and scroll dismissal
+   (`src/content/overlay/card-events.ts:82,89,98`, `src/content/overlay/editor-events.ts:65,69`). **Test-only** — those two files
+   must not change; `close()` is the single unmount path, so a pin proves the construction, not a fix.
 
 ## Gate and commit order (`A62`, `A73`, `A101`)
 

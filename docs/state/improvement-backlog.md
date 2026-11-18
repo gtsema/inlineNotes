@@ -171,3 +171,14 @@ These three name the shape, so the engineer's only job is to implement and test 
   Authorized narrowly: the code half may change **only** in `src/content/overlay/editor-controller.tsx` (capture the open-moment
   selection state; compare at the press). Pinned as four cases: stale over free words → lands; new across my own other note →
   refused; **stale across my own other note → lands** (the discriminating case); none-then-new over free words → asked and lands.
+
+- `A108` (**`B3` shape**): grouping is a **popup projection**, storage does not change — `visible` stays per entry, no migration,
+  no new key. Two named core operations own the aggregate writes, one slot write per affected record and **one index update per
+  call**: `setVisibleForAuthor(port, {pageKey, authorName, visible})` and `deleteEntriesOfAuthor(port, {pageKey, authorName})`,
+  both filtering by `isSameAuthor` (`A99`). The popup must not loop `setVisible`/`deleteEntry` itself: that rewrites the index N
+  times and can leave a partial state. Checkbox state is aggregate — checked iff **every** entry of that author is visible. The row
+  label is `<name> — <count>` (`Вы — 3` for my own, the stored name otherwise, `A82` survives), the count includes stale entries
+  (`A86`), rows order by the earliest `createdAt` of each author, no disclosure control, and a refused aggregate write stays silent
+  with a re-read (`A84` extended). The consequence I accept out loud: **the popup can no longer hide one note** — the per-note
+  checkbox of `A1`/`A50` is replaced by the author-level one, and the note card's `Удалить` becomes the only single-note
+  destructive action outside a group delete.

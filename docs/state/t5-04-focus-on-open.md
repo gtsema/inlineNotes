@@ -81,8 +81,20 @@ Every gate with its own exit status, `echo "exit=$?"` on the line right after th
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (five commits, no escalation), reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered** in five commits: `d3ca568` (spec), `729695c` (behavior — new owner
+  `src/content/overlay/focus-handoff.ts`), `b770066` (pins: 8 focus-handoff + 4 editor + 3 create-card, support recorder
+  `tests/support/focus-calls.ts`), `0d0c749` (carried 1–6), `4a630c8` (one comment rewrap). PM-measured gates: typecheck exit 0,
+  `npm test` exit 0 → **872 / 44 files** (+15 over `t5-03`), checker exit 0 → 0/0/106, build exit 0 → `dist/` 10 files, tree clean.
+  The `A74` pins were rewritten in place rather than deleted, and the engineer left my `t5-06` card untracked instead of sweeping
+  it into its commit.
+- **review verdict: `accepted`** (`docs/state/t5-04-review.md`) — 9/9 AC pass, 0 blocking, carried 1–5 done and 6 delivered as
+  name-only renames; 8 non-blocking remarks, of which **five** are carried forward (stale AC citations in test names and headers,
+  the `restore` call's `preventScroll` half missing from the spec, two unpinned close paths, browser items a–d).
+- **PM closed two of the reviewer's own findings about my briefs**: `docs/project-profile.md:101` still carried the pre-`A97`
+  "or steal focus" constraint (fixed personally — the profile states constraints and it is PM-owned), and the AC6 grep claim
+  `grep -rn tabindex src/` is not literally satisfiable because a doc comment matches; future briefs must state the criterion
+  (no **control** carries a `tabindex`), not a grep that over-matches comments.
