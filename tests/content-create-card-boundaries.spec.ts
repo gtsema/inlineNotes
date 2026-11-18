@@ -5,8 +5,9 @@
  * - AC4 of `docs/specs/content-overlay-ui.md` for this task: the content layer owns
  *   no persistence of its own — the only shipped content modules that talk to the
  *   core write path, the core read path, the settings reader or the anchor builder are
- *   the one module per flow (`create/create-note.ts` for Flow 2-3, `editor/edit-entry.ts`
- *   for Flow 5, `paint/page-painter.ts` for the read behind Flow 6's painting) plus
+ *   the one module per flow (`create/create-note.ts` for Flow 1-2, `editor/edit-entry.ts`
+ *   for Flow 4-5, `paint/page-painter.ts` for the read behind the `paint pass` of Flow 7)
+ *   plus
  *   `src/content/capture/selection-span.ts` for the anchor builder;
  * - the `t2-03` and `t3-01-settings-read` hand-over contracts: no page policy
  *   (`writeSlotThenIndex`, `readPageIndex`, `entrySlotValue`, `entryStorageKey`) and

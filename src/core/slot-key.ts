@@ -112,7 +112,11 @@ export function slotKeyHash(pageKey: string): string {
 
 /**
  * FNV-1a 32-bit over the Unicode code points of `value`. Stable across runs and
- * platforms; used only to disambiguate truncated slot keys.
+ * platforms. Two consumers, and only the second one is this file: the length rule above
+ * uses it to disambiguate a truncated slot key, and ruling `A102` made it the author half
+ * of the `paint slot` mapping in `src/content/paint/paint-palette.ts`, which is why the
+ * function is exported and why its arithmetic may not change without moving a reader's
+ * colour.
  */
 export function fnv1a32(value: string): number {
   let hash = 0x811c9dc5;

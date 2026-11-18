@@ -46,9 +46,10 @@
  *
  * The two properties per slot are not decoration either: `background-color` and
  * `text-decoration` are inside the small set of properties the CSS Custom Highlight spec
- * applies to a highlight pseudo-element (see the header of `paint-style.ts` for why the
- * frame is an underline and not an outline). A palette entry with a third property would
- * be a property the browser drops.
+ * applies to a highlight pseudo-element, and they are exactly the two the spec fixes per
+ * slot (`docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Highlight painting",
+ * the `highlight frame` row: only those two vary per slot, nothing else about the frame
+ * does). A palette entry with a third property would be a property the browser drops.
  */
 
 import { fnv1a32 } from '../../core/slot-key';
