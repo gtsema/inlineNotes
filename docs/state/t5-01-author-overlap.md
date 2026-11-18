@@ -73,4 +73,20 @@ None.
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling ×2 = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **3** — engineer, the same session resumed for the red
+`npm run typecheck` (a gate repair is unfinished work, not an attempt, `A80`-class), reviewer.
+
+## Verdicts and closure
+
+- PM gates on the delivered tree (`731ea9c` + `f1093f3`): `npm run build` → `dist/` self-contained, 10 files; `npm test` →
+  **807 passed / 41 files**; `node scripts/check-agent-config.mjs` → 0 errors / 0 warnings / 90 INFO; `npm run typecheck` →
+  **exit 0** (exit 2 at `731ea9c`, which is why `f1093f3` exists).
+- reviewer verdict: **accepted**, 0 blocking findings, 3 remarks (`docs/state/t5-01-review.md`). All ten AC `pass`. The reviewer
+  checked non-vacuity case by case (naming which assertion flips if the author filter is removed), that
+  `src/core/entry-overlap.ts` has an empty diff, that the two finders have exactly two shipped call sites and both are fed by
+  `entriesOfAuthor`, and that the gate repair kept its proof (`toHaveLength(2)` before the indexed read).
+- **PM closed reviewer remark 1 personally**: one half-true clause in `docs/specs/inline-comment-model.md:82` (after `A100` the
+  editor pass resolves only the own half, not the whole page). Remarks 2 and 3 were judged correct calls, not findings — the
+  engineer declared the extra test files and the overlay-spec edit as deviations, and both were needed to keep the two specs true.
+- **task status: accepted.** Commits: `7fb52ea` (specs), `731ea9c` (core + editor + 17 tests), `f1093f3` (test-only repair).
+  The escalation that produced `A99`/`A100` cost no attempt and prevented a half-true spec line.

@@ -323,7 +323,7 @@ until the whole set is implemented; the PM rules on anything new and records it.
 
 | Task | Slice (one verifiable behavior) | Spec / AC anchor | Children |
 |---|---|---|---|
-| `t5-01-author-overlap` | `assertCreatable` rejects a duplicate or an overlap **only against entries of the same `authorName`**; foreign overlaps become legal | `inline-comment-model.md` (overlap, duplicate) + `A93` | engineer, reviewer |
+| `t5-01-author-overlap` | **accepted** (`7fb52ea`+`731ea9c`+`f1093f3`, +17 tests → 807, 0 blocking) — the overlap and duplicate refusals answer per author at both call sites; one author identity (`isSameAuthor`) everywhere | `inline-comment-model.md` (overlap, duplicate) + `A93`, `A99`, `A100` | engineer, reviewer |
 | `t5-02-author-colors` | one paint name per author, color from a 6-color palette keyed by a deterministic hash of the name; the paint plan and the adopted stylesheet carry N rules instead of 1 | `content-overlay-ui.md` (painting) + `A94` (overturns `A28`) | engineer, reviewer |
 | `t5-03-tooltip-click-editor` | tooltip opaque on hover; **click opens the editor**; selecting text inside one's own note opens **nothing**; Flow 6 and `claimSelection` are retired with their pins | `content-overlay-ui.md` AC3 / Flow 4 / Flow 6 + `A96` | engineer, reviewer |
 
