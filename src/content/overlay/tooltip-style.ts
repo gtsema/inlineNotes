@@ -6,7 +6,7 @@
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Overlay
  * host" (isolated styles inside the one shadow root), "Tooltip opacity: **1.0** from
  * the first hover", and "Own entries and foreign entries are visually distinguished
- * only in the tooltip header"; ruling `A96`, task `t5-03` AC7.
+ * only in the tooltip header"; ruling `A96`, task `t5-03` AC1.
  *
  * The opacity number lives here rather than in the controller, because opacity is a
  * *look*: the controller decides **no** opacity state at all — the pre-`A96` two-state
@@ -38,7 +38,7 @@ export const TOOLTIP_FOREIGN_CLASS = 'is-foreign';
 
 /**
  * The opacity of a tooltip, hover or no hover (spec: "**1.0** from the first hover";
- * ruling `A96`, task `t5-03` AC7). One number, one declaration, no click state.
+ * ruling `A96`, task `t5-03` AC1). One number, one declaration, no click state.
  */
 export const TOOLTIP_OPACITY = 1;
 

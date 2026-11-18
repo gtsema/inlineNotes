@@ -101,9 +101,11 @@ export interface PaintedEntry {
    * Every fragment of the span, in document order (ruling `A36`).
    *
    * The node and the two node-local offsets are what the `caret hit-test` of
-   * `overlay/tooltip-hit-test.ts`, the Flow 6 selection claim of
-   * `editor/painted-selection.ts` and the placement measurement of
-   * `overlay/editor-controller.tsx` all work from. The `box` is this pass's own
+   * `overlay/tooltip-hit-test.ts` and the placement measurement of
+   * `overlay/editor-controller.tsx` work from; the editor's own `re-selection` question is
+   * answered against this fragment set and never against a page selection (ruling `A104`,
+   * and task `t5-03` AC7 removed the selection handover that used to read these numbers
+   * from the page). The `box` is this pass's own
    * record of the measurement that produced the entry: it is the value a widget is
    * **not** allowed to place itself against, because a scroll moves it silently —
    * which is why every widget re-measures through `placementFragmentBox`.

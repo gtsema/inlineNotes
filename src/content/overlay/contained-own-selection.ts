@@ -84,7 +84,7 @@ function selectionInsideEntry(
  *
  * Node identity is the first test, exactly as in the `caret hit-test`: the offsets of two
  * different text nodes are not comparable numbers (ruling `A100`, the domain rule of
- * `src/content/anchor/anchor-resolve.ts` seen from the selection side).
+ * `src/core/anchor-resolve.ts` seen from the selection side).
  */
 function fragmentIndexAt(
   fragments: readonly PaintedFragment[],

@@ -469,7 +469,7 @@ describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8; ruling A96)',
     expect(clicks[0].entry.comment).toBe(OWN_COMMENT);
   });
 
-  it('hands over the entry of the paint pass itself, so the editor opens over that range (AC8)', async () => {
+  it('hands over the entry of the paint pass itself, so the editor opens over that range (t5-03 AC2)', async () => {
     await boot();
 
     tooltip.hoverAt(20, 84);

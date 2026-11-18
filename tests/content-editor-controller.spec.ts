@@ -489,7 +489,7 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
     expect(fixture.opened).toEqual(['opened']);
   });
 
-  it('opens with no page selection at all (t5-03 AC1, A104)', async () => {
+  it('opens with no page selection at all (t5-03 AC2, A104)', async () => {
     const fixture = await boot();
     fixture.setPageSelection(null);
 
@@ -514,7 +514,7 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
     expect(fixture.editor.isOpen()).toBe(false);
   });
 
-  it('opens nothing for a foreign entry, and asks for no create card either (t5-03 AC2, A25)', async () => {
+  it('opens nothing for a foreign entry, and asks for no create card either (t5-03 AC3, A25)', async () => {
     const fixture = await boot();
 
     // The reader clicked the `tooltip` of somebody else's note: the tooltip stays where
@@ -532,7 +532,7 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
     expect(fixture.port.calls.filter((call) => call.op !== 'get')).toEqual([]);
   });
 
-  it('is not openable through a selection at all (t5-03 AC3, A96)', async () => {
+  it('is not openable through a selection at all (t5-03 AC7, A96)', async () => {
     const fixture = await boot();
     fixture.setPageSelection(selection('p1', 4, 15));
 
@@ -572,7 +572,7 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
     expect(fieldOf(overlay).value).toBe('a draft');
   });
 
-  it('opens nothing for an entry the paint pass does not hold (t5-03 AC8, A24, A66)', async () => {
+  it('opens nothing for an entry the paint pass does not hold (t5-03 AC3, AC9, A24, A66)', async () => {
     const staleRecord = storedEntry({
       id: 'cccccccccccc',
       pageKey: PAGE_KEY,

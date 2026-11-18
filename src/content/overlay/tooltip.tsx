@@ -28,7 +28,7 @@
  * - **opacity is not a state of this component.** `tooltip-style.ts` carries one
  *   opacity declaration for one class, and this component writes no opacity and no
  *   click class: a hovered tooltip is opaque from the first hover (ruling `A96`, task
- *   `t5-03` AC7).
+ *   `t5-03` AC1).
  *
  * An entry the reader did not write is read-only in the editor too
  * (`inline-comment-model.md` -> edit rights), and `visible` is not part of that rule

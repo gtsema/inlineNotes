@@ -2,10 +2,11 @@
  * The editor of an existing entry: the same widget as the create card, opened with
  * the stored comment and one extra control.
  *
- * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 5-6, Rules /
+ * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 4-5, Rules /
  * Semantics -> "Counter rules", "The card and the editor must be reachable by
- * keyboard", "The editor is opened by a selection, never by a foreign entry",
- * "Refusal message map"; task `t3-03` AC1, AC3, AC4, AC5; model AC7 and AC8.
+ * keyboard", "The `editor widget` is opened by a click on the `tooltip`, never by a page
+ * `selection`" (ruling `A96`), "Refusal message map"; task `t3-03` AC1, AC3, AC4, AC5;
+ * model AC7 and AC8.
  *
  * Why this is a second component over the same classes rather than one component with
  * a mode flag: the two flows ask different questions of their state. The create card

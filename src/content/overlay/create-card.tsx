@@ -19,7 +19,7 @@
  *   user who was refused has to be able to fix the selection or the wording.
  *
  * What it does not own: where the card sits (`card-placement.ts`), when it closes
- * (`create-card-controller.ts`, ruling `A32`), what a create means (`create-note.ts`),
+ * (`create-card-controller.tsx`, ruling `A32`), what a create means (`create-note.ts`),
  * and any storage or `chrome.*` call at all.
  */
 
