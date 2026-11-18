@@ -3,7 +3,8 @@
  * The `action row` of the two page widgets: icon-only controls, no cancel control,
  * the Russian word kept as an accessible name (task `t7-01` AC1-AC8; PM ruling
  * `A114`; `docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Compact
- * `action row`" and AC27).
+ * `action row`" and AC27), and the row-absence rule of task `t7-01b` item 1: an
+ * `action row` that holds no control is not rendered at all.
  *
  * The widgets are mounted into a plain container, as in
  * `tests/content-create-card-widget.spec.ts`: placement, closing and the storage round
@@ -261,6 +262,72 @@ describe('AC3, AC4: the two controls are icon-only and carry their Russian names
     expect(editor.container.querySelector(`.${CARD_PRIMARY_CLASS}`)).toBeNull();
     expect(editor.container.querySelector(`.${CARD_ICON_CLASS}`)).toBeNull();
     expect(editor.container.querySelector('svg')).toBeNull();
+  });
+});
+
+/**
+ * Task `t7-01b` item 1 (the reviewer's remark 4 to ruling `A114`): an `action row` that
+ * holds no control is **not rendered**. The container is not part of the authorship rule
+ * of model AC8 / `A25` — that rule is the absence of the two controls — and leaving the
+ * container behind gave a read-only note an empty band under it: the row rule declares
+ * `display: flex` and `margin-top: 8px`, and a 24 px button box sets its height.
+ *
+ * Both halves of the new statement are pinned here: the foreign editor's shadow DOM has
+ * no `.actions` node at all, and the reader's own editor has one holding exactly the two
+ * icon buttons. The third half is the negative: nothing about the read-only widget got
+ * worse — it still shows the stored comment and still closes.
+ *
+ * The foreign case is the **component-level** half of `A25`: no shipped page path reaches
+ * it (`src/content/overlay/editor-controller.tsx` opens with `canEdit` alone, because a
+ * `tooltip` click on a `foreign entry` opens nothing at all), so the pin mounts the
+ * component directly, exactly like the pin above.
+ */
+describe('t7-01b item 1: an action row with no control is not rendered at all', () => {
+  it('renders no action row node for a foreign entry (no empty band, A115 / remark 4)', async () => {
+    const editor = mountedEditor(false);
+    await settled();
+
+    // The container itself is gone, not an empty container: an empty `.actions` node is
+    // what the Run 5 item 6 browser check would have seen as a dead strip.
+    expect(editor.container.querySelector(`.${CARD_ACTIONS_CLASS}`)).toBeNull();
+    expect(editor.container.querySelectorAll('button')).toHaveLength(0);
+    // The note body of the widget is still there: the row is what left, not the card.
+    expect(editor.container.querySelectorAll(`.${CARD_INPUT_CLASS}`)).toHaveLength(1);
+  });
+
+  it('keeps that read-only editor open, showing its note, and closing on Esc', async () => {
+    const editor = mountedEditor(false);
+    await settled();
+
+    // Opens and shows the note: the widget is still the read-only view of the entry.
+    const field = need<HTMLTextAreaElement>(editor.container, `.${CARD_INPUT_CLASS}`);
+    expect(field.value).toBe('a note');
+    expect(need<HTMLElement>(editor.container, `.${CARD_COUNTER_CLASS}`).textContent).toBe('6/256');
+
+    // Closes on the one path a widget has at this level (`A114`), and writes nothing: a
+    // foreign entry had no write control to press in the first place.
+    pressKey(editor.container, 'Escape');
+    await settled();
+    expect(editor.onCancel).toHaveBeenCalledTimes(1);
+    expect(editor.saved).toEqual([]);
+    expect(editor.deleted()).toBe(0);
+  });
+
+  it('renders the row of an own entry, holding exactly the two icon buttons', async () => {
+    const editor = mountedEditor(true);
+    await settled();
+
+    const row = need<HTMLElement>(editor.container, `.${CARD_ACTIONS_CLASS}`);
+    const children = [...row.children];
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      expect(child.tagName).toBe('BUTTON');
+      expect(child.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+    }
+    expect(children.map((child: Element) => child.getAttribute('aria-label') ?? '')).toEqual([
+      CONTENT_STRINGS.save,
+      CONTENT_STRINGS.delete,
+    ]);
   });
 });
 

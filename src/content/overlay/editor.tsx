@@ -33,7 +33,9 @@
  *   when `canEdit` is `false`. The controller never opens this widget for a foreign
  *   entry (`A25`), so the flag is the second line of the same rule rather than the
  *   only one: a foreign record that reached this component by any route still exposes
- *   no write and no delete.
+ *   no write and no delete. Since task `t7-01b` the `action row` that used to hold them
+ *   is not rendered either — a container with no control in it is a band of dead space
+ *   under a read-only note, and the authorship rule was never about that container.
  *
  * What it does not own: where it sits, when it closes, what a save or a delete means,
  * and any storage or `chrome.*` call at all.
@@ -145,11 +147,18 @@ export function EntryEditor(props: EditorProps) {
         {cardCounterText(counted.codePointLength)}
       </span>
       {refusal === null ? null : <p class={CARD_REFUSAL_CLASS}>{refusalText(refusal)}</p>}
-      <div class={CARD_ACTIONS_CLASS}>
-        {/* Icon-only under ruling `A114`: the child of each button is its glyph, and the
-            Russian word each one used to print is now its accessible name and its
-            tooltip. A foreign entry still renders no write and no delete node at all. */}
-        {props.canEdit ? (
+      {/* The `action row` exists only when it holds a control (task `t7-01b`, the
+          reviewer's remark 4 to ruling `A114`). Rendering the container with both
+          controls inside the `canEdit` guard left a foreign entry with an empty row:
+          `display: flex`, a 24px button box and `margin-top: 8px` are enough to show a
+          visible band under a read-only note, which is the clutter ruling `A114` set out
+          to remove. The authorship rule of model AC8 and `A25` is the absence of the two
+          controls, and it is untouched here. */}
+      {props.canEdit ? (
+        <div class={CARD_ACTIONS_CLASS}>
+          {/* Icon-only under ruling `A114`: the child of each button is its glyph, and
+              the Russian word each one used to print is now its accessible name and its
+              tooltip. A foreign entry reaches neither the buttons nor this row. */}
           <button
             class={CARD_PRIMARY_CLASS}
             type="button"
@@ -160,8 +169,6 @@ export function EntryEditor(props: EditorProps) {
           >
             <SaveActionIcon />
           </button>
-        ) : null}
-        {props.canEdit ? (
           <button
             class={CARD_DELETE_CLASS}
             type="button"
@@ -171,8 +178,8 @@ export function EntryEditor(props: EditorProps) {
           >
             <DeleteActionIcon />
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
