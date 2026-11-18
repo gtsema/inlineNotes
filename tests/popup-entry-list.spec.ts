@@ -147,6 +147,40 @@ describe('AC1 the popup lists the current page through core', () => {
     expect(view.rows.map((row) => row.isOwn)).toEqual([true, false]);
   });
 
+  it('answers ten own notes and three foreign ones with two rows, «Вы — 10» and «Вася — 3» (`A95`, `A108`)', async () => {
+    // AC1 of `t5-06` at the size the spec names it (`content-overlay-ui.md` AC26). The two
+    // authors are interleaved in the stored order and interleaved again in creation order,
+    // so a grouping that keyed on adjacency — or that grouped by first-seen name in the
+    // stored order instead of the core order — would answer six rows here, not two.
+    const records: unknown[] = [];
+    for (let n = 0; n < 13; n += 1) {
+      const own = n % 4 !== 3;
+      const tag = own ? 'own' : 'for';
+      const suffix = String(n).padStart(2, '0');
+      records.push(
+        storedEntry({
+          id: `${tag}${suffix}${tag}${suffix}`,
+          authorName: own ? OWN_NAME : 'Вася',
+          createdAt: `2026-01-01T00:00:${suffix}.000Z`,
+        }),
+      );
+    }
+    const f = fixture({ records });
+
+    const rows = (await f.service.open()).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => [row.authorName, row.count, row.allVisible, row.isOwn])).toEqual([
+      [OWN_NAME, 10, true, true],
+      ['Вася', 3, true, false],
+    ]);
+    // The label is the one format entry of `src/popup/text.ts` at this count: the
+    // ownership word, ` — `, the plain number — no plural form appears at 10.
+    expect(rows.map((row) => authorRowLabel(row))).toEqual([
+      `${POPUP_STRINGS.ownEntry} — 10`,
+      'Вася — 3',
+    ]);
+  });
+
   it('places a row by the earliest entry of its author, never by the stored order (`A108`)', async () => {
     const records = [
       storedEntry({ id: 'ccc3c3c3c3c3', authorName: 'vasya', createdAt: '2026-03-03T00:00:00.000Z' }),

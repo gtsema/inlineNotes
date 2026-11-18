@@ -786,6 +786,39 @@ describe('the two aggregate author writes (t5-06 AC8, ruling A108)', () => {
     expect(records[4]).toBe(CORRUPT);
   });
 
+  it('turning a group on re-shows the record an older per-entry checkbox had hidden, and leaves another author\u2019s hidden record hidden (t5-06 AC4, ruling A108)', async () => {
+    const port = mixedPort();
+    const before = requireStoredRecords(port, SLOT_A);
+
+    const result = await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: true });
+    expect(result.ok).toBe(true);
+    expect((result as { entries: Entry[] }).entries.map((entry) => entry.id)).toEqual([
+      OWN_ONE,
+      OWN_TWO,
+    ]);
+
+    const records = requireStoredRecords(port, SLOT_A);
+    const flagOf = (record: unknown): unknown => (record as Record<string, unknown>)['visible'];
+    // The whole group lands on the visible side, **including** the record that a
+    // per-entry checkbox of a build before `A108` had turned off. The aggregate never
+    // skips a record because it was already hidden: that is what makes the popup's
+    // unchecked row mean "one press paints everything of this author".
+    expect(flagOf(records[0])).toBe(true);
+    expect(flagOf(records[2])).toBe(true);
+    // Another author's hidden record is not in this group and stays hidden, and both
+    // foreign records are the very objects the store held before the call (`A16`).
+    expect(flagOf(records[1])).toBe(true);
+    expect(flagOf(records[3])).toBe(false);
+    expect(records[1]).toBe(before[1]);
+    expect(records[3]).toBe(before[3]);
+    expect(records[4]).toBe(CORRUPT);
+    // `visible` stays a field of one record: the group has no stored shape, so the two
+    // records of this author still carry two independent flags (`A108`).
+    expect(Object.keys(records[0] as Record<string, unknown>).sort()).toEqual(
+      Object.keys(ownRecord(OWN_ONE)).sort(),
+    );
+  });
+
   it('publishes one slot write and exactly one pages:v1 update for a two-record group', async () => {
     const port = mixedPort();
 

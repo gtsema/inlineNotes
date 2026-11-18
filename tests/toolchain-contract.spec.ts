@@ -353,7 +353,7 @@ describe('layer boundaries', () => {
       }
     });
 
-    it('writes a row through the two aggregate author operations and never through a per-entry write (ruling A108; t5-06 AC7, AC9)', () => {
+    it('writes a row through the two aggregate author operations and never through a per-entry write (ruling A108; t5-06 AC3, AC5, AC8, AC9)', () => {
       // The trap `t5-06` names is a popup that loops `setVisible` / `deleteEntry` over the
       // entries of a row: N calls answer N `pages:v1` rewrites, and an interrupted loop
       // leaves half of an author's notes with no control left to finish the job. The shape
