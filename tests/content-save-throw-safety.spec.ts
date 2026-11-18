@@ -23,7 +23,9 @@
  *
  * What the user gets instead of the frozen card (AC1): the `selection_lost` line
  * («Выделение больше не найдено на странице»), nothing written, and a card that is
- * still usable — `Сохранить` enabled, `Отмена` and `Esc` alive, the draft intact.
+ * still usable — `Сохранить` enabled, a `pointerdown` outside the overlay host and `Esc`
+ * alive, the draft intact (ruling `A114` removed the cancel button this sentence used to
+ * name).
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -33,6 +35,7 @@ import { captureSpan } from '../src/content/capture/selection-span';
 import type { CapturedSelection } from '../src/content/capture/page-selection';
 import { ensureOverlayHost, OVERLAY_HOST_ID } from '../src/content/overlay/host';
 import type { OverlayHost } from '../src/content/overlay/host';
+import { attachCreateCardEvents } from '../src/content/overlay/card-events';
 import {
   CARD_CLASS,
   CARD_INPUT_CLASS,
@@ -178,11 +181,10 @@ function inputOf(overlay: OverlayHost): HTMLTextAreaElement {
   return field;
 }
 
-function buttonOf(overlay: OverlayHost, position: 'save' | 'cancel'): HTMLButtonElement {
-  const buttons = overlay.root.querySelectorAll(`.${CARD_CLASS} button`);
-  const button = position === 'save' ? buttons[0] : buttons[buttons.length - 1];
+function saveButtonOf(overlay: OverlayHost): HTMLButtonElement {
+  const button = overlay.root.querySelector(`.${CARD_CLASS} button`);
   if (!(button instanceof HTMLButtonElement)) {
-    throw new Error(`expected the ${position} button inside the shadow root`);
+    throw new Error('expected the save button inside the shadow root');
   }
   return button;
 }
@@ -200,8 +202,23 @@ async function typeDraft(overlay: OverlayHost, comment: string): Promise<void> {
 }
 
 async function pressSave(overlay: OverlayHost): Promise<void> {
-  buttonOf(overlay, 'save').click();
+  saveButtonOf(overlay).click();
   await settle();
+}
+
+/**
+ * Closes the open card the way ruling `A114` leaves it closable from outside the widget.
+ * The page wiring of `card-events.ts` belongs to the case that needs it, exactly as the
+ * event-driven pins of `t5-05` attach and detach it in `content-create-card-controller`.
+ */
+async function pressOutsideHost(controller: CreateCardController, host: HTMLElement): Promise<void> {
+  const detach = attachCreateCardEvents(controller, document, window, host);
+  try {
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await settle(2);
+  } finally {
+    detach();
+  }
 }
 
 function pressEscape(overlay: OverlayHost): void {
@@ -258,9 +275,14 @@ describe('a save over a selection the page took away (t3-05 AC1, ruling A75)', (
 
     // The frozen state this task exists for: the throw escaped the card's submit, so
     // `busy` stayed `true`, `Сохранить` rendered disabled and no line appeared.
-    const save = buttonOf(fixture.overlay, 'save');
+    const save = saveButtonOf(fixture.overlay);
     expect(save.disabled).toBe(false);
-    expect(save.textContent).toBe(CONTENT_STRINGS.save);
+    // Ruling `A114`: the control is icon-only, so the Russian word this pin used to read
+    // off the button is now its accessible name — the same statement about the same
+    // control being alive and pressable.
+    expect(save.getAttribute('aria-label')).toBe(CONTENT_STRINGS.save);
+    expect(save.getAttribute('title')).toBe(CONTENT_STRINGS.save);
+    expect(save.textContent).toBe('');
     expect(fixture.controller.isOpen()).toBe(true);
     expect(inputOf(fixture.overlay).value).toBe('my note');
 
@@ -278,18 +300,18 @@ describe('a save over a selection the page took away (t3-05 AC1, ruling A75)', (
     await pressSave(fixture.overlay);
 
     expect(refusalLineOf(fixture.overlay)).toBe(firstLine);
-    expect(buttonOf(fixture.overlay, 'save').disabled).toBe(false);
+    expect(saveButtonOf(fixture.overlay).disabled).toBe(false);
     expect(fixture.controller.isOpen()).toBe(true);
     expect(inputOf(fixture.overlay).value).toBe('my note');
     expect(writesOtherThanSettings(fixture.port)).toEqual([]);
   });
 
-  it('still closes on Отмена after that refusal, and writes nothing', async () => {
+  it('still closes on a pointerdown outside the host after that refusal, and writes nothing', async () => {
+    // The pin that pressed `Отмена` keeps its outcome and drives a surviving close path.
     const fixture = await openCardWithADoomedSelection();
     await pressSave(fixture.overlay);
 
-    buttonOf(fixture.overlay, 'cancel').click();
-    await settle(2);
+    await pressOutsideHost(fixture.controller, fixture.overlay.host);
 
     expect(fixture.controller.isOpen()).toBe(false);
     expect(cardOf(fixture.overlay)).toBeNull();

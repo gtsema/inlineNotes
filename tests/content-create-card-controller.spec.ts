@@ -53,6 +53,7 @@ import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-plan';
 import type { PaintSurface } from '../src/content/paint/paint-surface';
 import {
+  CARD_ACTIONS_CLASS,
   CARD_CLASS,
   CARD_COUNTER_CLASS,
   CARD_CSS,
@@ -280,12 +281,17 @@ function saveButtonOf(overlay: OverlayHost): HTMLButtonElement {
   return button;
 }
 
-/** The card's `Отмена`, the second button of the card. */
-function cancelButtonOf(overlay: OverlayHost): HTMLButtonElement {
-  const buttons = [...overlay.root.querySelectorAll(`.${CARD_CLASS} button`)];
-  const button = buttons[1];
+/**
+ * The action button of the card whose accessible name is `name` (ruling `A114`):
+ * since the row became icon-only, `aria-label` is the only handle a test has on one
+ * of these controls, because the button holds no text node any more.
+ */
+function actionButtonOf(overlay: OverlayHost, name: string): HTMLButtonElement {
+  const button = [...overlay.root.querySelectorAll(`.${CARD_ACTIONS_CLASS} button`)].find(
+    (candidate: Element) => candidate.getAttribute('aria-label') === name,
+  );
   if (!(button instanceof HTMLButtonElement)) {
-    throw new Error('expected the cancel button inside the shadow root');
+    throw new Error(`expected the ${name} button inside the shadow root`);
   }
   return button;
 }
@@ -958,7 +964,7 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
     }
   });
 
-  it('renders textarea, then Сохранить, then Отмена, as the rendered tab order', async () => {
+  it('renders textarea, then the Сохранить button, as the rendered tab order (A114)', async () => {
     const fixture = mount(selection('p1', 4, 15));
     await seedAuthor(fixture.port);
     await fixture.controller.capture();
@@ -968,11 +974,12 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
     await typeDraft(fixture.overlay, 'my note');
 
     const order = tabOrderOf(fixture.overlay);
-    expect(order).toHaveLength(3);
-    expect(order.map((element: Element) => element.tagName)).toEqual(['TEXTAREA', 'BUTTON', 'BUTTON']);
+    // Ruling `A114` took the third control away: the row is one icon-only button, and
+    // no `tabindex` was added to replace it, so the rendered order lost one step.
+    expect(order).toHaveLength(2);
+    expect(order.map((element: Element) => element.tagName)).toEqual(['TEXTAREA', 'BUTTON']);
     expect(order[0]).toBe(inputOf(fixture.overlay));
-    expect(order[1].textContent).toBe(CONTENT_STRINGS.save);
-    expect(order[2].textContent).toBe(CONTENT_STRINGS.cancel);
+    expect(order[1]).toBe(actionButtonOf(fixture.overlay, CONTENT_STRINGS.save));
     for (const element of order) {
       expect((element as HTMLButtonElement).disabled).toBe(false);
     }
@@ -1101,8 +1108,12 @@ describe('the card takes no focus and hands nothing back (A111, t6-01 AC1; the r
     }
   });
 
-  it('keeps the page control focused through `Отмена`, Esc and a successful save (A111, t6-01 AC1; the rewritten t5-04 AC4 pin)', async () => {
-    for (const [index, close] of ['cancel', 'esc', 'save'].entries()) {
+  it('keeps the page control focused through a press outside, Esc and a successful save (A111, t6-01 AC1; the rewritten t5-04 AC4 pin)', async () => {
+    // Ruling `A114` removed the cancel button that used to be this loop's first case, so
+    // the first case is now the other way out of a card whose widget holds no close
+    // control: a `pointerdown` outside the overlay host. The asserted outcome is the one
+    // the deleted pin asserted — a closed, hidden card and no focus call of any kind.
+    for (const [index, close] of ['outside', 'esc', 'save'].entries()) {
       const control = pageControl(`page-cta-${String(index)}`);
       const fixture = mount(selection('p1', 4, 15));
       await openCard(fixture, control);
@@ -1112,10 +1123,16 @@ describe('the card takes no focus and hands nothing back (A111, t6-01 AC1; the r
       expect(document.activeElement).toBe(control);
       expect(fixture.overlay.root.activeElement).toBeNull();
 
+      // The page wiring belongs to the case, is attached before the recorder starts, and
+      // is detached again in it: the controller fixture owns no listeners.
+      const detach =
+        close === 'outside'
+          ? attachCreateCardEvents(fixture.controller, document, window, fixture.overlay.host)
+          : () => undefined;
       const recorder: FocusCallRecorder = recordFocusCalls();
       try {
-        if (close === 'cancel') {
-          cancelButtonOf(fixture.overlay).click();
+        if (close === 'outside') {
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
           await settle();
         } else if (close === 'esc') {
           pressKey(fixture.overlay, 'Escape');
@@ -1134,6 +1151,7 @@ describe('the card takes no focus and hands nothing back (A111, t6-01 AC1; the r
         expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
       } finally {
         recorder.restore();
+        detach();
       }
     }
   });
@@ -1141,7 +1159,7 @@ describe('the card takes no focus and hands nothing back (A111, t6-01 AC1; the r
   it('takes no focus and hands nothing back when a page event closes the card (A111, t6-01 AC1; the rewritten t5-04 AC4 and t5-05 carried 4 pins)', async () => {
     // The two close paths that carry no button press: a `pointerdown` outside the overlay
     // host and a page scroll (`src/content/overlay/card-events.ts`, ruling `A32`). They go
-    // through the same `close()` as `Отмена`, so ruling `A111` leaves them the same
+    // through the same `close()` as `Esc`, so ruling `A111` leaves them the same
     // negative proof it left the button paths. The page wiring is attached for the case
     // and detached again in it: the controller fixture owns no listeners, and
     // `card-events.ts` is not changed by this task — the pin proves the construction.
@@ -1302,10 +1320,11 @@ describe('a card the reader typed into hands the caret back (t6-02 AC5, AC6; rul
     await typeDraft(fixture.overlay, 'a note of some length');
 
     const order = tabOrderOf(fixture.overlay);
-    expect(order).toHaveLength(3);
+    // Ruling `A114` is the second removal this pin absorbs: the door of `A112` added no
+    // `tabindex`, and the compact row of `A114` left one control instead of two.
+    expect(order).toHaveLength(2);
     expect(order[0]).toBe(inputOf(fixture.overlay));
-    expect(order[1].textContent).toBe(CONTENT_STRINGS.save);
-    expect(order[2].textContent).toBe(CONTENT_STRINGS.cancel);
+    expect(order[1]).toBe(actionButtonOf(fixture.overlay, CONTENT_STRINGS.save));
     for (const element of order) {
       expect(element.getAttribute('tabindex')).toBeNull();
     }
@@ -1346,17 +1365,23 @@ describe('a card the reader typed into hands the caret back (t6-02 AC5, AC6; rul
   // `A105` on the card path, once the card took the caret: every close path hands it back,
   // with the same `preventScroll` the entry call carried, and nothing is invented when the
   // page element is gone.
-  for (const [index, close] of ['cancel', 'esc', 'save'].entries()) {
+  for (const [index, close] of ['outside', 'esc', 'save'].entries()) {
     it(`a card typed into hands the caret back on the ${close} close (t6-02 AC6)`, async () => {
       const control = pageControl(`page-typed-close-${String(index)}`);
       const fixture = mount(selection('p1', 4, 15));
       await openTypedCard(fixture, control);
       await typeDraft(fixture.overlay, 'a note of some length');
 
+      // The `outside` case drives the close path that replaced the cancel button of the
+      // deleted pin (`A114`); the asserted outcome is unchanged.
+      const detach =
+        close === 'outside'
+          ? attachCreateCardEvents(fixture.controller, document, window, fixture.overlay.host)
+          : () => undefined;
       const recorder: FocusCallRecorder = recordFocusCalls();
       try {
-        if (close === 'cancel') {
-          cancelButtonOf(fixture.overlay).click();
+        if (close === 'outside') {
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
           await settle();
         } else if (close === 'esc') {
           pressKey(fixture.overlay, 'Escape');
@@ -1374,13 +1399,14 @@ describe('a card the reader typed into hands the caret back (t6-02 AC5, AC6; rul
         expect(calls[0]?.options).toEqual({ preventScroll: true });
       } finally {
         recorder.restore();
+        detach();
       }
     });
   }
 
   it('hands the caret back when a page event closes a card typed into (t6-02 AC6)', async () => {
     // The two close paths that carry no button press (`src/content/overlay/card-events.ts`,
-    // ruling `A32`): they run the same `close()` as `Отмена`, so ruling `A112` gives them
+    // ruling `A32`): they run the same `close()` as `Esc`, so ruling `A112` gives them
     // the same restore. The page wiring belongs to the case and is detached in it.
     for (const [index, close] of ['pointerdown', 'scroll'].entries()) {
       const control = pageControl(`page-typed-event-${String(index)}`);

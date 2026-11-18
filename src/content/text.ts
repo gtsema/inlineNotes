@@ -39,15 +39,24 @@ export type ContentRefusalCode = CreateNoteCode | EditNoteCode;
 export const CONTENT_STRINGS = {
   /** Accessible name and placeholder of the comment input. */
   commentInput: 'Текст заметки',
-  /** Save button of the create card and of the editor. */
+  /**
+   * Save button of the create card and of the editor. Since ruling `A114` the
+   * button is **icon-only** (`content-overlay-ui.md` -> "Compact `action row`"), so
+   * this string is no longer the button's text: it is its `aria-label` **and** its
+   * `title`, which is also the only handle a test or an assistive technology has on
+   * the control.
+   */
   save: 'Сохранить',
-  /** Cancel button of the create card and of the editor. */
-  cancel: 'Отмена',
   /**
    * Delete button of the editor (`content-overlay-ui.md` -> Flow / Sequence 5).
    * It is rendered for the reader's own entry only: `A25` rules that core does not
    * gate `deleteEntry` by authorship, so this button — and the editor that holds it
-   * — is the affordance a foreign entry never gets.
+   * — is the affordance a foreign entry never gets. Like the save button it is
+   * icon-only under ruling `A114`, so the string is its `aria-label` and `title`.
+   *
+   * There is **no** `cancel` entry: ruling `A114` removed the cancel control of both
+   * widgets, and `Esc` plus a `pointerdown` outside the overlay host are what close
+   * them. A string of this module names a control that exists.
    */
   delete: 'Удалить',
   /**

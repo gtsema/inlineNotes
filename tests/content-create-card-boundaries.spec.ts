@@ -18,7 +18,13 @@
  *   "allowed" and re-open the failure class `t2-03` remark 3 closed;
  * - ruling `A33` and `A47`: refusal wording is a total map in `src/content/text.ts`,
  *   the pinned sentences are exactly the ones the specs name, and no Russian string
- *   lives anywhere else in the shipped content layer.
+ *   lives anywhere else in the shipped content layer;
+ * - ruling `A114` (task `t7-01`), the half of that task's acceptance that is a **textual
+ *   fact about shipped sources**: the word of the deleted cancel control appears in no
+ *   module of `src/content/`, no module sets a tab index or intercepts `Tab`, and the
+ *   icon-only `action row` stayed inside the page widgets — `src/popup/` and
+ *   `src/options/` carry no inline glyph and keep their Russian words. The rendered half
+ *   of the same acceptance lives in `tests/content-card-actions.spec.ts`.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -330,7 +336,12 @@ describe('the refusal wording is one total map (A33, A47)', () => {
   it('holds the card strings and nothing else in the constants module', () => {
     expect(CONTENT_STRINGS.commentInput).toBe('Текст заметки');
     expect(CONTENT_STRINGS.save).toBe('Сохранить');
-    expect(CONTENT_STRINGS.cancel).toBe('Отмена');
+    expect(CONTENT_STRINGS.delete).toBe('Удалить');
+    // Ruling `A114`: a string of this module names a control that exists, and the cancel
+    // control of both widgets is gone — so the word it used to print is gone with it,
+    // and no new wording took its place.
+    expect(Object.keys(CONTENT_STRINGS)).not.toContain('cancel');
+    expect(Object.values(CONTENT_STRINGS)).not.toContain('Отмена');
   });
 
   it('keeps every Russian string of the content layer in one module', () => {
@@ -339,5 +350,51 @@ describe('the refusal wording is one total map (A33, A47)', () => {
       .filter((file) => /[А-Яа-яЁё]/.test(readFileSync(file, 'utf8')))
       .map((file) => toPosix(path.relative(ROOT, file)));
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps the word of the deleted cancel control out of the whole content layer (A114)', () => {
+    // A control that is not rendered leaves no positive assertion behind, so the absence
+    // is pinned where its label used to live: no shipped module of `src/content/` carries
+    // the word — not in code, not in a comment. What a reader can press instead survives
+    // in `tests/content-card-actions.spec.ts` and in the close-path pins of the two
+    // controller files.
+    const offenders = shippedContentFiles()
+      .filter((file) => readFileSync(file, 'utf8').includes('Отмена'))
+      .map((file) => toPosix(path.relative(ROOT, file)));
+    expect(offenders).toEqual([]);
+  });
+
+  it('sets no tab index and intercepts no Tab key, in either widget (A114, t5-04 AC6, t6-02 AC5)', () => {
+    // The compaction removed a control from the middle of the tab order. Ruling `A114`
+    // forbids repairing that with a `tabindex` or with a key handler, so the tab order is
+    // still the rendered order. Comments are stripped first: the prose of both widgets
+    // says "no `tabindex`", and a prose sentence must not trip its own pin.
+    expect(contentFilesMatching(/setAttribute\(\s*['"]tabindex/i)).toEqual([]);
+    expect(contentFilesMatching(/\.tabIndex\s*=/)).toEqual([]);
+    expect(contentFilesMatching(/key\s*===\s*['"]Tab['"]/)).toEqual([]);
+  });
+
+  it('kept the icon-only row inside the page widgets, and the extension words intact (A114)', () => {
+    // The popup and the options page were explicitly out of scope: their buttons keep
+    // their words, so an inline glyph or the shared glyph class appearing there is a
+    // scope violation, not a style choice.
+    for (const dir of ['src/popup', 'src/options']) {
+      const files = shippedContentFilesAt(path.join(ROOT, dir));
+      expect(files.length).toBeGreaterThan(0);
+      const offenders = files
+        .filter((file) => codeOnly(file).includes('<svg'))
+        .map((file) => toPosix(path.relative(ROOT, file)));
+      expect(offenders).toEqual([]);
+      const glyphOffenders = files
+        .filter((file) => codeOnly(file).includes('CARD_ICON_CLASS'))
+        .map((file) => toPosix(path.relative(ROOT, file)));
+      expect(glyphOffenders).toEqual([]);
+    }
+    // The words themselves are still the words of those surfaces, pinned as literals so
+    // this pin does not import a second layer into the content boundary file.
+    const popupText = readFileSync(path.join(ROOT, 'src', 'popup', 'text.ts'), 'utf8');
+    const optionsText = readFileSync(path.join(ROOT, 'src', 'options', 'text.ts'), 'utf8');
+    expect(popupText).toContain("delete: 'Удалить'");
+    expect(optionsText).toContain("save: 'Сохранить'");
   });
 });

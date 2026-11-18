@@ -16,7 +16,11 @@
  *   store applies, so the button and the store never disagree);
  * - the refusal line: a code from the write is shown through `refusalText`, the
  *   one map in `src/content/text.ts`, and the typed text survives it, because a
- *   user who was refused has to be able to fix the selection or the wording.
+ *   user who was refused has to be able to fix the selection or the wording;
+ * - the `action row` of ruling `A114`: **one** icon-only button — an inline `<svg>`
+ *   check mark and no text node — whose Russian string reaches the reader as
+ *   `aria-label` and `title` instead of as visible text, and **no** cancel control, so
+ *   `Esc` and a `pointerdown` outside the overlay host are the only ways out.
  *
  * What it does not own: where the card sits (`card-placement.ts`), when it closes
  * (`create-card-controller.tsx`, ruling `A32`), what a create means (`create-note.ts`),
@@ -29,6 +33,7 @@ import { MAX_COMMENT_CODE_POINTS, validateComment } from '../../core/entry-rules
 import type { CreateNoteResult } from '../create/create-note';
 import { CONTENT_STRINGS, cardCounterText, refusalText } from '../text';
 import type { ContentRefusalCode } from '../text';
+import { SaveActionIcon } from './action-icons';
 import {
   CARD_ACTIONS_CLASS,
   CARD_CLASS,
@@ -45,7 +50,11 @@ export const COUNTER_WARNING_CODE_POINTS = 240;
 export interface CreateCardProps {
   /** Hands the typed comment to the create path and reports its outcome. */
   onSubmit: (comment: string) => Promise<CreateNoteResult>;
-  /** `cancel`, `Esc`: close and write nothing. */
+  /**
+   * `Esc`: close and write nothing. Ruling `A114` left no cancel button to call this
+   * from inside the widget — the same close path is reached from outside by a
+   * `pointerdown` the event seam of `card-events.ts` reports.
+   */
   onCancel: () => void;
 }
 
@@ -109,11 +118,17 @@ export function CreateCard(props: CreateCardProps) {
       </span>
       {refusal === null ? null : <p class={CARD_REFUSAL_CLASS}>{refusalText(refusal)}</p>}
       <div class={CARD_ACTIONS_CLASS}>
-        <button class={CARD_PRIMARY_CLASS} type="button" disabled={!canSave} onClick={() => void submit()}>
-          {CONTENT_STRINGS.save}
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          {CONTENT_STRINGS.cancel}
+        {/* Icon-only under ruling `A114`: the child is the glyph, and the Russian word
+            the button used to print is now its accessible name and its tooltip. */}
+        <button
+          class={CARD_PRIMARY_CLASS}
+          type="button"
+          disabled={!canSave}
+          aria-label={CONTENT_STRINGS.save}
+          title={CONTENT_STRINGS.save}
+          onClick={() => void submit()}
+        >
+          <SaveActionIcon />
         </button>
       </div>
     </div>

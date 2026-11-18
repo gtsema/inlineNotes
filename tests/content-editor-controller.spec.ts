@@ -27,8 +27,9 @@
  * - **AC2** — `Сохранить` writes through core and nothing else: the stored record is
  *   read back through core `loadEntries`, `comment` and `updatedAt` move, `createdAt`
  *   and the `anchor` do not (ruling `A45`), and the port saw one slot write;
- * - **AC3** — `Отмена`, `Esc` and a `pointerdown` outside the overlay host are one
- *   cancel path, and the port received **no `set` and no `remove`** in any of them;
+ * - **AC3** — `Esc` and a `pointerdown` outside the overlay host are one
+ *   cancel path (ruling `A114` removed the cancel button that used to be its third
+ *   case), and the port received **no `set` and no `remove`** in any of them;
  *   a page scroll closes the editor (`A32`) while a `selectionchange` does **not**
  *   (`A45` would be unreachable otherwise); the `tooltip` click puts the caret in the
  *   note field (`A97`, `A105`) and the close hands it back to the page (`focus
@@ -406,15 +407,34 @@ function refusalLineOf(overlayHost: OverlayHost): string | null {
   return line === null ? null : (line.textContent ?? '');
 }
 
-async function press(overlayHost: OverlayHost, label: string): Promise<void> {
+/**
+ * The action button whose accessible name is `name`. Ruling `A114` made the row
+ * icon-only, so `aria-label` — not the text of the button, which is empty — is what
+ * names a control here.
+ */
+function actionButtonOf(overlayHost: OverlayHost, name: string): HTMLButtonElement {
   const button = buttonsOf(overlayHost).find(
-    (candidate: HTMLButtonElement) => candidate.textContent === label,
+    (candidate: HTMLButtonElement) => candidate.getAttribute('aria-label') === name,
   );
   if (button === undefined) {
-    throw new Error(`no button labelled ${label} in the shadow root`);
+    throw new Error(`no button named ${name} in the shadow root`);
   }
-  button.click();
+  return button;
+}
+
+async function press(overlayHost: OverlayHost, name: string): Promise<void> {
+  actionButtonOf(overlayHost, name).click();
   await settle();
+}
+
+/**
+ * Closes the open editor the way ruling `A114` leaves it closable from outside the
+ * widget: a `pointerdown` on the document, which the wiring `boot()` attaches through
+ * `src/content/overlay/editor-events.ts` reports as a cancel (`A42`).
+ */
+async function pressOutsideHost(): Promise<void> {
+  document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  await settle(2);
 }
 
 async function typeDraft(overlayHost: OverlayHost, comment: string): Promise<void> {
@@ -469,19 +489,22 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
       `${String(OWN_COMMENT.length)}/256`,
     );
     // The editor is the card widget plus the delete control: one stylesheet, one
-    // wrapper class, and the three actions in the rendered order the spec names.
+    // wrapper class, and the two actions of the `action row` in the rendered order the
+    // spec names (ruling `A114`), each named by its accessible name and not by text.
     expect(overlay.root.querySelectorAll(`.${WIDGET_ROOT_CLASS}`)).toHaveLength(1);
     expect(overlay.root.querySelectorAll(`.${EDITOR_ROOT_CLASS}`)).toHaveLength(1);
     expect(overlay.root.querySelectorAll(`style[${CARD_STYLE_ATTRIBUTE}]`)).toHaveLength(1);
-    expect(buttonsOf(overlay).map((button: HTMLButtonElement) => button.textContent)).toEqual([
+    expect(buttonsOf(overlay).map((button: HTMLButtonElement) => button.getAttribute('aria-label'))).toEqual([
       CONTENT_STRINGS.save,
-      CONTENT_STRINGS.cancel,
       CONTENT_STRINGS.delete,
     ]);
-    // The delete control is identifiable by class as well as by its Russian label, so
+    for (const button of buttonsOf(overlay)) {
+      expect(button.textContent).toBe('');
+    }
+    // The delete control is identifiable by class as well as by its accessible name, so
     // the warning style and a test can point at it without reading wording.
     const deleteButton = buttonsOf(overlay).find(
-      (button: HTMLButtonElement) => button.textContent === CONTENT_STRINGS.delete,
+      (button: HTMLButtonElement) => button.getAttribute('aria-label') === CONTENT_STRINGS.delete,
     );
     expect(deleteButton?.classList.contains(CARD_DELETE_CLASS)).toBe(true);
     // The click takes the overlay host, and the coordinator is told to dismiss the
@@ -672,16 +695,14 @@ describe('AC2: Сохранить writes through core and keeps the entry on its
 });
 
 describe('AC3: one cancel path, and no write in it', () => {
-  it('writes nothing on Отмена, on Esc and on a pointerdown outside the host', async () => {
-    for (const cancel of ['button', 'escape', 'outside'] as const) {
+  it('writes nothing on Esc and on a pointerdown outside the host', async () => {
+    for (const cancel of ['escape', 'outside'] as const) {
       const fixture = await boot();
       openOwn(fixture);
       await typeDraft(overlay, 'a draft that is discarded');
       expect(fixture.editor.isOpen()).toBe(true);
 
-      if (cancel === 'button') {
-        await press(overlay, CONTENT_STRINGS.cancel);
-      } else if (cancel === 'escape') {
+      if (cancel === 'escape') {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await settle(2);
       } else {
@@ -751,7 +772,7 @@ describe('AC3: one cancel path, and no write in it', () => {
     for (const control of controls) {
       control.focus();
     }
-    expect(overlay.root.activeElement).toBe(buttonsOf(overlay)[2] ?? null);
+    expect(overlay.root.activeElement).toBe(buttonsOf(overlay)[1] ?? null);
 
     // `focus restore` (`Assumption:` of ruling `A105`, t5-04 AC4): the close hands the
     // caret back to the page element that had it before the click.
@@ -850,8 +871,8 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
     }
   });
 
-  it('hands the caret back on cancel, on Esc, on a successful save and on a delete (A105)', async () => {
-    for (const [index, close] of ['cancel', 'esc', 'save', 'delete'].entries()) {
+  it('hands the caret back on a press outside, on Esc, on a successful save and on a delete (A105, A114)', async () => {
+    for (const [index, close] of ['outside', 'esc', 'save', 'delete'].entries()) {
       const fixture = await boot();
       const control = pageControl(`page-cta-${String(index)}`);
 
@@ -859,8 +880,10 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
       await settle(2);
       expect(overlay.root.activeElement).toBe(fieldOf(overlay));
 
-      if (close === 'cancel') {
-        await press(overlay, CONTENT_STRINGS.cancel);
+      if (close === 'outside') {
+        // The close path that took over the deleted cancel pin; the asserted handover is
+        // the one that pin made.
+        await pressOutsideHost();
       } else if (close === 'esc') {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await settle(2);
@@ -883,7 +906,7 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
   it('hands the caret back when a page event closes the editor (t5-04 AC4, A32, t5-05 carried 4)', async () => {
     // The editor's two close paths that carry no button press: a `pointerdown` outside the
     // overlay host and a page scroll (`src/content/overlay/editor-events.ts`, ruling
-    // `A32`). They reach the same `close()` as `Отмена`, `Esc`, a save and a delete, so the
+    // `A32`). They reach the same `close()` as `Esc`, a save and a delete, so the
     // `Assumption:` half of ruling `A105` owes them the same handover; the `pointerdown`
     // case is also the click-through of the `editor` ruling `A105` names. `editor-events.ts`
     // is not changed by this task: the pin proves the construction, exactly as it must.
@@ -936,7 +959,7 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
       // The page removed the control while the editor stood — a single-page app that
       // re-rendered the reading pane is the normal way this happens.
       control.remove();
-      await press(overlay, CONTENT_STRINGS.cancel);
+      await pressOutsideHost();
 
       expect(fixture.editor.isOpen()).toBe(false);
       expect(overlay.root.activeElement).toBeNull();
@@ -956,29 +979,28 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
     }
   });
 
-  it('still renders no `tabindex`, and the four controls keep the rendered order (t5-04 AC6)', async () => {
+  it('still renders no `tabindex`, and the three controls keep the rendered order (t5-04 AC6, A114)', async () => {
     const fixture = await boot();
     expect(openOwn(fixture)).toBe(true);
     await settle(2);
 
     // What ruling `A97` did **not** do: no control gained a `tabindex`, so the tab order
-    // is still the rendered order of the shadow tree — note field, then the three actions
-    // in the order the stylesheet names them.
+    // is still the rendered order of the shadow tree — note field, then the actions of
+    // the `action row` in the order the stylesheet names them. Ruling `A114` took the
+    // middle action away and added no `tabindex` in its place.
     const order = [
       ...overlay.root.querySelectorAll('textarea, button, input, select, a[href], [tabindex]'),
     ];
-    expect(order).toHaveLength(4);
+    expect(order).toHaveLength(3);
     expect(order[0]).toBe(fieldOf(overlay));
     expect(order.map((element: Element) => element.tagName)).toEqual([
       'TEXTAREA',
       'BUTTON',
       'BUTTON',
-      'BUTTON',
     ]);
-    expect(order.map((element: Element) => element.textContent ?? '')).toEqual([
-      '',
+    expect(order.map((element: Element) => element.getAttribute('aria-label') ?? '')).toEqual([
+      CONTENT_STRINGS.commentInput,
       CONTENT_STRINGS.save,
-      CONTENT_STRINGS.cancel,
       CONTENT_STRINGS.delete,
     ]);
     expect(overlay.root.querySelectorAll('[tabindex]')).toHaveLength(0);

@@ -20,8 +20,11 @@
  * - the draft: the stored comment becomes the initial value, every typed value is cut
  *   at `MAX_COMMENT_CODE_POINTS` code points by the same core cap the store applies,
  *   and the counter reads code points, never UTF-16 units;
- * - the three actions of Flow 5 — save, cancel, delete — in that tab order, with no
- *   `tabindex` anywhere (overlay AC17 for the card, the same rule here);
+ * - the two actions of Flow 5 — save, delete — in that rendered order, each of them an
+ *   icon-only button of the `action row` (ruling `A114`: an inline `<svg>` glyph, no
+ *   text node, the Russian word carried as `aria-label` and `title`), and no cancel
+ *   control at all, with no `tabindex` anywhere (overlay AC17 for the card, the same
+ *   rule here);
  * - the `refusal line`: a code from the write is shown through `refusalText`, and the
  *   draft survives it, because a reader refused with the `overlap` sentence has to be
  *   able to re-select and press the save button again (task `t3-03` AC5);
@@ -44,6 +47,7 @@ import type { EditNoteResult } from '../editor/edit-entry';
 import { CONTENT_STRINGS, cardCounterText, refusalText } from '../text';
 import type { ContentRefusalCode } from '../text';
 import { COUNTER_WARNING_CODE_POINTS, cutToCodePointCap } from './create-card';
+import { DeleteActionIcon, SaveActionIcon } from './action-icons';
 import {
   CARD_ACTIONS_CLASS,
   CARD_CLASS,
@@ -62,7 +66,11 @@ export interface EditorProps {
   canEdit: boolean;
   /** Hands the draft to the edit path and reports its outcome. */
   onSubmit: (comment: string) => Promise<EditNoteResult>;
-  /** Cancel, `Esc`, a pointer press outside the overlay host: close, write nothing. */
+  /**
+   * `Esc`, a pointer press outside the overlay host, a page scroll: close, write
+   * nothing. Ruling `A114` removed the cancel button that used to call this from
+   * inside the widget, so the close path is reached from outside only.
+   */
   onCancel: () => void;
   /** Delete: removes the entry at once — no confirmation step exists (ruling `A44`). */
   onDelete: () => Promise<EntryWriteResult>;
@@ -138,22 +146,30 @@ export function EntryEditor(props: EditorProps) {
       </span>
       {refusal === null ? null : <p class={CARD_REFUSAL_CLASS}>{refusalText(refusal)}</p>}
       <div class={CARD_ACTIONS_CLASS}>
+        {/* Icon-only under ruling `A114`: the child of each button is its glyph, and the
+            Russian word each one used to print is now its accessible name and its
+            tooltip. A foreign entry still renders no write and no delete node at all. */}
         {props.canEdit ? (
           <button
             class={CARD_PRIMARY_CLASS}
             type="button"
             disabled={!canSave}
+            aria-label={CONTENT_STRINGS.save}
+            title={CONTENT_STRINGS.save}
             onClick={() => void submit()}
           >
-            {CONTENT_STRINGS.save}
+            <SaveActionIcon />
           </button>
         ) : null}
-        <button type="button" onClick={props.onCancel}>
-          {CONTENT_STRINGS.cancel}
-        </button>
         {props.canEdit ? (
-          <button class={CARD_DELETE_CLASS} type="button" onClick={() => void remove()}>
-            {CONTENT_STRINGS.delete}
+          <button
+            class={CARD_DELETE_CLASS}
+            type="button"
+            aria-label={CONTENT_STRINGS.delete}
+            title={CONTENT_STRINGS.delete}
+            onClick={() => void remove()}
+          >
+            <DeleteActionIcon />
           </button>
         ) : null}
       </div>

@@ -17,8 +17,11 @@
  *   check would get wrong by a factor of two;
  * - a refusal keeps the typed text and shows the sentence of the code, with
  *   `duplicate` and `overlap` visibly different (ruling `A47`);
- * - the affordances are real controls: a `<textarea>` and two `<button>`s, so
- *   keyboard focus and Enter work without a mouse.
+ * - the affordances are real controls: a `<textarea>` and one `<button>`, so keyboard
+ *   focus and Enter work without a mouse. Since ruling `A114` that button is the only
+ *   one the row holds — it is icon-only, so its Russian word reaches the reader as
+ *   `aria-label` and `title` and never as a text node — and the card has no cancel
+ *   control to click.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -105,16 +108,21 @@ beforeEach(() => {
 });
 
 describe('an empty card', () => {
-  it('shows the Russian labels of the constants module', () => {
+  it('carries the Russian strings of the constants module as the accessible name of the button', () => {
     const { container } = mount();
     const field = input(container);
     expect(field.getAttribute('aria-label')).toBe(CONTENT_STRINGS.commentInput);
-    expect(saveButton(container).textContent).toBe(CONTENT_STRINGS.save);
-    const cancel = container.querySelectorAll('button')[1];
-    if (cancel === undefined) {
-      throw new Error('fixture cancel button is missing');
+    // Ruling `A114`: the word did not leave the product, it left the visible text.
+    const save = saveButton(container);
+    expect(save.getAttribute('aria-label')).toBe(CONTENT_STRINGS.save);
+    expect(save.getAttribute('title')).toBe(CONTENT_STRINGS.save);
+    expect(save.textContent).toBe('');
+    // No button of the row prints a word, and the string `Отмена` is nowhere in the
+    // card: the cancel control is gone, not merely unlabeled.
+    for (const button of [...container.querySelectorAll('button')]) {
+      expect(button.textContent).toBe('');
     }
-    expect(cancel.textContent).toBe(CONTENT_STRINGS.cancel);
+    expect(container.textContent ?? '').not.toContain('Отмена');
   });
 
   it('counts zero and disables Save', () => {
@@ -134,7 +142,8 @@ describe('an empty card', () => {
     const { container } = mount();
     expect(input(container).tagName).toBe('TEXTAREA');
     const buttons = container.querySelectorAll('button');
-    expect(buttons.length).toBe(2);
+    // One action button, not two: ruling `A114` took the cancel control away.
+    expect(buttons.length).toBe(1);
     for (const button of buttons) {
       expect(button.getAttribute('type')).toBe('button');
       expect(button.disabled ? button.getAttribute('aria-disabled') : null).toBeNull();
@@ -329,15 +338,19 @@ describe('the keyboard affordances of the card', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('cancels from the cancel button', async () => {
-    const { container, onCancel } = mount();
-    const cancel = container.querySelectorAll('button')[1];
-    if (cancel === undefined) {
-      throw new Error('fixture cancel button is missing');
-    }
-    cancel.click();
+  it('holds no cancel control, so no button press closes the card (A114)', async () => {
+    // The pin that pressed `Отмена` keeps its outcome and changes its driver: the row
+    // now holds exactly one button, and pressing it is a save, never a close. `Esc`
+    // above is the surviving way out of this widget.
+    const onSubmit = vi.fn(async (): Promise<CreateNoteResult> => ({ ok: true, entry: ENTRY_FIXTURE }));
+    const { container, onCancel } = mount({ onSubmit });
+    await type(container, 'draft');
+    const buttons = container.querySelectorAll('button');
+    expect(buttons.length).toBe(1);
+    saveButton(container).click();
     await settled();
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it('sends nothing when Save is clicked while disabled', async () => {
