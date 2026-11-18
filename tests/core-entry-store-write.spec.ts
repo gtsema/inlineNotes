@@ -8,13 +8,17 @@ import { ISO_UTC_TIMESTAMP_PATTERN, loadEntries } from '../src/core/entry-store-
 import type { CreateEntryOnPageInput } from '../src/core/entry-store-write';
 import {
   appendedRecord,
+  authorRecordsOf,
   clearPage,
   createEntryOnPage,
   deleteEntry,
+  deleteEntriesOfAuthor,
   entrySlotValue,
+  removedPositions,
   removedRecord,
   replacedRecord,
   setVisible,
+  setVisibleForAuthor,
   updateEntryComment,
 } from '../src/core/entry-store-write';
 import { PAGE_INDEX_KEY, entryStorageKey } from '../src/core/storage-keys';
@@ -27,7 +31,11 @@ import {
 } from './support/memory-storage-port';
 
 /**
- * The entry write path of task `t1-06` (AC1-AC5).
+ * The entry write path of task `t1-06` (AC1-AC5), plus the two **aggregate author**
+ * writes of task `t5-06` (ruling `A108`): `setVisibleForAuthor` and
+ * `deleteEntriesOfAuthor`, pinned as one slot write plus exactly one index update per
+ * call, an `isSameAuthor` filter, and no write at all for an author that owns nothing
+ * on that page.
  *
  * Rule owner: `docs/specs/inline-comment-model.md` -> Flow / Sequence 5, 7, 8 and
  * Rules / Semantics -> "Index write policy", "Index write guard", "Decode on
@@ -693,6 +701,286 @@ describe('setVisible (AC4)', () => {
     expect(next.updatedAt).toBe(entry.updatedAt);
     expect(next.createdAt).toBe(entry.createdAt);
     expect({ ...next, visible: true }).toEqual(entry);
+  });
+});
+
+describe('the two aggregate author writes (t5-06 AC8, ruling A108)', () => {
+  const FOREIGN_NAME = 'someone-else';
+  const OWN_ONE = 'own1own1own1';
+  const OWN_TWO = 'own2own2own2';
+  const FOREIGN_ONE = 'for1for1for1';
+  const FOREIGN_TWO = 'for2for2for2';
+
+  /** A record of `NAME`, canonical, with an explicit `visible` value. */
+  function ownRecord(id: string, visible: boolean = true): Record<string, unknown> {
+    return storedEntry({
+      id,
+      pageKey: PAGE_A,
+      authorName: NAME,
+      visible,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+  }
+
+  /** A record of another author, shaped like `ownRecord` so only the author differs. */
+  function foreignRecord(id: string, visible: boolean = true): Record<string, unknown> {
+    return storedEntry({
+      id,
+      pageKey: PAGE_A,
+      authorName: FOREIGN_NAME,
+      visible,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+  }
+
+  /**
+   * The page the popup groups into two rows: two records of `NAME` (one already hidden,
+   * the mixed state `A108` reads as unchecked), two of `FOREIGN_NAME` and one record the
+   * read guard cannot decode, which no author write may touch (`A16`).
+   */
+  function mixedPort(): MemoryStoragePort {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [
+      ownRecord(OWN_ONE),
+      foreignRecord(FOREIGN_ONE),
+      ownRecord(OWN_TWO, false),
+      foreignRecord(FOREIGN_TWO, false),
+      CORRUPT,
+    ]);
+    return port;
+  }
+
+  /** Every write that published `pages:v1`, so "one index update per call" is countable. */
+  function indexWritesOf(port: MemoryStoragePort): string[] {
+    return port.calls
+      .filter((call) => call.op !== 'get' && call.keys.includes(PAGE_INDEX_KEY))
+      .map((call) => `${call.op}:${call.keys.join(',')}`);
+  }
+
+  it('sets the flag on every entry of that author and on nobody else', async () => {
+    const port = mixedPort();
+    const before = requireStoredRecords(port, SLOT_A);
+
+    const result = await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: false });
+    expect(result.ok).toBe(true);
+    expect(((result as { entries: { id: string }[] }).entries as { id: string }[]).map((e) => e.id)).toEqual([
+      OWN_ONE,
+      OWN_TWO,
+    ]);
+
+    const records = requireStoredRecords(port, SLOT_A);
+    const flagOf = (record: unknown): unknown => (record as Record<string, unknown>)['visible'];
+    // Both records of the row's author — including the one that was already hidden —
+    // end up on the same side of the aggregate.
+    expect(flagOf(records[0])).toBe(false);
+    expect(flagOf(records[2])).toBe(false);
+    // Nobody else's record moved, and the two foreign records are the same objects the
+    // store held before the call: they were carried through, not rewritten.
+    expect(flagOf(records[1])).toBe(true);
+    expect(flagOf(records[3])).toBe(false);
+    expect(records[1]).toBe(before[1]);
+    expect(records[3]).toBe(before[3]);
+    // The unreadable record is not part of any author group (`A16`).
+    expect(records[4]).toBe(CORRUPT);
+  });
+
+  it('publishes one slot write and exactly one pages:v1 update for a two-record group', async () => {
+    const port = mixedPort();
+
+    await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: true });
+
+    // Four records of the page, two of them rewritten, and still one commit: a popup
+    // that looped `setVisible` per entry would answer 4 + 4 writes here.
+    expect(writesOf(port)).toEqual([`set:${SLOT_A}`, `set:${PAGE_INDEX_KEY}`]);
+    expect(indexWritesOf(port)).toEqual([`set:${PAGE_INDEX_KEY}`]);
+  });
+
+  it('a group name that differs only by a space is the same author (A99)', async () => {
+    const port = indexedPort([PAGE_A]);
+    const spaced = ownRecord(OWN_ONE);
+    spaced['authorName'] = 'Я ';
+    const exact = ownRecord(OWN_TWO);
+    exact['authorName'] = 'Я';
+    seedSlot(port, PAGE_A, [spaced, exact, foreignRecord(FOREIGN_ONE)]);
+
+    const result = await setVisibleForAuthor(port, { url: PAGE_A, authorName: ' Я ', visible: false });
+    expect(result.ok).toBe(true);
+
+    const records = requireStoredRecords(port, SLOT_A);
+    expect((records[0] as Record<string, unknown>)['visible']).toBe(false);
+    expect((records[1] as Record<string, unknown>)['visible']).toBe(false);
+    expect((records[2] as Record<string, unknown>)['visible']).toBe(true);
+    expect((records[0] as Record<string, unknown>)['authorName']).toBe('Я ');
+  });
+
+  it('an author with no entry on that page is answered empty and touches nothing', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [foreignRecord(FOREIGN_ONE)]);
+    const before = port.snapshot();
+
+    const result = await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: false });
+    expect(result).toEqual({ ok: true, entries: [] });
+    expect(writesOf(port)).toEqual([]);
+
+    const removed = await deleteEntriesOfAuthor(port, { url: PAGE_A, authorName: NAME });
+    expect(removed).toEqual({ ok: true, entries: [] });
+    expect(writesOf(port)).toEqual([]);
+    expect(port.snapshot()).toEqual(before);
+    expect(port.snapshot()[PAGE_INDEX_KEY]).toBe(before[PAGE_INDEX_KEY]);
+  });
+
+  it('an aggregate visibility write moves no stamp and changes no field but the flag', async () => {
+    const port = mixedPort();
+
+    await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: true });
+    const records = requireStoredRecords(port, SLOT_A);
+
+    const written = records[0] as Record<string, unknown>;
+    expect(written['updatedAt']).toBe(NOW);
+    expect(written['createdAt']).toBe(NOW);
+    expect(written['id']).toBe(OWN_ONE);
+    expect(Object.keys(written).sort()).toEqual(Object.keys(ownRecord(OWN_ONE)).sort());
+    expect(storedIndexOf(port)).toEqual({ version: 1, pageKeys: [PAGE_A] });
+  });
+
+  it('removes every record of that author and keeps the others by identity', async () => {
+    const port = mixedPort();
+    const before = requireStoredRecords(port, SLOT_A);
+    const foreignOne = before[1];
+    const foreignTwo = before[3];
+
+    const result = await deleteEntriesOfAuthor(port, { url: PAGE_A, authorName: NAME });
+    expect(result.ok).toBe(true);
+    expect(((result as { entries: unknown[] }).entries as { id: string }[]).map((e) => e.id)).toEqual([
+      OWN_ONE,
+      OWN_TWO,
+    ]);
+
+    const records = requireStoredRecords(port, SLOT_A);
+    expect(records.map((record) => (record as Record<string, unknown>)['id'])).toEqual([
+      FOREIGN_ONE,
+      FOREIGN_TWO,
+      'broken',
+    ]);
+    expect(records[0]).toBe(foreignOne);
+    expect(records[1]).toBe(foreignTwo);
+    expect(records[2]).toBe(CORRUPT);
+    expect(writesOf(port)).toEqual([`set:${SLOT_A}`, `set:${PAGE_INDEX_KEY}`]);
+    expect(indexWritesOf(port)).toEqual([`set:${PAGE_INDEX_KEY}`]);
+  });
+
+  it('a group that owns the page drops the slot before the index (index write policy)', async () => {
+    const port = indexedPort([PAGE_A, PAGE_B]);
+    seedSlot(port, PAGE_A, [ownRecord(OWN_ONE), ownRecord(OWN_TWO)]);
+    const otherSlot = slotValue([foreignRecord(FOREIGN_ONE)]);
+    port.seed(entryStorageKey(PAGE_B), otherSlot);
+
+    const result = await deleteEntriesOfAuthor(port, { url: PAGE_A, authorName: NAME });
+    expect(result.ok).toBe(true);
+
+    expect(writesOf(port)).toEqual([`remove:${SLOT_A}`, `set:${PAGE_INDEX_KEY}`]);
+    expect(storedRaw(port, SLOT_A)).toBeUndefined();
+    // The other page keeps the very slot object the store held: its bytes did not move.
+    expect(storedRaw(port, SLOT_B)).toBe(otherSlot);
+    expect(storedIndexOf(port)).toEqual({ version: 1, pageKeys: [PAGE_B] });
+  });
+
+  it('a page left with only unreadable records keeps that value verbatim (A16)', async () => {
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [ownRecord(OWN_ONE), CORRUPT]);
+
+    await deleteEntriesOfAuthor(port, { url: PAGE_A, authorName: NAME });
+
+    const records = requireStoredRecords(port, SLOT_A);
+    expect(records).toEqual([CORRUPT]);
+    expect(records[0]).toBe(CORRUPT);
+    expect(storedIndexOf(port)).toEqual({ version: 1, pageKeys: [PAGE_A] });
+  });
+
+  it('a group resolved through an indexed variant key writes that slot, not a fork (N5)', async () => {
+    const indexedKey = 'https://example.com/a?lang=ru';
+    const port = indexedPort([indexedKey]);
+    seedSlot(port, indexedKey, [ownRecord(OWN_ONE), foreignRecord(FOREIGN_ONE)]);
+
+    await setVisibleForAuthor(port, {
+      url: 'https://example.com/a?utm_source=x&fbclid=1',
+      authorName: NAME,
+      visible: false,
+    });
+
+    expect(port.storedKeys()).toEqual([PAGE_INDEX_KEY, entryStorageKey(indexedKey)]);
+    const records = requireStoredRecords(port, entryStorageKey(indexedKey));
+    expect((records[0] as Record<string, unknown>)['visible']).toBe(false);
+    expect((records[1] as Record<string, unknown>)['visible']).toBe(true);
+  });
+
+  it('refuses a page whose index is unusable and writes nothing at all', async () => {
+    for (const op of [
+      (port: MemoryStoragePort) =>
+        setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: false }),
+      (port: MemoryStoragePort) => deleteEntriesOfAuthor(port, { url: PAGE_A, authorName: NAME }),
+    ]) {
+      const port = new MemoryStoragePort();
+      seedIndex(port, { version: 2, pageKeys: [PAGE_A] });
+      seedSlot(port, PAGE_A, [ownRecord(OWN_ONE)]);
+
+      expect(await op(port)).toEqual({ ok: false, code: 'layout_version' });
+      expect(writesOf(port)).toEqual([]);
+    }
+  });
+
+  it('a failed slot write leaves pages:v1 exactly as it was', async () => {
+    const port = mixedPort();
+    const indexBefore = storedRaw(port, PAGE_INDEX_KEY);
+    port.failWriteOn(SLOT_A, 'quota');
+
+    expect(
+      await setVisibleForAuthor(port, { url: PAGE_A, authorName: NAME, visible: false }),
+    ).toEqual({ ok: false, code: 'quota' });
+    expect(storedRaw(port, PAGE_INDEX_KEY)).toBe(indexBefore);
+    expect(indexWritesOf(port)).toEqual([]);
+
+    const deletion = new MemoryStoragePort();
+    seedIndex(deletion, indexValue([PAGE_A]));
+    seedSlot(deletion, PAGE_A, [ownRecord(OWN_ONE)]);
+    deletion.failWriteOn(SLOT_A, 'quota');
+
+    expect(await deleteEntriesOfAuthor(deletion, { url: PAGE_A, authorName: NAME })).toEqual({
+      ok: false,
+      code: 'quota',
+    });
+    expect(storedRaw(deletion, PAGE_INDEX_KEY)).toEqual({ version: 1, pageKeys: [PAGE_A] });
+    expect(indexWritesOf(deletion)).toEqual([]);
+  });
+
+  it('authorRecordsOf is the isSameAuthor filter over the decoded records', () => {
+    const first = entryRecord({ id: OWN_ONE, pageKey: PAGE_A, authorName: 'Я ' });
+    const second = entryRecord({ id: OWN_TWO, pageKey: PAGE_A, authorName: 'Я' });
+    const foreign = entryRecord({ id: FOREIGN_ONE, pageKey: PAGE_A, authorName: FOREIGN_NAME });
+
+    expect(authorRecordsOf([first, null, second, foreign], 'Я')).toEqual([
+      { index: 0, entry: first },
+      { index: 2, entry: second },
+    ]);
+    expect(authorRecordsOf([foreign], FOREIGN_NAME).map((found) => found.index)).toEqual([0]);
+    // An empty name is never an author (A99), and an author of this page is never found
+    // on another author's list: both answers are the empty list, not a refusal.
+    expect(authorRecordsOf([first, second, foreign], '   ')).toEqual([]);
+    expect(authorRecordsOf([first, second], FOREIGN_NAME)).toEqual([]);
+  });
+
+  it('removedPositions drops the listed positions and keeps the rest by identity', () => {
+    const records = [ownRecord(OWN_ONE), CORRUPT, foreignRecord(FOREIGN_ONE), ownRecord(OWN_TWO)];
+
+    const next = removedPositions(records, [0, 3]);
+    expect(next).toEqual([CORRUPT, foreignRecord(FOREIGN_ONE)]);
+    expect(next[0]).toBe(CORRUPT);
+    expect(next[1]).toBe(records[2]);
+    expect(records).toHaveLength(4);
+
+    expect(() => removedPositions(records, [4])).toThrow('removedPositions: no stored record at position 4');
   });
 });
 

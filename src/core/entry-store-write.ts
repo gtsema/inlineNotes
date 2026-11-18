@@ -7,6 +7,13 @@
  * `writeSlotThenIndex` / `removeSlotThenIndex`, and it refuses rather than
  * publishing anything its own reader would reject.
  *
+ * Ruling `A108` added the two **aggregate author** writes — `setVisibleForAuthor` and
+ * `deleteEntriesOfAuthor` — behind the popup's one-row-per-author controls. They are
+ * built from the same primitives as the single-entry writes, so one call is still one
+ * commit: one page-slot write and exactly one `pages:v1` update, and an author that
+ * owns nothing on that page causes no write at all. The grouping itself is not stored
+ * anywhere: `visible` stays a per-entry field and no key, record shape or cap moved.
+ *
  * Rule owner: `docs/specs/inline-comment-model.md`
  * (Flow / Sequence -> 5, 7, 8; Rules / Semantics -> "Index write policy",
  * "Index write guard", "Decode on write", "Normalized text", "Timestamps",
@@ -41,6 +48,7 @@ import {
   MAX_COMMENT_CODE_POINTS,
   assertCreatable,
   canEdit,
+  isSameAuthor,
   randomId,
   setEntryVisibility,
   validateAuthorName,
@@ -143,6 +151,35 @@ export interface ClearPageInput {
   url: string;
 }
 
+/**
+ * Input of `setVisibleForAuthor` — the popup's aggregate checkbox (ruling `A108`).
+ * No author check: the author rule governs editing, never filtering (`A1`).
+ */
+export interface SetVisibleForAuthorInput {
+  url: string;
+  /** Author of the group; the records it covers are chosen by `isSameAuthor` (`A99`). */
+  authorName: string;
+  visible: boolean;
+}
+
+/**
+ * Input of `deleteEntriesOfAuthor` — the popup's group `Удалить` (ruling `A108`).
+ * No author check: delete is not an edit (`A25`), so a foreign group is deletable.
+ */
+export interface DeleteEntriesOfAuthorInput {
+  url: string;
+  /** Author of the group; the records it covers are chosen by `isSameAuthor` (`A99`). */
+  authorName: string;
+}
+
+/**
+ * Result of an aggregate author write. `entries` is what the call published
+ * (`setVisibleForAuthor`) or removed (`deleteEntriesOfAuthor`), and `[]` is a
+ * successful answer for an author that owns no entry on that page: nothing was
+ * written, nothing had to be (`A108`).
+ */
+export type AuthorWriteResult = { ok: true; entries: Entry[] } | { ok: false; code: EntryWriteCode };
+
 /** One page as a write sees it: the key, the index, the stored records. */
 interface PageWriteContext {
   /** Page key resolved through the index (`N5`). */
@@ -157,8 +194,8 @@ interface PageWriteContext {
   slotPresent: boolean;
 }
 
-/** Position of the targeted entry inside the stored list. */
-interface StoredEntryPosition {
+/** Position of a targeted entry inside the stored list, with the guard's reading of it. */
+export interface StoredEntryPosition {
   index: number;
   entry: Entry;
 }
@@ -330,6 +367,83 @@ export async function setVisible(port: StoragePort, input: SetVisibleInput): Pro
 }
 
 /**
+ * Turns the popup's **aggregate** checkbox into stored values (rulings `A1`, `A108`).
+ * Every entry of `authorName` on that page gets the flag in one whole-list commit:
+ * one page-slot write and exactly one `pages:v1` update, never one commit per entry,
+ * because N commits rewrite the index N times and can leave the page half-applied.
+ * An author with no entry on that page is answered with `entries: []` and no port
+ * write of any kind. A foreign author may be filtered: authorship governs editing,
+ * not visibility. `updatedAt` is not a save marker, so no entry moves in the order.
+ */
+export async function setVisibleForAuthor(
+  port: StoragePort,
+  input: SetVisibleForAuthorInput,
+): Promise<AuthorWriteResult> {
+  const loaded = await loadPageContext(port, input.url);
+  if (!loaded.ok) {
+    return loaded;
+  }
+  const context = loaded.context;
+
+  const targets = authorRecordsOf(context.decoded, input.authorName);
+  if (targets.length === 0) {
+    return { ok: true, entries: [] };
+  }
+
+  const records = [...context.records];
+  const published: Entry[] = [];
+  for (const target of targets) {
+    const record = canonicalRecord(setEntryVisibility(target.entry, input.visible));
+    if (record === null) {
+      return { ok: false, code: 'entry_invalid' };
+    }
+    records[target.index] = record;
+    published.push(record);
+  }
+
+  const write = await commitRecords(port, context, records);
+  if (!write.ok) {
+    return { ok: false, code: write.code };
+  }
+  return { ok: true, entries: published };
+}
+
+/**
+ * Removes **every** entry of one author of one page in one commit (ruling `A108`):
+ * the popup's group `Удалить`. Like `deleteEntry` it asks no author question — the
+ * spec gates editing by authorship and never a delete (`A25`) — and like every write
+ * it carries an unreadable record through verbatim (`A16`), because the guard cannot
+ * tell who wrote it. Every other author's record is kept by identity, and an author
+ * with no entry on that page is answered with `entries: []` and no port write.
+ */
+export async function deleteEntriesOfAuthor(
+  port: StoragePort,
+  input: DeleteEntriesOfAuthorInput,
+): Promise<AuthorWriteResult> {
+  const loaded = await loadPageContext(port, input.url);
+  if (!loaded.ok) {
+    return loaded;
+  }
+  const context = loaded.context;
+
+  const targets = authorRecordsOf(context.decoded, input.authorName);
+  if (targets.length === 0) {
+    return { ok: true, entries: [] };
+  }
+
+  const removed = targets.map((target: StoredEntryPosition) => target.entry);
+  const write = await commitRecords(
+    port,
+    context,
+    removedPositions(context.records, targets.map((target: StoredEntryPosition) => target.index)),
+  );
+  if (!write.ok) {
+    return { ok: false, code: write.code };
+  }
+  return { ok: true, entries: removed };
+}
+
+/**
  * Clears one page (Flow 8): the slot key goes first, then the index stops listing
  * the page. This is the only write allowed to drop what the guard could not decode
  * (ruling `A16`), because "clear page" is an explicit user action, and it is also
@@ -386,6 +500,50 @@ export function removedRecord(records: readonly unknown[], index: number): unkno
   const next = [...records];
   next.splice(index, 1);
   return next;
+}
+
+/**
+ * Drops every listed position at once — the aggregate delete of ruling `A108` — and
+ * keeps every other stored record verbatim, readable or not (`A16`). Positions are
+ * read against `records`, so an unreadable record shifts nothing: the caller lists
+ * positions of decodable records only, and `authorRecordsOf` never lists another
+ * author's slot or a record the guard could not decode.
+ */
+export function removedPositions(records: readonly unknown[], positions: readonly number[]): unknown[] {
+  const drop = new Set<number>();
+  for (const position of positions) {
+    requirePosition(records, position, 'removedPositions');
+    drop.add(position);
+  }
+  const next: unknown[] = [];
+  for (let index = 0; index < records.length; index += 1) {
+    if (!drop.has(index)) {
+      next.push(records[index]);
+    }
+  }
+  return next;
+}
+
+/**
+ * The positions whose record the **author identity** rule accepts as `authorName`
+ * (rulings `A99`, `A108`): the filter is core `isSameAuthor`, the one comparison the
+ * product has, so a record authored `"Я "` belongs to the author named `"Я"` here
+ * exactly as it does for edit rights and for the `own entry` label. A record the read
+ * guard could not decode has no author this rule can read, so it is never listed and
+ * therefore survives every aggregate write verbatim (`A16`).
+ */
+export function authorRecordsOf(
+  decoded: readonly (Entry | null)[],
+  authorName: string,
+): StoredEntryPosition[] {
+  const found: StoredEntryPosition[] = [];
+  for (let index = 0; index < decoded.length; index += 1) {
+    const entry = decoded[index];
+    if (entry !== null && isSameAuthor(entry.authorName, authorName)) {
+      found.push({ index, entry });
+    }
+  }
+  return found;
 }
 
 /**
