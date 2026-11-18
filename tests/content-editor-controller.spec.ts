@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
  * The editor of an existing entry, driven through a real shadow host, a real paint
- * pass and an in-memory storage seam (task `t3-03` AC1-AC5, and the opening half of
- * task `t5-03` AC1, AC2, AC3, AC7, AC8; rulings `A25`, `A42`, `A43`, `A44`, `A45`,
- * `A68`, `A74`, `A96`, `A104`).
+ * pass and an in-memory storage seam (task `t3-03` AC1-AC5, the opening half of
+ * task `t5-03` AC1, AC2, AC3, AC7, AC8, and the caret of task `t5-04` AC2, AC3, AC4;
+ * rulings `A25`, `A42`, `A43`, `A44`, `A45`,
+ * `A68`, `A96`, `A97`, `A104`, `A105`).
  *
  * The fixture is the shipped path, not a mock of it: the page is stored through core,
  * read and resolved by the real `paint pass` onto a recording `paint surface`, and a
@@ -28,8 +29,9 @@
  * - **AC3** — `Отмена`, `Esc` and a `pointerdown` outside the overlay host are one
  *   cancel path, and the port received **no `set` and no `remove`** in any of them;
  *   a page scroll closes the editor (`A32`) while a `selectionchange` does **not**
- *   (`A45` would be unreachable otherwise); opening the editor moves no focus
- *   (`A74`);
+ *   (`A45` would be unreachable otherwise); the `tooltip` click puts the caret in the
+ *   note field (`A97`, `A105`) and the close hands it back to the page (`focus
+ *   restore`);
  * - **AC4** — `Удалить` removes the entry at once, with no confirmation step
  *   (ruling `A44`), and the delete control is not rendered for a foreign entry
  *   (ruling `A25`);
@@ -722,7 +724,7 @@ describe('AC3: one cancel path, and no write in it', () => {
     expect(fixture.port.calls.filter((call) => call.op !== 'get')).toEqual([]);
   });
 
-  it('moves no focus when it opens (A74)', async () => {
+  it('opens with the caret in the prefilled note field (A97, A105, t5-04 AC2)', async () => {
     const fixture = await boot();
     const pageButton = document.createElement('button');
     pageButton.id = 'page-control';
@@ -733,14 +735,26 @@ describe('AC3: one cancel path, and no write in it', () => {
     openOwn(fixture);
     await settle(2);
 
-    expect(document.activeElement).toBe(pageButton);
-    expect(overlay.root.activeElement).toBeNull();
+    // This pin is the rewritten form of the `A74` pin "moves no focus when it opens":
+    // the same fixture, the same page element focused first, the opposite expectation.
+    // The click that prefilled the field also moved the caret into it, and the document
+    // answers the host for a focus inside the shadow tree.
+    expect(overlay.root.activeElement).toBe(fieldOf(overlay));
+    expect(fieldOf(overlay).value).toBe(OWN_COMMENT);
+    expect(document.activeElement).toBe(overlay.host);
+    expect(document.activeElement).not.toBe(pageButton);
     // The controls are still reachable, in the order the shadow tree holds them.
     const controls = [fieldOf(overlay), ...buttonsOf(overlay)];
     for (const control of controls) {
       control.focus();
     }
     expect(overlay.root.activeElement).toBe(buttonsOf(overlay)[2] ?? null);
+
+    // `focus restore` (`Assumption:` of ruling `A105`, t5-04 AC4): the close hands the
+    // caret back to the page element that had it before the click.
+    fixture.editor.close();
+    await settle(2);
+    expect(document.activeElement).toBe(pageButton);
   });
 
   it('is placed by the `card placement` rule, and by the viewport rule when nothing has an area', async () => {

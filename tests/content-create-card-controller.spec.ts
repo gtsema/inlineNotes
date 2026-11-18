@@ -28,7 +28,8 @@
  *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1);
  * - the two carried findings of `t3-01` that `t3-02` did not close, now pinned at
  *   the only call site where they exist: the keyboard contract of an **open** card
- *   (`t3-01` remark 4, task `t3-02b` AC1, ruling `A74`) and the ruling-`A29`
+ *   (`t3-01` remark 4, task `t3-02b` AC1, and since task `t5-04` the caret in the note
+ *   field of ruling `A97`) and the ruling-`A29`
  *   re-derive-at-save moment, driven by a DOM that changes **between `open()` and
  *   `Сохранить`** (`t3-01` remark 5, task `t3-02b` AC2).
  *
@@ -899,12 +900,15 @@ describe('a measurement that throws leaves the card closed (ruling A64)', () => 
 
 describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)', () => {
   /**
-   * Ruling `A74` (assumption, applied as the least-risky default): opening the card
-   * takes no focus. The page keeps the element it had focused, and the reader
-   * reaches the card with `Tab`. What is pinned here is the shipped behavior, so a
-   * future change to it has to change this test and the spec sentence together.
+   * Ruling `A97` **overturns** `A74` (shape ruling `A105`, task `t5-04` AC1): opening
+   * the card puts the caret **in the note field**, because the reader asked for it. This
+   * pin is the rewritten form of the `A74` pin "opens with the page focus exactly where
+   * it was" — same fixture, same page element focused first, opposite expectation.
+   * The page's own element is the document's answer again only after a close restored
+   * it (AC4), and the `Tab` order of the three controls is untouched, because no
+   * control gained a `tabindex` (AC6).
    */
-  it('opens with the page focus exactly where it was', async () => {
+  it('opens with the caret in the note field (A97, A105, t5-04 AC1)', async () => {
     const article = document.getElementById('art');
     if (article === null) {
       throw new Error('fixture article is missing');
@@ -920,15 +924,15 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
     await seedAuthor(fixture.port);
     await fixture.controller.capture();
 
-    // The card really is open — and the document still answers the page's own
-    // element: neither the shadow host nor anything inside its shadow tree took
-    // the focus. A focused element inside a shadow tree would make
-    // `document.activeElement` answer the host, and `root.activeElement` answer it.
+    // The card really is open — and the shadow tree answers its own note field, because
+    // the host is revealed before the caret moves (a field inside a hidden host takes no
+    // focus). The document answers the host, not the page's button: shadow retargeting,
+    // the same isolation AC1 of `t3-01` pins for the element count.
     expect(fixture.controller.isOpen()).toBe(true);
     expect(cardOf(fixture.overlay)).not.toBeNull();
-    expect(document.activeElement).toBe(pageButton);
-    expect(document.activeElement).not.toBe(fixture.overlay.host);
-    expect(fixture.overlay.root.activeElement).toBeNull();
+    expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
+    expect(document.activeElement).toBe(fixture.overlay.host);
+    expect(document.activeElement).not.toBe(pageButton);
   });
 
   it('renders textarea, then Сохранить, then Отмена, as the rendered tab order', async () => {

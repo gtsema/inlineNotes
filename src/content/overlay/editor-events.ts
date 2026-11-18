@@ -4,7 +4,7 @@
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 5, Rules /
  * Semantics -> "Editor lifetime" and "The card and the editor must be reachable by
- * keyboard" (ruling `A74`); rulings `A42` (a click outside is a cancel, never a save)
+ * keyboard"; rulings `A42` (a click outside is a cancel, never a save)
  * and `A43` (`Esc` is the same cancel path as the cancel button).
  *
  * Three inputs, and each is one of the three cancel paths the spec names:
@@ -19,10 +19,11 @@
  *   same rule the card and the tooltip keep);
  * - **`Esc`** — close, on the same path as the cancel button (`A43`). The listener
  *   sits on the
- *   document and not only inside the widget because of ruling `A74`: opening the
- *   editor moves no focus, so a key press belongs to whatever the page had focused
- *   and would never reach the shadow tree on its own. A keyboard reader who never
- *   pressed `Tab` still has a way out.
+ *   document and not only inside the widget because a key press does not always belong
+ *   to the widget: the caret is in the note field while the editor stands (ruling `A97`
+ *   overturned `A74`), but the page may hold it before the handover and after a restore
+ *   that found its element gone. A keyboard reader who never pressed `Tab` still has a
+ *   way out.
  *
  * **`selectionchange` is deliberately absent, and that absence is a rule.** The card
  * of `t3-01` closes when the selection moves to other boundary points (ruling `A32`),

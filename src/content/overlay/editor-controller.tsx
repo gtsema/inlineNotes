@@ -8,11 +8,13 @@
  * re-selects", "Ruling `A78`: what a successful `re-selection` stores", "Settings name
  * picked up without a reload", "Page-boundary throws", plus "Card placement" (rulings
  * `A30`, `A64`, `A65`, reused), "The card and the editor must be reachable by
- * keyboard" (ruling `A74`) and the `A68` coexistence rule; and
+ * keyboard", "`focus on open`" and "`focus restore`" (rulings `A97`, `A105`, which
+ * overturn `A74`) and the `A68` coexistence rule; and
  * `docs/specs/inline-comment-model.md` -> "Edit rights", "Overlap", "Staleness".
- * Task `t3-03` AC2-AC5 for the editor itself, and task `t5-03` AC1, AC2, AC3, AC7,
- * AC8, AC9 for the half ruling `A96` and ruling `A104` changed; rulings `A42`, `A43`,
- * `A44`, `A45`, `A64`, `A65`, `A74`, `A78`, `A96`, `A104`, `A106`, `A107`.
+ * Task `t3-03` AC2-AC5 for the editor itself, task `t5-03` AC1, AC2, AC3, AC7,
+ * AC8, AC9 for the half ruling `A96` and ruling `A104` changed, and task `t5-04` AC2,
+ * AC3, AC4 for the caret; rulings `A42`, `A43`, `A44`, `A45`, `A64`, `A65`, `A78`,
+ * `A96`, `A97`, `A104`, `A105`, `A106`, `A107`.
  *
  * One editor at a time, and this controller is the only writer of the widget's open
  * state. It never repositions an open editor: the overlay spec's answer to moved text
@@ -67,11 +69,17 @@
  * resolved, painted from or written; each is a pair of boundary points kept only to answer
  * "did the page selection move while this editor stood".
  *
- * **No focus is taken** (ruling `A74`, and overlay AC17 for the card). Nothing here
- * calls `focus()`: the page keeps the element it had focused, and the reader reaches
- * `textarea`, save, cancel and delete with `Tab`. That is also why `Esc` is
- * answered at the document level in `editor-events.ts` as well as inside the widget —
- * with the page holding focus, a key press never reaches the shadow tree on its own.
+ * **The caret goes with the editor** (ruling `A97`, which overturns `A74`; shape ruling
+ * `A105`; task `t5-04` AC2, AC3, AC4). `open` hands the caret to the note field, which
+ * already carries the stored comment, and every close path — the cancel button, `Esc`, a
+ * press outside, a scroll, a successful save, a successful delete — hands it back to the
+ * element the page had focused before the open, while that element is still connected.
+ * The handover itself is owned by `focus-handoff.ts`; this module owns its moments, and the
+ * order is part of the rule: reveal the host, then focus, because a field inside a
+ * hidden host takes no focus; unmount, then restore, or the unmount takes the caret back.
+ * The `Esc` listener of `editor-events.ts` stays on the document whatever the caret does:
+ * a page that had focus before the open, or an element the restore could not bring back,
+ * still has to reach the way out.
  */
 
 import { render } from 'preact';
@@ -90,6 +98,7 @@ import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
 import { EDITOR_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
 import { EntryEditor } from './editor';
+import { createFocusHandoff } from './focus-handoff';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
 import { isOwnEntry } from './tooltip-hit-test';
@@ -188,6 +197,7 @@ export function createEditorController(
   const readSelection = options.readSelection ?? capturePageSelection;
   const viewport = options.viewport ?? defaultViewportOf(doc);
   const isHostBusy = options.isHostBusy ?? ((): boolean => false);
+  const focus = createFocusHandoff(doc, overlay);
 
   let session: EditorSession | null = null;
 
@@ -258,6 +268,10 @@ export function createEditorController(
     );
     setOverlayHostHidden(overlay, false);
     positionEditor(anchorBox);
+    // `A97`: the caret lands in the field the click just prefilled, and `preventScroll`
+    // keeps the article where it is while it does. After the reveal — a field inside a
+    // hidden host takes no focus (`t5-04` AC2, AC3).
+    focus.open(wrapper);
     if (options.onOpened !== undefined) {
       options.onOpened();
     }
@@ -338,6 +352,10 @@ export function createEditorController(
     if (!isHostBusy()) {
       setOverlayHostHidden(overlay, true);
     }
+    // `focus restore` (`Assumption:` of ruling `A105`, `t5-04` AC4): after the unmount,
+    // whatever close path led here, and nothing is forced when the page's element is
+    // no longer in the document.
+    focus.restore();
   }
 
   /**
