@@ -66,6 +66,7 @@ import {
   type CreateCardController,
   type CreateCardOptions,
 } from '../src/content/overlay/create-card-controller';
+import { attachCreateCardEvents } from '../src/content/overlay/card-events';
 import { CONTENT_STRINGS, REFUSAL_TEXT, refusalText } from '../src/content/text';
 import { CARD_VIEWPORT_GUTTER_PX } from '../src/content/overlay/card-placement';
 import { createEntryOnPage } from '../src/core/entry-store-write';
@@ -1108,6 +1109,54 @@ describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', 
       expect(document.activeElement).toBe(control);
       expect(fixture.overlay.root.activeElement).toBeNull();
       expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+    }
+  });
+
+  it('hands the caret back when a page event closes the card (t5-04 AC4, A32, t5-05 carried 4)', async () => {
+    // The two close paths that carry no button press: a `pointerdown` outside the overlay
+    // host and a page scroll (`src/content/overlay/card-events.ts`, ruling `A32`). They go
+    // through the same `close()` as `Отмена`, so the `Assumption:` half of ruling `A105`
+    // owes them the same handover. The page wiring is attached for the case and detached
+    // again in it: the controller fixture owns no listeners, and `card-events.ts` is not
+    // changed by this task — the pin proves the construction, exactly as it must.
+    for (const [index, close] of ['pointerdown', 'scroll'].entries()) {
+      const control = pageControl(`page-cta-event-${String(index)}`);
+      const fixture = mount(selection('p1', 4, 15));
+      await openCard(fixture);
+      await typeDraft(fixture.overlay, 'a note the reader never saved');
+      expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
+
+      const detach = attachCreateCardEvents(
+        fixture.controller,
+        document,
+        window,
+        fixture.overlay.host,
+      );
+      const recorder: FocusCallRecorder = recordFocusCalls();
+      try {
+        if (close === 'pointerdown') {
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        } else {
+          window.dispatchEvent(new Event('scroll'));
+        }
+        await settle();
+
+        expect(fixture.controller.isOpen()).toBe(false);
+        expect(fixture.overlay.host.hidden).toBe(true);
+        expect(fixture.overlay.root.activeElement).toBeNull();
+        expect(document.activeElement).toBe(control);
+        // Exactly one focus call ran after the recorder was on, and it is the handover:
+        // the page control, with the same `preventScroll: true` the open call passes.
+        const calls = recorder.calls();
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.element).toBe(control);
+        expect(calls[0]?.options).toEqual({ preventScroll: true });
+        // A close is not a write (ruling `A32`): the port saw nothing but reads.
+        expect(writesOtherThanSettings(fixture.port)).toEqual([]);
+      } finally {
+        recorder.restore();
+        detach();
+      }
     }
   });
 

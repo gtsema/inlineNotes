@@ -457,7 +457,7 @@ describe('the tooltip of painted text (AC3)', () => {
   });
 });
 
-describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8; ruling A96)', () => {
+describe('the click of the tooltip (task t5-03 AC1, AC2, AC3; ruling A96)', () => {
   it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
     await boot();
 
@@ -509,8 +509,12 @@ describe('the click of the tooltip (task t5-03 AC1, AC2, AC3, AC8; ruling A96)',
 
   it('keeps the hidden-entry and stale answers of the paint pass out of the click', async () => {
     // `A40`: an entry that is not painted has no tooltip, so it can never be the entry
-    // a click hands over (`t5-03` AC8 says the click opens the editor of a *painted*
-    // entry, and a hidden one is reachable again through its checkbox).
+    // a click hands over. The AC that owns that fact is `t5-03` AC2 together with ruling
+    // `A104` — the click opens the `editor` over the entry the `paint pass` produced — and
+    // `content-overlay-ui.md` AC16 keeps a hidden entry unpainted yet listed and deletable;
+    // a hidden one is reachable again through its popup checkbox.
+    // (`t5-03` AC8 is the other half of the tooltip: it still hides on a page scroll and on
+    // a `pointerdown` outside the host — pinned in `the page wiring of the tooltip` below.)
     await boot({ records: [recordFor('a1b2c3d4e5f6', 'quick brown', { visible: false })] });
 
     tooltip.hoverAt(20, 84);

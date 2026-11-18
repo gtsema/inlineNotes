@@ -2,7 +2,7 @@
 /**
  * The editor of an existing entry, driven through a real shadow host, a real paint
  * pass and an in-memory storage seam (task `t3-03` AC1-AC5, the opening half of
- * task `t5-03` AC1, AC2, AC3, AC7, AC8, and the caret of task `t5-04` AC2, AC3, AC4;
+ * task `t5-03` AC2, AC3, AC7, AC9, and the caret of task `t5-04` AC2, AC3, AC4;
  * rulings `A25`, `A42`, `A43`, `A44`, `A45`,
  * `A68`, `A96`, `A97`, `A104`, `A105`).
  *
@@ -17,12 +17,13 @@
  * storage shape fails here.
  *
  * Pinned behaviour, per acceptance criterion:
- * - **AC1 of `t3-03` + AC1 of `t5-03`** — the click on an own entry's `tooltip` opens
- *   the editor prefilled with the stored comment, **with no page selection at all**;
- *   **AC2 of `t5-03`** — the same click on a foreign entry opens **no widget at all**,
- *   answers `false`, and writes nothing; **AC3 of `t5-03`** — the editor is never opened
- *   by a selection, and the only entry it can open is one the paint pass produced
- *   (**AC8**), including the entry that is not painted at all;
+ * - **AC1 of `t3-03` + AC2 of `t5-03`** — the click on an own entry's `tooltip` opens
+ *   the editor prefilled with the stored comment, **with no page selection at all**
+ *   (ruling `A104`); **AC3 of `t5-03`** — the same click on a foreign entry opens **no
+ *   widget at all**, answers `false`, and writes nothing; **AC7 of `t5-03`** — the editor
+ *   is never opened by a selection; and the only entry it can open is one the `paint pass`
+ *   produced: an entry it does not hold has no `tooltip` and therefore no click at all
+ *   (`t3-02` AC1, `content-overlay-ui.md` AC16, rulings `A104`, `A24`);
  * - **AC2** — `Сохранить` writes through core and nothing else: the stored record is
  *   read back through core `loadEntries`, `comment` and `updatedAt` move, `createdAt`
  *   and the `anchor` do not (ruling `A45`), and the port saw one slot write;
@@ -572,7 +573,7 @@ describe('AC1: the tooltip click opens the editor of the entry, and nothing else
     expect(fieldOf(overlay).value).toBe('a draft');
   });
 
-  it('opens nothing for an entry the paint pass does not hold (t5-03 AC3, AC9, A24, A66)', async () => {
+  it('opens nothing for an entry the paint pass does not hold (t3-02 AC1, content-overlay-ui.md AC16, A24, A66, A104)', async () => {
     const staleRecord = storedEntry({
       id: 'cccccccccccc',
       pageKey: PAGE_KEY,
@@ -876,6 +877,51 @@ describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, 
       // the page control answers the document again.
       expect(document.activeElement).toBe(control);
       expect(overlay.root.activeElement).toBeNull();
+    }
+  });
+
+  it('hands the caret back when a page event closes the editor (t5-04 AC4, A32, t5-05 carried 4)', async () => {
+    // The editor's two close paths that carry no button press: a `pointerdown` outside the
+    // overlay host and a page scroll (`src/content/overlay/editor-events.ts`, ruling
+    // `A32`). They reach the same `close()` as `Отмена`, `Esc`, a save and a delete, so the
+    // `Assumption:` half of ruling `A105` owes them the same handover; the `pointerdown`
+    // case is also the click-through of the `editor` ruling `A105` names. `editor-events.ts`
+    // is not changed by this task: the pin proves the construction, exactly as it must.
+    for (const [index, close] of ['pointerdown', 'scroll'].entries()) {
+      const fixture = await boot();
+      const control = pageControl(`page-event-${String(index)}`);
+
+      expect(openOwn(fixture)).toBe(true);
+      await settle(2);
+      expect(overlay.root.activeElement).toBe(fieldOf(overlay));
+
+      const recorder: FocusCallRecorder = recordFocusCalls();
+      try {
+        if (close === 'pointerdown') {
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        } else {
+          window.dispatchEvent(new Event('scroll'));
+        }
+        await settle(2);
+
+        expect(fixture.editor.isOpen()).toBe(false);
+        expect(editorElementOf(overlay)).toBeNull();
+        expect(overlay.host.hidden).toBe(true);
+        expect(overlay.root.activeElement).toBeNull();
+        expect(document.activeElement).toBe(control);
+        // Exactly one focus call ran after the recorder was on, and it is the handover:
+        // the page control, with the same `preventScroll: true` the open call passes.
+        const calls = recorder.calls();
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.element).toBe(control);
+        expect(calls[0]?.options).toEqual({ preventScroll: true });
+        // Neither event is a write (ruling `A42`): the port saw no write at all.
+        expect(
+          fixture.port.calls.filter((call) => call.op === 'set' || call.op === 'remove'),
+        ).toEqual([]);
+      } finally {
+        recorder.restore();
+      }
     }
   });
 
