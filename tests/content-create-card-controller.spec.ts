@@ -75,6 +75,8 @@ import { isEntryStorageKey, PAGE_INDEX_KEY, SETTINGS_KEY } from '../src/core/sto
 import type { Entry } from '../src/core/entry';
 import { MAX_AUTHOR_NAME_CODE_POINTS } from '../src/core/entry-rules';
 import { MemoryStoragePort } from './support/memory-storage-port';
+import type { FocusCallRecorder } from './support/focus-calls';
+import { recordFocusCalls } from './support/focus-calls';
 
 const PAGE_URL = 'https://example.test/article';
 const AUTHOR = 'reader-one';
@@ -273,6 +275,16 @@ function saveButtonOf(overlay: OverlayHost): HTMLButtonElement {
   const button = overlay.root.querySelector(`.${CARD_CLASS} button`);
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error('expected the save button inside the shadow root');
+  }
+  return button;
+}
+
+/** The card's `Отмена`, the second button of the card. */
+function cancelButtonOf(overlay: OverlayHost): HTMLButtonElement {
+  const buttons = [...overlay.root.querySelectorAll(`.${CARD_CLASS} button`)];
+  const button = buttons[1];
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error('expected the cancel button inside the shadow root');
   }
   return button;
 }
@@ -1018,6 +1030,113 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
     const page = await loadEntries(fixture.port, PAGE_URL);
     expect(page.entries).toHaveLength(1);
     expect(refusalLineOf(fixture.overlay)).toBeNull();
+  });
+});
+
+describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', () => {
+  /**
+   * The page control the reader had focused before the selection. Each case focuses one
+   * first: `focus restore` is a promise **about that element**, so a fixture in which
+   * nothing was focused cannot pin it. Ruling `A97` is what makes the question exist at
+   * all — before it the card never took the caret, so there was nothing to hand back.
+   */
+  function pageControl(id: string): HTMLElement {
+    const article = document.getElementById('art');
+    if (article === null) {
+      throw new Error('fixture article is missing');
+    }
+    const control = document.createElement('button');
+    control.id = id;
+    control.textContent = 'Read more';
+    article.append(control);
+    control.focus();
+    return control;
+  }
+
+  /** Opens one card over a page that holds a focused control. */
+  async function openCard(fixture: Fixture): Promise<void> {
+    await seedAuthor(fixture.port);
+    await fixture.controller.capture();
+    expect(fixture.controller.isOpen()).toBe(true);
+    expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
+  }
+
+  it('asks the note field for the caret with `preventScroll: true` (A105, t5-04 AC3)', async () => {
+    pageControl('page-cta-shape');
+    const fixture = mount(selection('p1', 4, 15));
+    // The option is the whole promise of ruling `A105`: the host is `position: fixed`, so
+    // moving the caret must not scroll the article. No test DOM shows a scroll, so the pin
+    // reads the argument of the call — the same way the `settle delay` is pinned as a
+    // constant rather than as a timer.
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      await openCard(fixture);
+
+      const field = inputOf(fixture.overlay);
+      const fieldCalls = recorder.callsOn(field);
+      expect(fieldCalls).toHaveLength(1);
+      expect(fieldCalls[0]?.options).toEqual({ preventScroll: true });
+      expect(fixture.overlay.root.activeElement).toBe(field);
+      expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('hands the caret back on `Отмена`, on Esc and on a successful save (A105, t5-04 AC4)', async () => {
+    for (const [index, close] of ['cancel', 'esc', 'save'].entries()) {
+      const control = pageControl(`page-cta-${String(index)}`);
+      const fixture = mount(selection('p1', 4, 15));
+      await openCard(fixture);
+      await typeDraft(fixture.overlay, 'a note of some length');
+      expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
+
+      if (close === 'cancel') {
+        cancelButtonOf(fixture.overlay).click();
+        await settle();
+      } else if (close === 'esc') {
+        pressKey(fixture.overlay, 'Escape');
+        await settle();
+      } else {
+        await pressSave(fixture.overlay);
+      }
+
+      expect(fixture.controller.isOpen()).toBe(false);
+      expect(fixture.overlay.host.hidden).toBe(true);
+      // The `Assumption:` half of ruling `A105`: the widget is gone and the page control
+      // answers the document again.
+      expect(document.activeElement).toBe(control);
+      expect(fixture.overlay.root.activeElement).toBeNull();
+      expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+    }
+  });
+
+  it('forces nothing when the page control the card took the caret from is gone', async () => {
+    const control = pageControl('page-cta-gone');
+    const fixture = mount(selection('p1', 4, 15));
+    await openCard(fixture);
+
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      // The page removed the control while the card stood — a re-rendered reader pane is
+      // the normal way this happens.
+      control.remove();
+      pressKey(fixture.overlay, 'Escape');
+      await settle();
+
+      expect(fixture.controller.isOpen()).toBe(false);
+      expect(fixture.overlay.root.activeElement).toBeNull();
+      // Nothing was forced: the recorder was already running when the close ran, and it
+      // saw no call at all — no `body`, no `documentElement`, no shadow host, no detached
+      // control. What the document answers is the browser's own default for an emptied
+      // shadow tree.
+      expect(recorder.calls()).toEqual([]);
+      expect(document.activeElement).not.toBe(control);
+      expect(document.activeElement).not.toBe(fixture.overlay.host);
+      expect(document.activeElement).not.toBe(document.documentElement);
+    } finally {
+      recorder.restore();
+    }
   });
 });
 

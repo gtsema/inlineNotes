@@ -95,6 +95,8 @@ import {
   slotValue,
   storedEntry,
 } from './support/memory-storage-port';
+import type { FocusCallRecorder } from './support/focus-calls';
+import { recordFocusCalls } from './support/focus-calls';
 
 const PAGE_URL = 'https://example.test/article';
 const PAGE_KEY = pageKeyFromUrl(PAGE_URL) ?? '';
@@ -806,6 +808,142 @@ describe('AC3: one cancel path, and no write in it', () => {
     expect(fixture.surface.heldNames()).toEqual([]);
     expect(fixture.paintedEntries()).toEqual([]);
     expect(fixture.editor.isOpen()).toBe(false);
+  });
+});
+
+describe('the caret of the editor and the way back to the page (t5-04 AC3, AC4, AC6)', () => {
+  /**
+   * The page control the reader had focused before the `tooltip` click. Every case of
+   * this block focuses one first: `focus restore` is a promise **about that element**, so
+   * a fixture in which nothing was focused cannot pin it. The control sits outside the
+   * article, so it never changes the words the `paint pass` resolves.
+   */
+  function pageControl(id: string): HTMLElement {
+    const control = document.createElement('button');
+    control.id = id;
+    control.textContent = 'Read more';
+    document.body.append(control);
+    control.focus();
+    return control;
+  }
+
+  it('asks the note field for the caret with `preventScroll: true` (A105, t5-04 AC3)', async () => {
+    const fixture = await boot();
+    pageControl('page-before-click');
+    // The option is the whole promise of `A105`: the host is `position: fixed`, so the
+    // caret must not scroll the article. No test DOM shows a scroll, so the pin reads the
+    // argument of the call, exactly as the `settle delay` is pinned as a constant.
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      expect(openOwn(fixture)).toBe(true);
+      await settle(2);
+
+      const field = fieldOf(overlay);
+      const fieldCalls = recorder.callsOn(field);
+      expect(fieldCalls).toHaveLength(1);
+      expect(fieldCalls[0]?.options).toEqual({ preventScroll: true });
+      expect(overlay.root.activeElement).toBe(field);
+      expect(document.activeElement).toBe(overlay.host);
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('hands the caret back on cancel, on Esc, on a successful save and on a delete (A105)', async () => {
+    for (const [index, close] of ['cancel', 'esc', 'save', 'delete'].entries()) {
+      const fixture = await boot();
+      const control = pageControl(`page-cta-${String(index)}`);
+
+      expect(openOwn(fixture)).toBe(true);
+      await settle(2);
+      expect(overlay.root.activeElement).toBe(fieldOf(overlay));
+
+      if (close === 'cancel') {
+        await press(overlay, CONTENT_STRINGS.cancel);
+      } else if (close === 'esc') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await settle(2);
+      } else if (close === 'save') {
+        await typeDraft(overlay, 'an edit that lands');
+        await press(overlay, CONTENT_STRINGS.save);
+      } else {
+        await press(overlay, CONTENT_STRINGS.delete);
+      }
+
+      expect(fixture.editor.isOpen()).toBe(false);
+      expect(overlay.host.hidden).toBe(true);
+      // `focus restore` (the `Assumption:` half of ruling `A105`): the widget is gone and
+      // the page control answers the document again.
+      expect(document.activeElement).toBe(control);
+      expect(overlay.root.activeElement).toBeNull();
+    }
+  });
+
+  it('forces nothing when the page control the click took the caret from is gone', async () => {
+    const fixture = await boot();
+    const control = pageControl('page-removed');
+    expect(openOwn(fixture)).toBe(true);
+    await settle(2);
+
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      // The page removed the control while the editor stood — a single-page app that
+      // re-rendered the reading pane is the normal way this happens.
+      control.remove();
+      await press(overlay, CONTENT_STRINGS.cancel);
+
+      expect(fixture.editor.isOpen()).toBe(false);
+      expect(overlay.root.activeElement).toBeNull();
+      // Nothing was forced: the close called focus on neither the removed control, nor
+      // the shadow host, nor `body`, nor the root element. What the document answers
+      // afterwards is the browser's own default for an emptied shadow tree, not a focus
+      // this extension invented.
+      expect(document.activeElement).not.toBe(control);
+      expect(document.activeElement).not.toBe(overlay.host);
+      expect(document.activeElement).not.toBe(document.documentElement);
+      // The recorder was already running when the close ran, so an empty log is the
+      // statement "this close focused nothing at all" — no `body`, no `documentElement`,
+      // no shadow host, no detached control.
+      expect(recorder.calls()).toEqual([]);
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('still renders no `tabindex`, and the four controls keep the rendered order (t5-04 AC6)', async () => {
+    const fixture = await boot();
+    expect(openOwn(fixture)).toBe(true);
+    await settle(2);
+
+    // What ruling `A97` did **not** do: no control gained a `tabindex`, so the tab order
+    // is still the rendered order of the shadow tree — note field, then the three actions
+    // in the order the stylesheet names them.
+    const order = [
+      ...overlay.root.querySelectorAll('textarea, button, input, select, a[href], [tabindex]'),
+    ];
+    expect(order).toHaveLength(4);
+    expect(order[0]).toBe(fieldOf(overlay));
+    expect(order.map((element: Element) => element.tagName)).toEqual([
+      'TEXTAREA',
+      'BUTTON',
+      'BUTTON',
+      'BUTTON',
+    ]);
+    expect(order.map((element: Element) => element.textContent ?? '')).toEqual([
+      '',
+      CONTENT_STRINGS.save,
+      CONTENT_STRINGS.cancel,
+      CONTENT_STRINGS.delete,
+    ]);
+    expect(overlay.root.querySelectorAll('[tabindex]')).toHaveLength(0);
+    expect(overlay.host.getAttribute('tabindex')).toBeNull();
+
+    for (const element of order) {
+      expect(element.getAttribute('tabindex')).toBeNull();
+      (element as HTMLElement).focus();
+      expect(overlay.root.activeElement).toBe(element);
+      expect(document.activeElement).toBe(overlay.host);
+    }
   });
 });
 
