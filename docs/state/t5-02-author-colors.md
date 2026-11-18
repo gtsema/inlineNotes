@@ -63,8 +63,20 @@ None — the one carried item from `t5-01`'s review (a half-true clause in `inli
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2** — engineer, reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered**: `c43f64d` (spec), `31f2a2f` (palette + plan + style + page painter + 26 tests). No escalation, no
+  gate repair — the `A101` exit-status rule from `t5-01` worked: the engineer reported four exit statuses and all four were 0,
+  which the PM reproduced personally.
+- PM gates on the delivered tree: build exit 0 (`dist/` 10 files), `npm test` exit 0 → **833 passed / 42 files**, checker exit 0
+  → 0/0/101 INFO, `npm run typecheck` exit 0. Working tree clean apart from the PM's own artifacts.
+- reviewer verdict: **accepted**, 0 blocking findings, 3 carried fixes, 4 remarks (`docs/state/t5-02-review.md`). 9/9 AC pass;
+  read-only corroboration 42 spec files, 833 declarations, 0 skip/only, per-file deltas summing to +26.
+- **Carried items disposition.** Item 1 (AC25 said "an unchanged page looks unchanged" — half-true for an author in slot 1–5) is
+  **closed by the PM** in the same wording family the Rules bullet already uses. Items 2 and 3 (a dead comment pointer out of
+  `paint-style.ts`; `src/core/slot-key.ts:115` claiming `fnv1a32` is used only for slot-key disambiguation) are **comment-only**
+  and are carried into `t5-03` under an `A90`-style named exception, because core was forbidden in `t5-02` and a separate
+  comment-only task would cost two children for three sentences.
+- **task status: accepted.**

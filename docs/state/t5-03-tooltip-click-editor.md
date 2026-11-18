@@ -51,12 +51,21 @@ Three observable changes, one surface:
 - Allowed: `src/content/overlay/**`, `src/content/main.ts`, `src/content/editor/**` **only** for opening the editor without a
   selection (name every file you touch in the report), `tests/`, `docs/specs/content-overlay-ui.md`.
 - Forbidden: anything under `src/core/`, `src/content/paint/**` (the palette just shipped in `t5-02`), `src/popup/`,
-  `src/options/`, `src/manifest.json`, dependencies, harness files, and the other PM-owned specs (`A76`, `A89`).
+  `src/options/`, `src/manifest.json`, dependencies, harness files, and the other PM-owned specs (`A76`, `A89`) — **except** the
+  comment-only files named in the Carried-fix checklist below.
 - Do not touch the task state file `docs/state/t5-03-tooltip-click-editor.md`; write your report to your own artifact.
 
-## Carried-fix checklist
+## Carried-fix checklist (`A72` — all three are **comment-only**, no behavior, no string)
 
-None.
+1. `src/content/paint/paint-palette.ts:49-50` sends the reader to "the header of `paint-style.ts`" for why the frame is an
+   underline and not an outline, but `t5-02` moved that rationale into `paint-palette.ts:47-51` and it is no longer in
+   `paint-style.ts`. Either restore one sentence in the `paint-style.ts` header or drop the pointer. Report `done` + `path:line`.
+2. `src/core/slot-key.ts:115` still says `fnv1a32` is "used only to disambiguate truncated slot keys" — `A102` made that false
+   (`paint-palette.ts:54` imports it for colour). One comment sentence, **no code, no signature, no rule change**.
+**Boundary exception (`A90` naming rule):** for these carried items only, you may change **comment text** in
+`src/content/paint/paint-palette.ts`, `src/content/paint/paint-style.ts` and `src/core/slot-key.ts`. No shipped string, no code,
+no signature, no rule. Cite the carried number in the commit message. Standing instruction for this task: grep every cross-file
+comment pointer before committing — this is the third dead-pointer finding of the same class after `t4-03` and `t5-01`.
 
 ## Gate and commit order (`A62`, `A73`, `A101`)
 
