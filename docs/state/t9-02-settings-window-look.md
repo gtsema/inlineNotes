@@ -39,9 +39,16 @@ explanation line and the same `Имя` / `Сохранить` behavior as before
    `src/manifest.json` are untouched; the field, the `N/40` counter, the disabled-`Сохранить` rule and the message line
    behave exactly as the existing pins say.
 7. **Fits the dialog box.** The page fills the Chrome dialog box (the old fixed `width: 360px` is gone) with a centered
-   card, and produces no horizontal scrollbar at the dialog's own width.
+   card, and no shipped rule lets it exceed the dialog's width. The observation «no horizontal scrollbar» stays a Run 6 item;
+   no sentence in the spec claims it as something the reader has seen.
 8. **Gates.** `npm run build` → `npm test` → `node scripts/check-agent-config.mjs` (plus `npm run typecheck`) exit 0,
    quoted in the report with the `dist/` file count, which grows by exactly one file.
+9. **Terms / Aliases rows (carried fix 3 of the `t9-01` review).** `docs/specs/content-overlay-ui.md` gains one row for the
+   settings window anchored on the Russian wording `README.md` already uses («Окно настроек») and one row for the new
+   explanation line, so the English anchor and the Russian UI string pair up in the spec.
+10. **The `t9-01` review's carried fix 3 (the `Terms / Aliases` rows) is answered by number** in the report. The other three
+    carried fixes of that review were moved out of this slice into `t9-02b-spec-test-debt` — the review produced more than two,
+    and stacking them onto a look-and-feel slice is the shape that overruns the runtime ceiling.
 
 ## Brief — t9-02 (to `extension-engineer`)
 
@@ -49,13 +56,19 @@ explanation line and the same `Имя` / `Сохранить` behavior as before
 - **Input paths.** `docs/project-profile.md`, `docs/state/t9-02-settings-window-look.md`, `docs/specs/content-overlay-ui.md`,
   `src/options/` (all five files), `angular.json`, `scripts/build-extension.mjs`, `tests/toolchain-contract.spec.ts`,
   and the source asset `C:/Users/user/Desktop/test/Mistension/img/128.png`.
-- **Output artifact.** Two commits (asset+config+component+tests, then spec edit) plus `docs/state/engineer-report.md`.
-- **Acceptance criterion.** AC 1–8 above, judged against the files, the SHA-256 of the copied asset and the quoted gates.
+- **Output artifact.** Two commits (asset+config+component+tests, then spec edit) **plus a repo file `docs/state/t9-02-engineer.md`
+  written with your own write tool** — the harness run artifact is not a repo artifact and its absence is a blocking finding
+  (`t9-01` review, finding 1).
+- **Acceptance criterion.** AC 1–10 above, judged against the files, the SHA-256 of the copied asset and the quoted gates.
+- **Carried-fix checklist (the report must answer every number with `done` + file:line or `skipped` + reason):**
+  1. The two `Terms / Aliases` rows of AC 9 (the reviewer's R1 — the settings window and its new explanation line have no
+     anchor in the spec while `README.md:38` already uses «Окно настроек»).
 - **Constraints.** Copy the asset with a byte copy (`cp`), never re-encode or resize it. Do not touch `src/content/`,
   `src/core/`, `src/popup/` or `src/manifest.json`. No network calls, no remote image, no `@import`. All UI strings
-  Russian, all new strings only in `src/options/text.ts`. Work order: reach green, **commit code+tests+asset first**, then
+  Russian, all new strings only in `src/options/text.ts`. Do not write the substring «единственный» into `README.md` —
+  `tests/content-card-events.spec.ts` forbids it. Work order: reach green, **commit code+tests+asset first**, then
   the spec edit, commit again (`A53`). The task state file `docs/state/t9-02-settings-window-look.md` is the PM's — the
-  only `docs/state/` file you write is your own report. Print no full test log.
+  only other `docs/state/` file you write is your own report `docs/state/t9-02-engineer.md`. Print no full test log.
 
 ## Attempts log
 

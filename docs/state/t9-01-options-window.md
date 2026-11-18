@@ -45,8 +45,9 @@ commit 2 carries the spec and README, per `A53`)
 | Task | Slice | Children |
 |---|---|---|
 | `t9-01-options-window` | manifest → window + build-script reference check + contract test + spec/README lines | engineer, reviewer |
-| `t9-02-settings-window-look` | the artwork asset + the redesigned window (mascot, pastel palette, hint line) | engineer, reviewer — **blocked on `A120`** |
-| `t9-03` (PM, no child) | `npm run build`, reload in `chrome://extensions`, screenshot the window, write Run 6 | — |
+| `t9-02-settings-window-look` | the artwork asset + the redesigned window (mascot, pastel palette, hint line) + the two `Terms / Aliases` rows | engineer, reviewer |
+| `t9-02b-spec-test-debt` | the spec stops claiming an unmeasured observable, and three unpinned rules get pins | engineer, reviewer |
+| Run 6 (PM, no child) | `npm run build`, reload in `chrome://extensions`, screenshot the window, write the Run row + the two stale README numbers | — |
 
 ## Brief — t9-01 (to `extension-engineer`)
 
@@ -77,7 +78,33 @@ Expected 2 (engineer, reviewer). Used: 2.
 
 ## Verdicts
 
-Reviewer: pending. PM acceptance: pending the review.
+**Reviewer (`docs/state/t9-01-review.md`): changes requested — 2 blocking findings.** AC 1-4 pass, AC 5 not covered, AC 6 fails on evidence.
+
+| Finding | What it says | PM closure |
+|---|---|---|
+| 1 | The engineer report named by the brief (`docs/state/engineer-report.md`) is absent from the working tree and from git, so AC 6 has no artifact. | **Closed by the PM.** The role's `output:` path is a harness artifact, not a repo file — the child wrote it, the harness routed it to the run directory. The PM copied it to `docs/state/t9-01-engineer.md` (30+ earlier tasks use the `docs/state/<task>-engineer.md` name). Root cause is the brief, not the child: the brief must name the repo path. Fix carried into every Stage 9 brief. |
+| 2 | `docs/specs/content-overlay-ui.md:89` states «never produces a horizontal scrollbar at the dialog's own width» as a shipped observable. No test reads `src/options/` styles, no browser has ever opened that page in a dialog, and the task did not touch `src/options/`. The same spec already shows the right discipline for the `action row` 24×24 hit box, and `A117` retracted exactly this kind of claim. | **Open — carried into `t9-02`**, which owns the options stylesheet and will rewrite it anyway. Carried fix 1 below. |
+
+**PM acceptance: the shipped shape is accepted, the task is not closed until carried fix 1 lands.** No third attempt on `t9-01` (budget): the finding is a spec sentence in the surface `t9-02` rewrites, so a separate cleanup task would be wasted work.
+
+## Carried-fix checklist → routed by the PM after the verdict
+
+| # | Item | Lands in |
+|---|---|---|
+| 1 | **Finding 2.** `docs/specs/content-overlay-ui.md:89` («never produces a horizontal scrollbar at the dialog's own width») restated as a requirement owed by Run 6, in the `action row` discipline, plus a mechanical pin of the shipped layout | `t9-02b-spec-test-debt` — it must follow `t9-02`, which rewrites that stylesheet |
+| 2 | **R2.** The build-script pin proves substrings; extend it to the existence check and its failure message | `t9-02b-spec-test-debt` |
+| 3 | **R1.** The `Terms / Aliases` rows for the settings window («Окно настроек») and for the new explanation line | `t9-02` — its carried fix 1, since that slice introduces the Russian strings |
+| 4 | **R3.** The AC 1 / AC 2 negatives are unpinned, and the icon / `entry.css` branches the scan pins are vacuous because the shipped manifest names neither | `t9-02b-spec-test-debt` |
+| 5 | **R6.** A brief with nothing to carry must literally say `Carried-fix checklist: none` (`code-review-flow` → Rules) | closed by the PM: every Stage 9 brief carries the line |
+
+Four items from one review is more than two, so they get their own slice rather than stacking onto `t9-02` — the shape that
+overran the ceiling in `t2-03`. Stage 9 is now `t9-01`, `t9-02`, `t9-02b`: three tasks, the budget holds. The real-Chrome pass
+(Run 6) is the workflow's sync step, not a task.
+
+## Remarks accepted as-is (no work)
+
+R4 / R5 (the stale `135` and the tab-era «экран настроек» confirmation in `README.md:133,135-136`) stay deferred to `t9-03` /
+Run 6 as ruled. R7 (the spec edit landed in a second commit) is the `A69` exception, recorded not punished.
 
 ## PM answers to the engineer's notes
 
@@ -85,9 +112,9 @@ Reviewer: pending. PM acceptance: pending the review.
    rule (`A53`), and both commits exist. The AC heading is corrected below and in `t9-02` the same wording is already fixed.
 2. **Ruling greppability.** Accepted as-is; `A119`/`A122` are already inside the bullets and `A118` is greppable from this
    state file and the commit message. No follow-up.
-3. **Missing `Terms / Aliases` row.** Not decided by the PM alone — put to `code-reviewer` as question 2, because the spec
-   contract owns the answer. If the reviewer calls it a violation, it becomes a carried fix in `t9-02`, whose slice adds the
-   Russian strings for this surface anyway.
+3. **Missing `Terms / Aliases` row.** The reviewer's answer: not a violation of this task (no Russian string was introduced —
+   the dialog caption is Chrome's), but it is a gap, and it becomes **mandatory in `t9-02`** because that slice adds the
+   window's Russian explanation line. Carried fix 3.
 4. **The extra test.** Accepted: an unpinned build-script rule is a comment, not a check. The 957 → 958 movement is recorded here.
 5. **«единственный» in the README.** Recorded as a live trap for future briefs: `tests/content-card-events.spec.ts` forbids that
    substring in `README.md`. `t9-02`'s brief must not reintroduce it.
