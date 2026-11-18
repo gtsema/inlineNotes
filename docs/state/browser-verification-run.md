@@ -310,3 +310,22 @@ Supersedes every row that pressed `Отмена` (Runs 1–4, see the note at th
 6. **A foreign entry (`A96`, `A117`).** Click the tooltip of a note whose author is not yours: nothing opens — no field, no glyphs,
    no message, no empty band. The band was never reachable, so this item checks the real rule, not the corrected one.
 7. **Your own verdict.** Is the window actually lighter than it was with three word-buttons? One sentence.
+
+### Run 5 outcome (2026-11-18, Chrome 157.0.8103.38, unpacked `dist/` rebuilt at `ab1eb00`)
+
+One blanket statement plus one explicit answer: «все пункты ок. стало легче, да».
+
+| Item | Result |
+|---|---|
+| 1 the glyphs read without words | **passed** — the reader confirmed it; **no description of the glyphs was given**, so "the check is read as save" stays a may-claim, not a recorded observation |
+| 2 measured hit target ≥ 24×24 | **passed** (blanket) |
+| 3 hover `title`, including the disabled save glyph | **passed** (blanket) — what Chrome shows for a disabled button is still not recorded either way |
+| 4 tab order `поле → ✓`, editor `поле → ✓ → корзина` | **passed** (blanket) |
+| 5 closing without a cancel control | **passed** (blanket) |
+| 6 a foreign entry opens nothing at all (`A96`, `A117`) | **passed** (blanket) |
+| 7 is the window lighter? | **passed** — the reader's own words: «стало легче, да» |
+
+- Items passed: 7 (six under one blanket statement, one stated). Failed: 0. Not verified: 0.
+- Stage 8 (`A114` compact icon-only row, no cancel control) is therefore **fixed and verified** in real Chrome.
+- Still not observed and not claimed anywhere: whether Chrome shows a `title` on a **disabled** save button, and whether the two
+  glyphs are unambiguous to a reader who has never seen the extension.

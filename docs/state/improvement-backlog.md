@@ -264,3 +264,7 @@ These three name the shape, so the engineer's only job is to implement and test 
   level, and the spec says exactly that instead of claiming a sight the reader never gets. Run 5 item 6 therefore checks the real
   observable: a foreign `tooltip` click opens nothing. Same family as `A110` (accepted, unreachable, pinned) and the reason the rule
   "a documentation claim about browser UI must be pinned to an observation" exists — here the observation was mine, and it was wrong.
+
+- `A114`/`A115`/`A117` (**the compact row**): verified in Run 5 (2026-11-18) — 7 of 7 items passed, the reader's own verdict
+  «стало легче, да». Two questions stay open by choice and are written as may-claims rather than facts: the `title` on a disabled
+  save button, and glyph recognizability for a first-time reader.

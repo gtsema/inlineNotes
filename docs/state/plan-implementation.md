@@ -387,3 +387,7 @@ verification owed is **Run 5** (seven items, `A114`/`A115`/`A117`); it supersede
 `A116` keeps those rows byte-intact. Accepted debt handed forward: the whole-stylesheet frame pin and the "exactly **one**
 `.actions` node" half (`docs/state/t7-01b-actions-row-cleanup.md` → Closure). The ruling that mattered in this stage is not about
 icons: `A117` retracts a browser claim **I** wrote into a task card and that the engineer then carried into the spec.
+
+**Stage 8 verified in real Chrome (Run 5, 2026-11-18): 7 of 7 items passed**, the reader's verdict on clutter being «стало легче, да».
+The compact row is closed as fixed and verified. Two questions are deliberately left unobserved and unclaimed: the `title` on a
+disabled save button, and glyph recognizability for a reader who has never seen the extension.
