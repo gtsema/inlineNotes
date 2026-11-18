@@ -17,9 +17,8 @@
  * - **scroll** — close. The widget is a fixed box over text that just moved, and the
  *   overlay spec's answer to that state is the close, not a chase (ruling `A32`, the
  *   same rule the card and the tooltip keep);
- * - **`Esc`** — close, on the same path as the cancel button (`A43`). The listener
- *   sits on the
- *   document and not only inside the widget because a key press does not always belong
+ * - **`Esc`** — close, on the same path as the cancel button (`A43`). The listener sits
+ *   on the document and not only inside the widget because a key press does not always belong
  *   to the widget: the caret is in the note field while the editor stands (ruling `A97`
  *   overturned `A74`), but the page may hold it before the handover and after a restore
  *   that found its element gone. A keyboard reader who never pressed `Tab` still has a
