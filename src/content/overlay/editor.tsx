@@ -23,8 +23,8 @@
  * - the two actions of Flow 5 — save, delete — in that rendered order, each of them an
  *   icon-only button of the `action row` (ruling `A114`: an inline `<svg>` glyph, no
  *   text node, the Russian word carried as `aria-label` and `title`), and no cancel
- *   control at all, with no `tabindex` anywhere (overlay AC17 for the card, the same
- *   rule here);
+ *   control at all, with no tab index attribute anywhere (overlay AC17 for the card, the
+ *   same rule here);
  * - the `refusal line`: a code from the write is shown through `refusalText`, and the
  *   draft survives it, because a reader refused with the `overlap` sentence has to be
  *   able to re-select and press the save button again (task `t3-03` AC5);

@@ -1431,7 +1431,13 @@ describe('a card the reader typed into hands the caret back (t6-02 AC5, AC6; rul
         expect(fixture.controller.isOpen()).toBe(false);
         expect(fixture.overlay.host.hidden).toBe(true);
         expect(document.activeElement).toBe(control);
-        expect(recorder.callsOn(control)).toHaveLength(1);
+        const calls = recorder.callsOn(control);
+        expect(calls).toHaveLength(1);
+        // The carried fix (`t7-01` checklist item 2 of `A72`): the restore of these two
+        // event-driven closes is pinned as the same call **shape** the button and keystroke
+        // closes assert, not only as a count. The widget is `position: fixed`, so a restore
+        // that forgot the option could scroll the article under the reader.
+        expect(calls[0]?.options).toEqual({ preventScroll: true });
         // A close is not a write (ruling `A32`).
         expect(writesOtherThanSettings(fixture.port)).toEqual([]);
       } finally {

@@ -32,8 +32,8 @@
  * `restore`), exactly as the `editor` has since `A105`. A card nobody typed into still
  * makes no focus call on any close path: the handover was never opened, so `restore`
  * has nothing to restore and forces nothing. This module holds no `focus()` call of its
- * own, and no `tabindex` and no `Tab` interception appear anywhere — the rule is
- * layout-independent by construction.
+ * own, and no tab index attribute and no `Tab` interception appear anywhere — the rule
+ * is layout-independent by construction.
  *
  * The two moments of a capture, and they are deliberately not shared:
  * - **opening** measures the selection once (one stream, one pass) to decide

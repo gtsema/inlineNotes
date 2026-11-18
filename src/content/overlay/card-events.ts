@@ -153,8 +153,9 @@ export function attachCreateCardEvents(
   doc.addEventListener('selectionchange', onSelectionChange);
   win.addEventListener('scroll', onScroll, true);
   doc.addEventListener('pointerdown', onPointerDown, true);
-  // Bubble phase, deliberately: the page's own key handling runs first, and a page that
-  // consumes the keystroke keeps it. Nothing here intercepts `Tab`.
+  // Bubble phase, and the guarantee does not rest on that phase: this handler never calls
+  // `preventDefault()` and never stops propagation, so a page that consumes the keystroke
+  // keeps it whatever the order of the listeners is. Nothing here intercepts `Tab`.
   doc.addEventListener('keydown', onKeyDown);
 
   return (): void => {

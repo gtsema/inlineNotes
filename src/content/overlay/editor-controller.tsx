@@ -71,9 +71,10 @@
  *
  * **The caret goes with the editor** (ruling `A97`, which overturns `A74`; shape ruling
  * `A105`; task `t5-04` AC2, AC3, AC4). `open` hands the caret to the note field, which
- * already carries the stored comment, and every close path — the cancel button, `Esc`, a
- * press outside, a scroll, a successful save, a successful delete — hands it back to the
- * element the page had focused before the open, while that element is still connected.
+ * already carries the stored comment, and every close path — `Esc`, a press outside, a
+ * scroll, a successful save, a successful delete (ruling `A114` removed the cancel button
+ * that used to be one of them) — hands it back to the element the page had focused before
+ * the open, while that element is still connected.
  * The handover itself is owned by `focus-handoff.ts`; this module owns its moments, and the
  * order is part of the rule: reveal the host, then focus, because a field inside a
  * hidden host takes no focus; unmount, then restore, or the unmount takes the caret back.

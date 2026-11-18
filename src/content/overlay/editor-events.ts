@@ -5,9 +5,10 @@
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 5, Rules /
  * Semantics -> "Editor lifetime" and "The card and the editor must be reachable by
  * keyboard"; rulings `A42` (a click outside is a cancel, never a save)
- * and `A43` (`Esc` is the same cancel path as the cancel button).
+ * and `A43` (`Esc` is one cancel path with the other close paths; ruling `A114` removed
+ * the cancel button that used to be the third one the same ruling named).
  *
- * Three inputs, and each is one of the three cancel paths the spec names:
+ * Three inputs, and each is one of the close paths the spec names:
  *
  * - **pointerdown outside the overlay host** — close, write nothing. A press on the
  *   page is the reader leaving the note, and `A42` rules that it is a cancel and not
@@ -17,7 +18,8 @@
  * - **scroll** — close. The widget is a fixed box over text that just moved, and the
  *   overlay spec's answer to that state is the close, not a chase (ruling `A32`, the
  *   same rule the card and the tooltip keep);
- * - **`Esc`** — close, on the same path as the cancel button (`A43`). The listener sits
+ * - **`Esc`** — close, on the same path as a press outside the host (`A43`); since ruling
+ *   `A114` it is also the only close path the widget itself offers. The listener sits
  *   on the document and not only inside the widget because a key press does not always belong
  *   to the widget: the caret is in the note field while the editor stands (ruling `A97`
  *   overturned `A74`), but the page may hold it before the handover and after a restore
