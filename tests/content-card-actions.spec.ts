@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The `action row` of the two page widgets: icon-only controls, no cancel control,
- * the Russian word kept as an accessible name (task `t7-01` AC1-AC8; PM ruling
+ * the Russian word kept as an accessible name (task `t7-01` AC1, AC3-AC7, AC9; PM ruling
  * `A114`; `docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Compact
  * `action row`" and AC27), and the row-absence rule of task `t7-01b` item 1: an
  * `action row` that holds no control is not rendered at all.
@@ -402,7 +402,7 @@ describe('AC5: the hit box and the glyph paint are declared in the shipped style
   });
 });
 
-describe('AC6: the rendered order is textarea then save, then delete', () => {
+describe('AC7: the rendered order is textarea then save, then delete', () => {
   it('renders the card as textarea, save', async () => {
     const card = mountedCard();
     await settled();
@@ -447,7 +447,7 @@ describe('AC6: the rendered order is textarea then save, then delete', () => {
   });
 });
 
-describe('AC7: the behavior the compaction must not have touched', () => {
+describe('AC6: the behavior the compaction must not have touched', () => {
   it('keeps the card save button disabled for an empty, a blank and an over-cap comment', async () => {
     const card = mountedCard();
     await settled();
@@ -510,7 +510,7 @@ describe('AC7: the behavior the compaction must not have touched', () => {
   });
 });
 
-describe('AC8: the rules that did not move, and the surfaces this task stayed out of', () => {
+describe('AC9: the rules that did not move, and the surfaces this task stayed out of', () => {
   it('keeps the non-action visual rules of the card in the stylesheet', () => {
     for (const declaration of [
       'width: 300px;',
@@ -520,6 +520,16 @@ describe('AC8: the rules that did not move, and the surfaces this task stayed ou
       'color: #8a4b08;',
       `.${CARD_REFUSAL_CLASS} {`,
       'color: #a4262c;',
+      // The `frame colors` ruling `A114` claims are unchanged (task `t7-01b` item 2, the
+      // reviewer's remark 1): `src/content/overlay/card-style.ts` declares all three and
+      // no test read any of them back. The frame rule's own selector stands in the same
+      // list because the identical `border` and `background` strings are declared for the
+      // `textarea` and for a button of the row as well: without that marker the frame rule
+      // could disappear and the border/background assertions would still pass.
+      `.${WIDGET_ROOT_CLASS} .${CARD_CLASS} {`,
+      'background: #ffffff;',
+      'border: 1px solid #b9bec4;',
+      'box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);',
     ]) {
       expect(CARD_CSS).toContain(declaration);
     }
