@@ -20,7 +20,8 @@ quietly stopping checking anything.
 Done-criterion (observable): clicking the extension's settings in Chrome shows the author-name field inside a Chrome
 window, not a new tab; `npm run build` still fails if `dist/options/index.html` disappears.
 
-## AC (numbered; the engineer writes lines 1–5 into `docs/specs/content-overlay-ui.md` verbatim, in the same commit as the manifest change)
+## AC (numbered; the engineer wrote lines 1–5 into `docs/specs/content-overlay-ui.md` verbatim — commit 1 carries code and tests,
+commit 2 carries the spec and README, per `A53`)
 
 1. **Settings window.** `src/manifest.json` declares `options_ui` with `page` = `options/index.html` and
    `open_in_tab` = `false`, and declares no `options_page` key. Chrome renders the settings surface as a window whose
@@ -62,15 +63,37 @@ window, not a new tab; `npm run build` still fails if `dist/options/index.html` 
 
 | # | Child | Result |
 |---|---|---|
-| 1 | `extension-engineer` | launched 2026-11-19 |
+| 1 | `extension-engineer` | delivered 2026-11-19, two commits (`d187fbd` code+tests, `00862e2` spec+README), report `docs/state/engineer-report.md` |
+| 2 | `code-reviewer` | launched 2026-11-19, read-only, output `docs/state/reviewer-report.md` |
+
+## PM-verified gates (independent re-run, not the child's quote)
+
+`npm run build` **0** · `npm test` **0** (958 tests / 45 files) · `node scripts/check-agent-config.mjs` **0** (0 errors, 0 warnings, 140 info) · `npm run typecheck` **0**.
+`dist/` is still 10 files.
 
 ## Delegation count
 
-Expected 2 (engineer, reviewer). Used: 1.
+Expected 2 (engineer, reviewer). Used: 2.
 
 ## Verdicts
 
-Pending.
+Reviewer: pending. PM acceptance: pending the review.
+
+## PM answers to the engineer's notes
+
+1. **Commit count.** The engineer is right and the AC heading is the stale wording: the brief's two-commit order is the
+   rule (`A53`), and both commits exist. The AC heading is corrected below and in `t9-02` the same wording is already fixed.
+2. **Ruling greppability.** Accepted as-is; `A119`/`A122` are already inside the bullets and `A118` is greppable from this
+   state file and the commit message. No follow-up.
+3. **Missing `Terms / Aliases` row.** Not decided by the PM alone — put to `code-reviewer` as question 2, because the spec
+   contract owns the answer. If the reviewer calls it a violation, it becomes a carried fix in `t9-02`, whose slice adds the
+   Russian strings for this surface anyway.
+4. **The extra test.** Accepted: an unpinned build-script rule is a comment, not a check. The 957 → 958 movement is recorded here.
+5. **«единственный» in the README.** Recorded as a live trap for future briefs: `tests/content-card-events.spec.ts` forbids that
+   substring in `README.md`. `t9-02`'s brief must not reintroduce it.
+6. **Checker info 135 → 140.** Accepted, exit stays 0. The README's quoted count is corrected in `t9-03`, together with the
+   Run 6 row, not in a separate commit.
+7. **Historical README row.** Correct to leave intact (`A116` spirit: old run rows stay byte-intact); the window shape is Run 6.
 
 ## Open questions
 
