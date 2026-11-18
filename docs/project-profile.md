@@ -98,11 +98,13 @@ Skills (4, no overlap): `chrome-mv3-extension-ts` (technical), `requirements-spe
 
 - No network access from the extension at runtime; all data stays in `chrome.storage.local`.
 - Minimal third-party dependencies (Angular/Vitest toolchain only).
-- Must not break host page layout; overlay uses isolated CSS and a high but bounded `z-index`. Focus: since ruling `A111` the
-  extension moves the caret into its own note field **only when the reader opens an editor** (a tooltip click, where no live page
-  selection exists to lose), and hands it back on close (`A105`); opening the **create card** makes no focus call at all, because a
-  focus move into an editable element ends the page selection that the card is opened from (ruling `A111` narrows `A97` and
-  restores the `A74` half for that path). Neither path moves the page's scroll position (`preventScroll`).
+- Must not break host page layout; overlay uses isolated CSS and a high but bounded `z-index`. Focus: the extension **never moves
+  the caret when it opens the create card** (ruling `A111`, which narrows `A97` and restores the `A74` half: a focus move into an
+  editable element ends the page selection that the card is opened from), it **takes the caret when the reader opens an editor**
+  (a tooltip click, where no live page selection exists to lose, `A97`/`A104`) and hands it back on close (`A105`), and it **takes
+  the caret when the reader types** while a create card stands open — one printable key, no `Space`, no `Ctrl`/`Cmd`/`Alt`, and
+  never by cancelling the page's key (ruling `A112`, the door the user chose after Run 3 measured that `Tab` does not reach the
+  card). No focus call of this overlay moves the page's scroll position (`preventScroll`).
 - Chrome MV3 only; no `chrome.*` APIs beyond what MV3 service workers allow.
 
 ## Language & Runtime Model

@@ -251,3 +251,17 @@ The user reported "everything ok" with one exception, the `Tab` item. Recorded p
 - Item 2 became backlog **B8** and is ruled **`A112`** (the user chose the "typing is the way in" shape, `S4`); task `t6-02`.
 - The spec sentence "`Tab` is now the only way in" (`docs/specs/content-overlay-ui.md` AC17) was **false in Chrome** as of this
   run; `t6-02` AC7 forbids leaving it in place.
+
+---
+
+## Run 4 — the `A112` typing door
+
+Supersedes Run 3 items 3 and 6 (both were blocked behind the failed `Tab` item) and re-measures Run 3 item 9, which predates the
+door. Record each as `passed` / `failed` / `not verified`.
+
+1. **The door itself.** Select a sentence slowly, then press a letter (`п`, or `a`, or a digit): the caret is in the card's field\nand the pressed character is the first character of the note.
+2. **The non-triggers hold in Chrome.** `Space` still scrolls the article and does **not** enter the field; `Tab` still does not\nenter the card (its cause stays unmeasured by design); `Esc` closes without writing; `Ctrl+Enter` saves.
+3. **What the keystroke costs (Run 3 item 6).** After the typing keystroke, is the page's selection still painted? Say which half\nof the spec's claim Chrome shows — the stored note is correct either way.
+4. **Live tab order (Run 3 item 3).** Once inside the field by typing: `Tab` → `Сохранить` → `Отмена`, read after typing a comment.
+5. **Close paths of a typed card.** `Отмена`, `Esc`, a save, a click outside the card and a page scroll each put the caret back\nwhere the page had it before the keystroke.
+6. **Run 3 item 9, re-measured.** Focus the page's own editable (a search box), open a card by selecting text elsewhere, then\ntype: per `A112` the caret jumps to the card. Record the behavior **and** whether the reader accepts it.

@@ -355,11 +355,13 @@ the user's chosen shape.
 | Task | Slice | Spec / AC anchor | Children |
 |---|---|---|---|
 | `t6-01-focus-editor-only` | **accepted** (`d7f1a6a`+`67dd155`, 907 tests, 0 blocking) — the create card makes zero focus calls on open and on every close path, the five `t5-04` card pins rewritten in place, the editor keeps the caret with `preventScroll` and the restore | `content-overlay-ui.md` `focus on open` + `A111` (narrows `A97`, restores the `A74` half for one path) | engineer, reviewer |
-| `t6-02-typing-enters-card` | opened: the first printable keystroke while the card is open moves the caret into the `textarea` (no `preventDefault`, no `Tab` interception, `A111`'s no-focus-on-open intact); the `A105` restore then applies to the card's closes | `content-overlay-ui.md` `focus on open` + `A112` (adds to `A111`) | engineer, reviewer |
+| `t6-02-typing-enters-card` | **accepted** (`a98e753`+`38a3e4a`, 935 tests, 0 blocking) — one printable keystroke (not `Space`, no `Ctrl`/`Cmd`/`Alt`) while the card stands moves the caret into the `textarea` through the one focus owner, never by cancelling the page's key; the `A105` restore then applies to that card's closes | `content-overlay-ui.md` `focus on open` + `A112` (adds to `A111`) | engineer, reviewer |
 
 One task only. After it is accepted, `dist/` is rebuilt and the user re-checks **Run 2 item 1** (and item 10 remains `not
 verified` unless they choose to hand-seed storage).
 
 **Stage 7 was closed on 2026-11-18 (`t6-01` accepted, 8/8 AC, 907 tests) and reopened the same day by the browser pass**: Run 3
 recorded 6 passed, **item 2 (`Tab` into the card) failed**, items 3 and 6 not verified behind it. That is backlog **B8**, ruled
-**`A112`**, and it opens `t6-02` as the second task of this stage. Run 4 will re-check the keyboard door plus items 3 and 6.
+**`A112`**, and `t6-02` closed it (9/9 AC, 0 blocking, **935 tests over 44 files**, checker 0/0/115, typecheck 0, `dist/` 10 files).
+Stage 7 is closed again with two tasks; the verification owed is **Run 4** — the typing door, the live tab order, the
+visual-selection half, and Run 3 item 9 re-measured now that typing can move the caret.

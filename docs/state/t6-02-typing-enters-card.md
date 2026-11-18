@@ -61,6 +61,17 @@ intercepting `Tab`.
   `package.json`, harness files, the other PM-owned specs (`A76`, `A89`).
 - Do not touch `docs/state/t6-02-typing-enters-card.md`; write your report to your own artifact.
 
+## Carried-fix checklist (`A72`)
+
+Nothing was carried **into** this task. Debt it leaves for the next touch of the named files (`A72`, from the review):
+
+1. `src/content/overlay/card-events.ts:156-157` — the comment "Bubble phase, deliberately: the page's own key handling runs
+   first" is stronger than the mechanism: it holds for a page listener on the event target, in the capture phase, or on `document`
+   registered before `document_idle`, but not for a bubble-phase `document` listener added later (a late SPA mount). The
+   order-independent guarantee is "we never call `preventDefault()`". Reword the comment.
+2. `tests/content-create-card-controller.spec.ts:1408` — the two event-driven closes of a **typed** card pin the restore as a call
+   count but not its options; `{ preventScroll: true }` is pinned only at `:1374`. Add the options assertion.
+
 ## Gate and commit order (`A62`, `A73`, `A101`)
 
 1. Spec + README, commit at green.
@@ -71,8 +82,23 @@ intercepting `Tab`.
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (two commits), reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered** in two commits: `a98e753` (the three-part focus split in the Terms rows, the Rules bullet and AC17, the
+  false `Tab` sentence deleted from spec and README), `38a3e4a` (`card-events.ts` gains a bubble-phase `keydown` door,
+  `create-card-controller.tsx` gains `takeCaretForTyping()` routed through the one focus owner, 28 tests, 14 of them red without
+  the implementation). PM-measured gates: build exit 0 → `dist/` 10 files, `npm test` exit 0 → **935 / 44 files**, checker exit 0 →
+  0/0/115, typecheck exit 0, tree clean. The child's **harness** acceptance-report failed to parse (an unsupported field name) —
+  a harness defect, not an attempt and not a defect of the work.
+- **review verdict: `accepted`** (`docs/state/t6-02-review.md`) — 9/9 AC, 0 blocking. The `A112` promise was checked where it
+  could lie: the two `preventDefault` hits in `card-events.ts` are prose, the pin greps the shipped source text for a **call**
+  (`\.\s*preventDefault\s*\(`), and the four pre-existing calls in `create-card.tsx:82,87` / `editor.tsx:111,116` live inside the
+  shadow tree, so they answer keys pressed inside our own widget, not the page's.
+- **PM closed from the review:** finding 2 — `docs/project-profile.md` said the caret moves "only when the reader opens an editor",
+  which `A112` made false; rewritten to the three-part rule. Finding 5 — the spec's `Assumption:` now names the second
+  consequence of the guard: a focused **page** editable (search box, comment form) loses the caret to the card when the reader
+  types while a card stands; if the user calls that wrong, the fix is one more guard plus its own ruling, not a quiet code change.
+  Finding 3 — this card now has the `Carried-fix checklist` section the flow requires; findings 1 and 4 became its two numbered
+  debt items.
