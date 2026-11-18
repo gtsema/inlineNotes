@@ -59,8 +59,24 @@ None yet.
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (two commits, no escalation), reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered** in two commits: `d7f1a6a` (the focus rule split in the three spec places + README, with the honest
+  jsdom limit written into AC17), `67dd155` (`create-card-controller.tsx` stops calling the handoff at both moments; the five
+  `t5-04` card pins rewritten in place at `:925`, `:1082`, `:1104`, `:1141`, `:1185`; one added at `:1213`). PM-measured:
+  `grep -c "focus\." src/content/overlay/create-card-controller.tsx` → **0**, and the whole of `src/` holds exactly two `.focus(`
+  calls, both inside `focus-handoff.ts`, whose only shipped caller is `editor-controller.tsx`. Gates: build exit 0 → `dist/` 10
+  files, `npm test` exit 0 → **907 / 44 files**, checker exit 0, typecheck exit 0, tree clean.
+- **review verdict: `accepted`** (`docs/state/t6-01-review.md`) — 8/8 AC, 0 blocking. The negative proof was verified as a count
+  with the card provably open, the four editor-side files have empty diffs, and the comment-only claims for `focus-handoff.ts` and
+  `tests/content-focus-handoff.spec.ts` were confirmed mechanically by the reviewer.
+- **PM closed from the review, same commit as this card:** finding 2 — `docs/project-profile.md` was the last sentence in the repo
+  still claiming the card takes the caret, now rewritten to the `A111` split; finding 5 — README «Стадии 1–6» → «Стадии 1–7»;
+  finding 6 — AC17 now states that the reader's own `Tab` into the field is itself a focus move into an editable element and may
+  end the **visual** selection, while the stored note stays correct because the create path holds the `Range` captured at open.
+- **accepted carried debt (review finding 1):** the comment at `tests/content-create-card-controller.spec.ts:1215` says that pin
+  proves the restore call left `close()`. It does not: with `focus.open` gone the handoff's held element is `null`, so a leftover
+  `restore()` would be inert and every pin would still see zero calls. The real proof is static (deleted import/local/calls +
+  `grep` 0 + typecheck 0). Reword at the next touch of that file.

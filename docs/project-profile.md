@@ -98,9 +98,11 @@ Skills (4, no overlap): `chrome-mv3-extension-ts` (technical), `requirements-spe
 
 - No network access from the extension at runtime; all data stays in `chrome.storage.local`.
 - Minimal third-party dependencies (Angular/Vitest toolchain only).
-- Must not break host page layout; overlay uses isolated CSS and a high but bounded `z-index`. Focus: since ruling `A97` the
-  extension **does** move the caret into its own note field when the reader opens a card or an editor, and hands it back on close
-  (`A105`); it never moves the page's scroll position (`preventScroll`).
+- Must not break host page layout; overlay uses isolated CSS and a high but bounded `z-index`. Focus: since ruling `A111` the
+  extension moves the caret into its own note field **only when the reader opens an editor** (a tooltip click, where no live page
+  selection exists to lose), and hands it back on close (`A105`); opening the **create card** makes no focus call at all, because a
+  focus move into an editable element ends the page selection that the card is opened from (ruling `A111` narrows `A97` and
+  restores the `A74` half for that path). Neither path moves the page's scroll position (`preventScroll`).
 - Chrome MV3 only; no `chrome.*` APIs beyond what MV3 service workers allow.
 
 ## Language & Runtime Model

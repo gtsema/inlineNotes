@@ -208,3 +208,20 @@ the six-item browser list is deliberately still open (`прогон будет �
   practice: re-grep the limits and counts instead of trusting the previous README, and grep every cross-file path a comment names.
 - **Debt this stage added knowingly:** the blank-author popup row is pinned as unreachable-but-inert (`A110`) rather than fixed;
   the aggregate cross-tab repaint and the `onChanged` record count have no real-Chrome proof yet — they are Run 2 items 7 and 8.
+
+## Stage 7 — one defect the browser found and 907 tests could not (2026-11-18)
+
+- **The browser pass paid for itself on its second run.** Run 2 passed 9 of 10 items and surfaced one real defect (`B7`) that no
+  unit test could ever show: jsdom does not drop a page selection when focus enters an editable element, so the whole class of
+  "the caret eats the selection" was invisible to the suite. Rule kept: a green suite never substitutes for the runtime check.
+- **What failed (ruling shape):** `A97` traded away the artifact the reader was holding at that moment. A ruling that touches a
+  gesture which **is** the input to the operation must name what survives of that gesture, or it will be reversed. `A111` states
+  the predicate per widget instead of per feature.
+- **What worked:** keeping the focus behavior in one owner module (`focus-handoff.ts`) made the reversal a two-call deletion with
+  no new logic. Cross-cutting behavior in a single owner keeps later reversals cheap — this is the third time that design paid.
+- **What failed (proof honesty):** a pin that asserts "no focus call" can be **inert** — once `focus.open` is gone, a leftover
+  `focus.restore()` changes nothing observable, so the test comment at `tests/content-create-card-controller.spec.ts:1215` claimed
+  a behavioral proof it cannot give. When a call is deleted, the proof is static (deleted import, `grep` 0, typecheck 0) and the
+  comment must say so.
+- **What worked (process):** the reversal was offered as four labeled options with consequences and one recommendation; the user
+  picked in one line. A decision block beats an open question.

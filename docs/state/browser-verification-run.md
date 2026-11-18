@@ -203,3 +203,30 @@ Reported by the user as "1,2 / 3 / 4-5 / 6-9 ok", recorded per item, nothing inf
 - **A new problem was reported during this run, not covered by any item:** selecting text slowly makes the card appear and
   **clear the page selection**. The user attributes it to the focus move of `A97` and asks whether to revert it. Tracked as
   backlog **B7** in `docs/state/improvement-backlog.md`; no ruling yet, the shape is a question for the user.
+
+---
+
+## Run 3 — the `A111` split (create card takes no focus, editor keeps it)
+
+This run **supersedes** two older records, which stay in place as history: Run 1's keyboard rows at
+`docs/state/browser-verification-run.md:32-33` (measured under `A74`) and Run 2 item 1 at `:191` (measured under `A97`). Neither
+describes the shipped build any more. Record each item as `passed` / `failed` / `not verified`; nothing is inferred from tests.
+
+1. **B7 itself — the half no test can pin.** Select a sentence **slowly**: the card appears and the browser's own selection stays
+   painted. This is the exact gesture that failed in Run 2.
+2. **The new keyboard entry:** after a mouse selection, the **first** `Tab` lands in the card's `textarea`. Do not start the probe
+   from the omnibox — Run 1's `Shift+Tab` probe hit a Chrome-UI control and proved nothing.
+3. **Tab order in the live shadow tree:** `textarea` → `Сохранить` → `Отмена`. Read it **after typing a comment**, because
+   `Сохранить` leaves the tab order while empty.
+4. **Keys reach the card only after `Tab`:** `Esc` closes and writes nothing; `Ctrl+Enter` (and `Cmd+Enter`) saves.
+5. **Survival end to end:** slow selection → `Tab` → type → `Сохранить` → the highlight and frame land on exactly the words that
+   were selected.
+6. **The residual risk of `A111`:** does the reader's own `Tab` into the `textarea` clear the page's visual selection? If it does,
+   the spec at `docs/specs/content-overlay-ui.md` AC17 already states it, and the stored note is still correct — say which half of
+   that sentence the browser shows.
+7. **The editor half is unchanged:** a `tooltip` click puts the caret in the prefilled field and **no page scroll** happens —
+   Run 2's "no scroll" claim was made under the old card behavior and now belongs to the editor only.
+8. **Editor close paths in Chrome:** `Отмена`, `Esc`, a save, `Удалить`, a `pointerdown` outside the card and a page scroll each
+   hand the caret back to what was focused before the open, and force nothing when that element is gone.
+9. **A page that owns its own focus** (a search box, autofocus, page keyboard shortcuts): with the card standing the page keeps its
+   focus and its shortcuts, and the event-driven closes still close the card without writing while the caret stays on the page.

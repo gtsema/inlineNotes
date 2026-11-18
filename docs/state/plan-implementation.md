@@ -354,7 +354,11 @@ the user's chosen shape.
 
 | Task | Slice | Spec / AC anchor | Children |
 |---|---|---|---|
-| `t6-01-focus-editor-only` | the create card takes no focus again; the editor keeps the caret | `content-overlay-ui.md` `focus on open` + `A111` (narrows `A97`, restores the `A74` half for one path) | engineer, reviewer |
+| `t6-01-focus-editor-only` | **accepted** (`d7f1a6a`+`67dd155`, 907 tests, 0 blocking) — the create card makes zero focus calls on open and on every close path, the five `t5-04` card pins rewritten in place, the editor keeps the caret with `preventScroll` and the restore | `content-overlay-ui.md` `focus on open` + `A111` (narrows `A97`, restores the `A74` half for one path) | engineer, reviewer |
 
 One task only. After it is accepted, `dist/` is rebuilt and the user re-checks **Run 2 item 1** (and item 10 remains `not
 verified` unless they choose to hand-seed storage).
+
+**Stage 7 closed 2026-11-18: `t6-01` accepted, 8/8 AC, 0 blocking, 907 tests over 44 files, `dist/` 10 files, checker 0/0/114,
+typecheck exit 0.** The verification it needs is now **Run 3** of `docs/state/browser-verification-run.md` (nine items, superseding
+Run 1's keyboard rows and Run 2 item 1), and the user is invited for it.
