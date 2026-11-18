@@ -83,7 +83,9 @@ Expected 2 (engineer, reviewer). Used: 2.
 | Finding | What it says | PM closure |
 |---|---|---|
 | 1 | The engineer report named by the brief (`docs/state/engineer-report.md`) is absent from the working tree and from git, so AC 6 has no artifact. | **Closed by the PM.** The role's `output:` path is a harness artifact, not a repo file — the child wrote it, the harness routed it to the run directory. The PM copied it to `docs/state/t9-01-engineer.md` (30+ earlier tasks use the `docs/state/<task>-engineer.md` name). Root cause is the brief, not the child: the brief must name the repo path. Fix carried into every Stage 9 brief. |
-| 2 | `docs/specs/content-overlay-ui.md:89` states «never produces a horizontal scrollbar at the dialog's own width» as a shipped observable. No test reads `src/options/` styles, no browser has ever opened that page in a dialog, and the task did not touch `src/options/`. The same spec already shows the right discipline for the `action row` 24×24 hit box, and `A117` retracted exactly this kind of claim. | **Open — carried into `t9-02`**, which owns the options stylesheet and will rewrite it anyway. Carried fix 1 below. |
+| 2 | `docs/specs/content-overlay-ui.md:89` states «never produces a horizontal scrollbar at the dialog's own width» as a shipped observable nobody measured. | **Spec half closed by the PM** (the sentence now names `A124`/`t9-02`, says the pin is owed by `t9-02`, and states that no sentence claims it as something the reader sees — the `action row` discipline). The **pin half stays owed by `t9-02` AC 7.** |
+
+Finding 1 closed by the PM: `cp` of the run artifact into `docs/state/t9-01-engineer.md`, the repo name every earlier task uses.
 
 **PM acceptance: the shipped shape is accepted, the task is not closed until carried fix 1 lands.** No third attempt on `t9-01` (budget): the finding is a spec sentence in the surface `t9-02` rewrites, so a separate cleanup task would be wasted work.
 

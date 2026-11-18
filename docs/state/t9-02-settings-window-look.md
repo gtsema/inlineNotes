@@ -7,7 +7,9 @@ Blocked until `t9-01-options-window` is accepted: the manifest shape and the bui
 | Ruling | Decision | Source |
 |---|---|---|
 | `A123` | The artwork is a **byte-identical copy of the user's own asset** `C:\Users\user\Desktop\test\Mistension\img\128.png` (a flat cartoon orange cat inside a lifebuoy, RGBA, 128×128, 27 KB) into `src/options/assets/cat-mascot.png`. The file is never re-encoded, cropped or edited: any framing or zoom is CSS only. Provenance (owner's own extension, no third-party license) is stated in the spec. | user ("возьми его"), `A120` closed |
-| `A124` | The mascot renders at **80 CSS px** (the 128 px source is never upscaled past ~1.6×), **whole image including the lifebuoy**, in a circular frame in the header. The window palette is derived from the artwork: cream background, orange primary action, lifebuoy-blue border and confirmation. WCAG-AA text contrast. Static art, one light theme, no scroll at the Chrome dialog width. | user, «всё дефолт» |
+| `A124` | The mascot renders at **80 CSS px** (the 128 px source is never upscaled past ~1.6×), **whole image including the lifebuoy**, in a circular frame in the header. The window palette is derived from the artwork, sampled from the asset itself in Chrome (canvas pixel read of `128.png`: cat body `#e25a00`, lifebuoy blue `#a0d0e0`, pale cream inside the ring `#fefcf5`, navy outline `#00203e`) and darkened until it passes WCAG AA. Static art, one light theme, no scroll at the Chrome dialog width. | user, «всё дефолт» |
+| `A125` | The shipped palette is pinned **as literal values**: page/card cream `#fdf7ee`, ink `#1b2a33` (13.8:1 on cream), hint text `#7b6a55` (4.9:1), primary action `#b8480d` with white text (5.3:1), confirmation / border accent `#0f5f7a` on the pale band `#eef4f7` (6.4:1), decorative lifebuoy-blue border `#a6cbdc` (never carries text). Every pair that carries text is ≥ 4.5:1, pinned by a test that reads the stylesheet text. | PM ruling from `A124`, ratios measured, not estimated |
+| `A126` | The asset is identified by hash: SHA-256 of the source `Mistension/img/128.png` is `a899a9106d0ebefc978e493db61663917703803ebb5f9c703d9e67bb00d446b4` (27 414 bytes). The copy in `src/options/assets/cat-mascot.png` must hash equal, and the reviewer re-computes it. | PM measurement, 2026-11-19 |
 
 Reuses `A118` (the settings surface is a Chrome window), `A119`/`A122` (entry points), `A121` (look defaults).
 
@@ -32,9 +34,10 @@ explanation line and the same `Имя` / `Сохранить` behavior as before
    framing/rounding is produced by CSS (`border-radius`, `object-fit`, `object-position`), never by editing the PNG.
 4. **One new Russian line.** `src/options/text.ts` gains exactly one string: the explanation that this name signs every
    note. No existing string, message-map key or counter wording changes, and no string is removed.
-5. **The palette is literal and derived.** The component stylesheet declares the cream / orange / lifebuoy-blue palette
-   as literal color values, and the label, hint and message text hold AA contrast against their background. Pinned by
-   reading the stylesheet text.
+5. **The palette is literal and derived (`A125`).** The component stylesheet declares exactly these values: cream
+   `#fdf7ee`, ink `#1b2a33`, hint `#7b6a55`, primary action `#b8480d` with white text, accent `#0f5f7a` on `#eef4f7`,
+   decorative border `#a6cbdc`. A test reads the shipped stylesheet text and pins the values, so a later edit cannot
+   silently drop the contrast.
 6. **Nothing else moves.** `src/options/author-name-service.ts`, `src/core/`, `src/content/`, `src/popup/` and
    `src/manifest.json` are untouched; the field, the `N/40` counter, the disabled-`Сохранить` rule and the message line
    behave exactly as the existing pins say.
@@ -63,12 +66,24 @@ explanation line and the same `Имя` / `Сохранить` behavior as before
 - **Carried-fix checklist (the report must answer every number with `done` + file:line or `skipped` + reason):**
   1. The two `Terms / Aliases` rows of AC 9 (the reviewer's R1 — the settings window and its new explanation line have no
      anchor in the spec while `README.md:38` already uses «Окно настроек»).
-- **Constraints.** Copy the asset with a byte copy (`cp`), never re-encode or resize it. Do not touch `src/content/`,
+- **Constraints.** Copy the asset with a byte copy (`cp`) and prove it: `sha256sum` of the copy must equal `A126`
+  (`a899a9106d0ebefc978e493db61663917703803ebb5f9c703d9e67bb00d446b4`). Do not touch `src/content/`,
   `src/core/`, `src/popup/` or `src/manifest.json`. No network calls, no remote image, no `@import`. All UI strings
   Russian, all new strings only in `src/options/text.ts`. Do not write the substring «единственный» into `README.md` —
   `tests/content-card-events.spec.ts` forbids it. Work order: reach green, **commit code+tests+asset first**, then
   the spec edit, commit again (`A53`). The task state file `docs/state/t9-02-settings-window-look.md` is the PM's — the
   only other `docs/state/` file you write is your own report `docs/state/t9-02-engineer.md`. Print no full test log.
+
+## Palette (pinned by `A125`; the engineer does not invent values)
+
+| Role | Value | Contrast on its background |
+|---|---|---|
+| page / card background | `#fdf7ee` | — |
+| text (title, label, field) | `#1b2a33` | 13.8:1 |
+| hint line, counter | `#7b6a55` | 4.9:1 |
+| primary action (`Сохранить`) | `#b8480d`, white label | 5.3:1 |
+| confirmation / accent text | `#0f5f7a` on `#eef4f7` | 6.4:1 |
+| decorative border, mascot frame | `#a6cbdc` | carries no text |
 
 ## Attempts log
 
