@@ -188,3 +188,11 @@ These three name the shape, so the engineer's only job is to implement and test 
   layer, and a harness file is exactly where a role changing that layer will not look. Accepted limitation, recorded so it is not
   mistaken for a rendered-DOM proof: the popup's "no address node" check reads the **template source**, and it is sufficient only
   while the adjacent view-shape pin holds — that pair is carried through `t5-06` as a numbered item, where the view shape changes.
+
+- `A110` (**the empty-author row is accepted debt, not a bug to fix now**): a stored record whose `authorName` is empty or
+  whitespace-only still decodes (`src/core/entry-store-read.ts:132`), renders an inert popup row whose checkbox and `Удалить` write
+  nothing (`groupsOf` filters by `isSameAuthor`, which refuses an empty side), and two such rows share a `trackBy` value. No shipped
+  create can produce it (`src/core/entry-store-write.ts:242` normalizes behind `assertCreatable`), so the fix is **a pin, not code**:
+  the shape is documented as unreachable-by-construction and inert, which stops a later refactor from quietly starting to write to
+  such a row. Rejected alternative: a normalize-or-drop rule in `groupsOf` — it would invent a product rule for a state no path can
+  create, and product rules need a spec line, which this has none of.

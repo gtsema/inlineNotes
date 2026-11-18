@@ -82,8 +82,25 @@ one note.
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (attempt 1 hit the wall after CP3, resumed
+in-session for CP5, `A80`), reviewer. A third child is opened as `t5-06b` for the reviewer's carried items, not a second attempt.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 hit the 60-minute wall after CP3** (`cc10d12` specs + README, `543bcbf` core, `78f4c32` popup), tree clean, nothing
+  lost — **not an attempt** (`A80`). PM measured the abandoned tree (typecheck 0, 899/44, boundaries inside the brief) and resumed
+  the **same session** with a finish-only brief: no re-exploration, walk AC 1–10 naming a pin or "no pin yet", two gates
+  unmeasured, carried items by number.
+- **CP5 delivered** `1b4f163`: two pins that had no owner (AC1 at the size the spec names it — ten own + three foreign
+  interleaved, two rows `Вы — 10` / `Вася — 3`; AC4 at the core layer — `visible: true` re-shows a record the old per-entry
+  checkbox hid, leaves a foreign author's hidden record hidden), plus a corrected AC attribution in the aggregate-import scan and
+  README counts. PM-measured gates on that tree: build exit 0 → `dist/` 10 files, `npm test` exit 0 → **901 / 44 files**,
+  checker exit 0 → 0/0/113, typecheck exit 0, tree clean.
+- **review verdict: `accepted`** (`docs/state/t5-06-review.md`) — 10/10 AC, 0 blocking, all four carried items done, and the two
+  `A98`/`A109` pins verified to still assert what they asserted before the refactor. Five non-blocking findings: the empty-author
+  inert row (not producible by a shipped write, unpinned shape), the repaint pin still driven by per-entry `setVisible`, a popup
+  by-identity claim that is `toEqual` where the report said `toBe` (the real by-identity proof is at the core layer), a citation
+  slip about `A109`, and two stale README sentences (`:5`, `:111`) outside the range.
+- **PM note on the report overstatement:** "the survivors are the same objects — `toBe`, not `toEqual`" is true at
+  `tests/core-entry-store-write.spec.ts:881-905` and not true of the popup pin at `tests/popup-entry-list.spec.ts:733-748`. The
+  claim is not wrong about the rule, only about which file proves it — carried as `t5-06b` item 2 rather than argued away.

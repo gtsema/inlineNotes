@@ -333,7 +333,8 @@ until the whole set is implemented; the PM rules on anything new and records it.
 |---|---|---|---|
 | `t5-04-focus-on-open` | **accepted** (`d3ca568`+`729695c`+`b770066`+`0d0c749`+`4a630c8`, 872 tests, 0 blocking) — the caret goes into the note field on open, `preventScroll` at the call shape, focus returns on close, all six `t5-03` carried comment items closed | `content-overlay-ui.md` keyboard rule + `A97` (overturns `A74`), `A105` | engineer, reviewer |
 | `t5-05-popup-host-line` | **accepted** (`c5964aa`+`5bc2580`+`fe43182`+`64d0c48`, 875 tests, 0 blocking) — the popup renders no address in any state; the active-tab read, the page-key pins and the `tabs` permission survive | popup contract + `A98` (`A49` intact) | engineer, reviewer |
-| `t5-06-popup-author-groups` | one popup row per author with a count; the checkbox is an aggregate write over that author's entries; popup `Удалить` deletes that author's whole page set; a new named core operation owns that delete | popup contract + `A95` | engineer, reviewer |
+| `t5-06-popup-author-groups` | **accepted** (`cc10d12`+`543bcbf`+`78f4c32`+`1b4f163`, 901 tests, 0 blocking) — one popup row per author `<name> — <count>`, the checkbox and `Удалить` are one aggregate core call each (`setVisibleForAuthor` / `deleteEntriesOfAuthor`, one index update per call), `visible` stays per entry with no migration | popup contract + `A95`, `A108` | engineer, reviewer |
+| `t5-06b-carried-fixes` | opened (wall-clock recovery leftovers): the page-layer repaint pin driven by the aggregate write, the popup by-identity claim, the empty-author inert-row shape pinned as accepted debt, two stale README sentences | none new (pins and prose) | engineer, reviewer |
 
 Order is fixed: `t5-01` before `t5-02` (overlaps must be legal before they are colored side by side), `t5-03` is independent,
 `t5-06` last (it moves visibility semantics). Gates at every acceptance: `npm run build`, `npm test`,
