@@ -79,8 +79,22 @@ comment pointer before committing — this is the third dead-pointer finding of 
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **3** — attempt 1 (timeout, not an attempt, resumed in-session),
+reviewer, attempt 2 (`A106` spec + pin). One re-review remains in budget.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1: wall-clock timeout at 60 minutes, nothing committed** — not an attempt (`A80`). PM measured the abandoned tree
+  (11 modified files, `painted-selection.ts` deleted, `contained-own-selection.ts` new, typecheck exit 2 with 17 errors in six
+  suites, tests 779 passed / 43 failed) and resumed **the same session** with three commit-per-green checkpoints, explicitly
+  allowing a partial committed delivery.
+- **attempt 1 resumed delivered 4 commits**: `0f19bec` (behavior), `b064301` (pins), `31977fe` (carried comments), `b6643b1`
+  (branch pins). PM-measured gates: build exit 0 (10 files), `npm test` exit 0 → **851 / 43 files**, checker exit 0 → 0/0/103,
+  typecheck exit 0, tree clean. `claimSelection` and `painted-selection.ts` are gone from `src/`, `tests/` and the spec.
+- **review verdict: `blocked`** (`docs/state/t5-03-review.md`) — all nine AC pass, but the tree carries a spec-vs-code
+  contradiction: the two `re-selection` sentences describe a page-selection baseline while the code keeps the painted entry's
+  boundary points. The engineer had asked exactly this as open question 1 and the brief did not answer it — a brief fault, on
+  record here. The reviewer also judged all 12 removed test cases (all legitimate, each question re-pinned elsewhere) and listed
+  four further comment-pointer defects (its items 3–6).
+- **attempt 2 opened** under ruling `A106` (the baseline is the `PaintedEntry`, never the page selection): rewrite the two spec
+  sentences and pin the observable case by ruling name; no `src/` change.

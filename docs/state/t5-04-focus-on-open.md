@@ -43,19 +43,27 @@ browser verification item 1.
 
 - Allowed: `src/content/overlay/**`, `src/content/main.ts` only if a call site needs it, `tests/`,
   `docs/specs/content-overlay-ui.md`.
-- Forbidden: `src/core/`, `src/content/paint/**`, `src/content/create/**`, `src/content/editor/**`, `src/popup/`,
-  `src/options/`, `src/manifest.json`, dependencies, harness files, the other PM-owned specs (`A76`, `A89`).
+- Forbidden: `src/core/`, `src/content/paint/**` (except the comment line of carried item 1), `src/content/create/**`,
+  `src/content/editor/**`, `src/popup/`, `src/options/`, `src/manifest.json`, dependencies, harness files, the other PM-owned
+  specs (`A76`, `A89`).
 - Do not touch the task state file `docs/state/t5-04-focus-on-open.md`; write your report to your own artifact.
 
 ## Carried-fix checklist (`A72`)
 
 1. `src/content/paint/paint-plan.ts:105` still points at `editor/painted-selection.ts`, a module deleted in `t5-03`. Fix the
    sentence (one comment line, no code). Report `done` + `path:line`.
-2. *(the reviewer of `t5-03` may add more dead pointers of the same class; the PM numbers them into this list before the brief is
-   sent — if this line is still here when you read it, the answer is "the list is one item")*
+2. `src/content/overlay/contained-own-selection.ts:87` cites `src/content/anchor/anchor-resolve.ts` — a path that has **never**
+   existed in this repository; the rule it means lives at `src/core/anchor-resolve.ts`. One comment line.
+3. `src/content/overlay/editor.tsx:5-7` points at "Flow / Sequence 5-6" and at the Rules sentence "The editor is opened by a
+   selection, never by a foreign entry" — `t5-03` deleted that rule and renumbered the flows. Point the header at the shipped
+   rule ("opened by a click on the `tooltip`, never by a page `selection`"). Comment text only.
+4. `src/content/overlay/create-card.tsx:22` cites `create-card-controller.ts`; the file is `.tsx`.
 
-**Boundary exception (`A90` naming rule):** item 1 is a **comment-only** change in `src/content/paint/paint-plan.ts`. Cite the
-carried number in the commit message.
+Every item above is a **comment line**; report each as `done` + `path:line` or `skipped` + reason (`A72`).
+
+**Boundary exception (`A90` naming rule):** items 1–4 are **comment-only** changes in `src/content/paint/paint-plan.ts`,
+`src/content/overlay/contained-own-selection.ts`, `src/content/overlay/editor.tsx` and `src/content/overlay/create-card.tsx`.
+No shipped string, no code, no signature, no rule. Cite the carried number in the commit message.
 
 ## Gate and commit order (`A62`, `A73`, `A101`)
 
