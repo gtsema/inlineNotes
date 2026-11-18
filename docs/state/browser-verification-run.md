@@ -142,3 +142,29 @@ This is the `storage.onChanged` watch of `t4-03` (`src/content/refresh/storage-c
   host line became backlog item B6; the `tabs` install warning was never observed, so the README stopped asserting it.
 - **Run closed 2026-11-18.** Nothing among the six items failed. The only claim left without a real-Chrome confirmation is the
   `Tab` order of the card's controls in a live shadow tree, which stays pinned by `tests/content-create-card-controller.spec.ts`.
+
+---
+
+## Run 2 — Stage 5/6 behavior (planned, not yet executed)
+
+Prepared before the tasks run, so nothing gets inferred from tests later: each item is recorded as `passed` / `failed` /
+`not verified` against a real Chrome reload of `dist/`, and an item stays `not verified` if the probe cannot be built. Two probes
+are known-bad from Run 1 and must not be reused: the omnibox `Shift+Tab` probe (Chrome UI controls are in the tab order) and any
+assumption that an unpacked reload shows a permission warning.
+
+1. **Focus on open (`A97`, `A105`).** (a) select text → the caret is already in the note field; (b) the page does not scroll when
+   it does so — `preventScroll` is pinned only at the call shape in jsdom, so this is the item that proves the real behavior;
+   (c) click a tooltip → the caret is in the field with the comment; (d) after `Отмена` / `Esc` / `Сохранить` / `Удалить` the caret
+   is back on the control the page had focused; (e) when the page had focused nothing, focus is left where the browser puts it.
+2. **Tooltip as the way in (`A96`, `A104`).** Opaque from the first hover; clicking my tooltip opens the editor over the note's
+   own words; clicking a foreign tooltip does nothing; selecting inside my own note opens nothing; selecting inside a foreign
+   note opens the create card.
+3. **`A106`/`A107` baseline.** With a stale selection of other words standing on the page, clicking my tooltip and pressing
+   `Сохранить` saves cleanly; making a **new** selection across another of my own notes before the press is refused.
+4. **Per-author colours (`A94`, `A102`).** Two authors on one page → two different colours; my own notes carry no extra marker;
+   an own highlight over a foreign one blends rather than hides either.
+5. **Per-author overlap (`A93`, `A99`, `A100`).** A second note over my own words is refused with the overlap line; a note over a
+   foreign note's words is accepted.
+6. **Popup (`A98`, `A95`, `A108`).** No address line anywhere; notes still resolve on a `?utm_…` variant of the same page; one row
+   per author with `<name> — <count>`; the checkbox hides and shows **all** of that author's notes; popup `Удалить` removes that
+   author's whole set and leaves the other author's rows byte-identical; the note card's `Удалить` still removes one note.
