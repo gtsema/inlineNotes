@@ -192,3 +192,19 @@ the six-item browser list is deliberately still open (`прогон будет �
   numbered comment-only items. Standing cheap mitigation: grep every cross-file path a comment names before committing.
 - **Process:** the 60-minute wall hit `t5-03` attempt 1 with nothing committed; the same-session resume with three
   commit-per-green checkpoints delivered everything (`A80` a second time, `A73` proved again).
+
+## Stage 6 — focus on open, no popup address, popup author groups (2026-11-18)
+
+- **What worked:** the `A80` recovery pattern paid for itself twice. `t5-03` and `t5-06` both hit the 60-minute wall with
+  commit-per-green checkpoints already in place, so the recovery cost was a finish-only resume, not a re-run — and neither cost an
+  attempt.
+- **What failed (planning, not code):** `t5-06` was one task too large for one slice on this model (spec + two new core
+  operations + a popup refactor). Splitting it into `core aggregates` and `popup projection` at open time would have avoided the
+  wall. Rule: a task that names changes in two layers gets two cards from the start.
+- **What failed (ruling wording):** `A106` was written as an outcome, and the code disagreed with it; the engineer's escalation
+  turned it into the predicate `A107`. Rule for every future ruling: state **what counts as X**, never **what happens to X**.
+- **Recurring defect class, still alive:** README factual drift (a stage line frozen at «Стадии 1–4», an internal number
+  disagreement) and stale comment/AC pointers. Both were caught by review, both cost a carried slice. Cheap mitigation now in
+  practice: re-grep the limits and counts instead of trusting the previous README, and grep every cross-file path a comment names.
+- **Debt this stage added knowingly:** the blank-author popup row is pinned as unreachable-but-inert (`A110`) rather than fixed;
+  the aggregate cross-tab repaint and the `onChanged` record count have no real-Chrome proof yet — they are Run 2 items 7 and 8.

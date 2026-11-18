@@ -51,8 +51,18 @@ Report per item: `done` + `path:line`, and the four gates with exit codes. Tails
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (two commits, no escalation), reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered** in two commits: `8ece789` (items 1–3 — an aggregate-driven repaint pin added next to the surviving
+  per-entry one, `toBe` for every survivor of a group delete, the `A110` blank-author shape pinned with all three halves),
+  `81ad1f1` (item 4 — the opening-line number disagreement and the frozen «Стадии 1–4» line, counts re-measured not trusted).
+  Diff touched **only** `README.md` and two test files: `git diff --name-only c569c63..HEAD -- src` is empty, and both behavior
+  specs are untouched, which is what AC5 demanded.
+  PM-measured gates: build exit 0 → `dist/` 10 files, `npm test` exit 0 → **906 / 44 files**, checker exit 0 → 0/0/113,
+  typecheck exit 0, tree clean.
+- **review verdict: `accepted`** (`docs/state/t5-06b-review.md`) — 5/5 AC, 0 blocking, `A110` confirmed pinned rather than fixed,
+  README verified sentence by sentence including three limit spot-checks. The review's closing contribution is a numbered list of
+  **ten** things that still have no real-Chrome confirmation; items 7–10 were written into Run 2 of
+  `docs/state/browser-verification-run.md` immediately, so the browser pass inherits them as a checklist rather than a memory.

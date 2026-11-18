@@ -334,9 +334,14 @@ until the whole set is implemented; the PM rules on anything new and records it.
 | `t5-04-focus-on-open` | **accepted** (`d3ca568`+`729695c`+`b770066`+`0d0c749`+`4a630c8`, 872 tests, 0 blocking) — the caret goes into the note field on open, `preventScroll` at the call shape, focus returns on close, all six `t5-03` carried comment items closed | `content-overlay-ui.md` keyboard rule + `A97` (overturns `A74`), `A105` | engineer, reviewer |
 | `t5-05-popup-host-line` | **accepted** (`c5964aa`+`5bc2580`+`fe43182`+`64d0c48`, 875 tests, 0 blocking) — the popup renders no address in any state; the active-tab read, the page-key pins and the `tabs` permission survive | popup contract + `A98` (`A49` intact) | engineer, reviewer |
 | `t5-06-popup-author-groups` | **accepted** (`cc10d12`+`543bcbf`+`78f4c32`+`1b4f163`, 901 tests, 0 blocking) — one popup row per author `<name> — <count>`, the checkbox and `Удалить` are one aggregate core call each (`setVisibleForAuthor` / `deleteEntriesOfAuthor`, one index update per call), `visible` stays per entry with no migration | popup contract + `A95`, `A108` | engineer, reviewer |
-| `t5-06b-carried-fixes` | opened (wall-clock recovery leftovers): the page-layer repaint pin driven by the aggregate write, the popup by-identity claim, the empty-author inert-row shape pinned as accepted debt, two stale README sentences | none new (pins and prose) | engineer, reviewer |
+| `t5-06b-carried-fixes` | **accepted** (`8ece789`+`81ad1f1`, 906 tests, 0 blocking) — an aggregate-driven cross-tab repaint pin added beside the surviving per-entry one, `toBe` for every survivor of a group delete, the blank-author row pinned as accepted debt (`A110`), README re-measured; `src/` and both behavior specs untouched | none new (pins and prose) | engineer, reviewer |
 
 Order is fixed: `t5-01` before `t5-02` (overlaps must be legal before they are colored side by side), `t5-03` is independent,
 `t5-06` last (it moves visibility semantics). Gates at every acceptance: `npm run build`, `npm test`,
 `node scripts/check-agent-config.mjs`, plus `npm run typecheck`. The browser check happens **once, at the end**, and the user is
 invited then.
+
+**Stage 6 closed 2026-11-18: all four tasks accepted, 0 blocking findings outstanding, 906 tests over 44 files, `dist/` 10 files,
+checker 0 errors / 0 warnings / 113 INFO, typecheck exit 0.** Stages 5 and 6 together shipped every answered backlog item
+(B1–B6). Nothing in Stage 5/6 has a real-Chrome confirmation yet — that is Run 2 of `docs/state/browser-verification-run.md`,
+ten numbered items, and the user is invited for it now.

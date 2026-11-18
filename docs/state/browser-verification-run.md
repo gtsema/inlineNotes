@@ -168,3 +168,16 @@ assumption that an unpacked reload shows a permission warning.
 6. **Popup (`A98`, `A95`, `A108`).** No address line anywhere; notes still resolve on a `?utm_…` variant of the same page; one row
    per author with `<name> — <count>`; the checkbox hides and shows **all** of that author's notes; popup `Удалить` removes that
    author's whole set and leaves the other author's rows byte-identical; the note card's `Удалить` still removes one note.
+
+7. **Cross-tab repaint driven by the aggregate write.** Name both tabs: a popup checkbox press in tab A must hide and re-show
+   **all** of the reader's highlights in tab B of the same page, leaving a foreign author's highlights in place. Run 1 item 6
+   proved the older per-entry `setVisible` shape only; the aggregate path is pinned at
+   `tests/content-cross-tab-refresh.spec.ts:340` with a hand-fired single record.
+8. **How many `storage.onChanged` records one aggregate write produces in Chrome.** Core performs two `port.set` calls (slot then
+   index, `src/core/page-index-store.ts:151-163`), so the `A60` one-record-one-repaint count is an assumption in the browser even
+   though the unit pin hand-fires one record. Record what Chrome actually emits.
+9. **Popup group `Удалить` on a real page.** The other authors' rows unchanged, their highlights untouched; with the last row
+   removed the page shows the empty state and no highlight anywhere.
+10. **The `A110` blank-author row.** Reachable only by hand-seeding `chrome.storage.local`; either probe it explicitly (label
+    renders as « — 1», both controls do nothing, two such rows do not corrupt the list) or record it as `not verified`. Do not
+    infer it from `tests/popup-entry-list.spec.ts:849`.
