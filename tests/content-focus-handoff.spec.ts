@@ -5,15 +5,18 @@
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Terms / Aliases -> `focus on open`
  * and `focus restore`, Rules / Semantics -> the `focus on open` bullet, and AC17
  * (ruling `A97`, which overturns `A74`; the shape and the `Assumption:` half come from
- * ruling `A105`; ruling `A111` narrowed `A97` to the `editor` alone).
+ * ruling `A105`; ruling `A111` narrowed `A97` to the `editor` alone; ruling `A112` added
+ * the typing door, which opens this handover for the `selection card` at the keystroke).
  *
- * Since ruling `A111` the `editor` is the widget this handover serves, and
- * `tests/content-editor-controller.spec.ts` pins the rule **at that call site**: the
- * editor really moves the caret. `tests/content-create-card-controller.spec.ts` pins the
- * other half of the split — the card path makes **no** focus call at all, which is only
+ * Since ruling `A111` the `editor` is the widget that takes the caret **at its open**, and
+ * since ruling `A112` a `selection card` the reader typed into takes it **at the
+ * keystroke**. `tests/content-editor-controller.spec.ts` pins the rule **at the editor
+ * call site**: the editor really moves the caret.
+ * `tests/content-create-card-controller.spec.ts` and `tests/content-card-events.spec.ts`
+ * pin both halves on the card path — no focus call at the open, and the caret in the
+ * field plus a handover that every close hands back after a typing entry — all of it
  * observable through this same recorder. This file pins what those call sites cannot see
- * without a fake, and what the ruling says about the half that has no widget left to
- * hold it:
+ * without a fake, and what the ruling says about the halves no call site can state:
  *
  * - **`preventScroll: true` is one shape, owned once** (`FIELD_FOCUS_OPTIONS`): jsdom
  *   has no scrolling widget to refuse, so the promise is pinned as the argument the

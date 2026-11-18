@@ -49,6 +49,7 @@ import { CARD_CLASS, CARD_INPUT_CLASS } from '../src/content/overlay/card-style'
 import { isInsideOverlayHost } from '../src/content/capture/page-selection';
 import { saveSettings } from '../src/core/settings-store';
 import { MemoryStoragePort } from './support/memory-storage-port';
+import { recordFocusCalls } from './support/focus-calls';
 
 const AUTHOR = 'reader-one';
 const PAGE_URL = 'https://example.test/article';
@@ -96,6 +97,7 @@ const ARTICLE = [
 
 interface Wiring {
   readonly host: HTMLElement;
+  readonly root: ShadowRoot;
   readonly cardCount: () => number;
   readonly isOpen: () => boolean;
   readonly dispose: CardEventBinding;
@@ -172,10 +174,67 @@ async function wire(): Promise<Wiring> {
   active = dispose;
   return {
     host: overlay.host,
+    root: overlay.root,
     cardCount: (): number => overlay.root.querySelectorAll(`.${CARD_CLASS}`).length,
     isOpen: (): boolean => controller.isOpen(),
     dispose,
   };
+}
+
+/**
+ * A control the reader had focused on the page **before** the selection, so a case can
+ * show where the caret stood and whether a keystroke moved it.
+ */
+function pageControl(id: string): HTMLElement {
+  const control = document.createElement('button');
+  control.id = id;
+  control.textContent = 'Read more';
+  document.body.append(control);
+  control.focus();
+  if (document.activeElement !== control) {
+    throw new Error('the fixture page control is not the document answer');
+  }
+  return control;
+}
+
+/**
+ * One real key press: `composed`, so it crosses the shadow boundary the way a browser
+ * key does, and `cancelable`, so `defaultPrevented` is observable (`t6-02` AC2).
+ */
+function keyPress(init: { key: string; ctrl?: boolean; meta?: boolean; alt?: boolean }): KeyboardEvent {
+  return new KeyboardEvent('keydown', {
+    key: init.key,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    ctrlKey: init.ctrl === true,
+    metaKey: init.meta === true,
+    altKey: init.alt === true,
+  });
+}
+
+/** The note field of the one open card. */
+function fieldOf(wiring: Wiring): HTMLTextAreaElement {
+  const field = wiring.root.querySelector(`.${CARD_INPUT_CLASS}`);
+  if (!(field instanceof HTMLTextAreaElement)) {
+    throw new Error('expected the card note field inside the shadow root');
+  }
+  return field;
+}
+
+/**
+ * One open card with a page control holding the document caret: the state Run 3 item 2
+ * describes, a mouse selection while the page still owns the focus.
+ */
+async function openWithPageCaret(id: string): Promise<{ wiring: Wiring; control: HTMLElement }> {
+  const wiring = await wire();
+  const control = pageControl(id);
+  selectPageText('p1', 4, 15);
+  await openCard(wiring);
+  if (document.activeElement !== control) {
+    throw new Error('the fixture lost the page caret before the keystroke');
+  }
+  return { wiring, control };
 }
 
 beforeEach(() => {
@@ -357,6 +416,7 @@ describe('the settle delay is a constant the spec pins (ruling A63)', () => {
         close: (): void => undefined,
         isOpen: (): boolean => false,
         selectionMovedElsewhere: (): boolean => false,
+        takeCaretForTyping: (): void => undefined,
       },
       document,
       window,
@@ -372,5 +432,174 @@ describe('the settle delay is a constant the spec pins (ruling A63)', () => {
     } finally {
       dispose();
     }
+  });
+});
+
+/**
+ * The keyboard door of ruling `A112` (task `t6-02`). Run 3 item 2 of
+ * `docs/state/browser-verification-run.md` measured in real Chrome that `Tab` does not
+ * reach an open card, so the card's door is a printable keystroke: the wiring asks the
+ * controller to move the caret into the note field, and the decision of **which**
+ * keystroke that is lives in this module and nowhere else. The caret move itself is
+ * `focus-handoff.ts`'s, and these cases pin the call the wiring caused (with
+ * `preventScroll`) rather than re-pinning the handover.
+ */
+describe('typing opens the card for the caret (t6-02 AC1, ruling A112)', () => {
+  // `key.length === 1` is the test, so the door does not depend on a keyboard layout or
+  // on a key-name table: Cyrillic, Latin, a digit and punctuation all enter.
+  for (const key of ['п', 'a', '7', ',']) {
+    it(`the ${JSON.stringify(key)} keystroke moves the caret into the note field with preventScroll (t6-02 AC1)`, async () => {
+      const { wiring } = await openWithPageCaret('cta-typing');
+      const field = fieldOf(wiring);
+      const recorder = recordFocusCalls();
+      try {
+        document.dispatchEvent(keyPress({ key }));
+        expect(wiring.root.activeElement).toBe(field);
+        expect(document.activeElement).toBe(wiring.host);
+        const calls = recorder.callsOn(field);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.options).toEqual({ preventScroll: true });
+        expect(recorder.calls()).toHaveLength(1);
+      } finally {
+        recorder.restore();
+      }
+    });
+  }
+});
+
+describe('the door leaves the keystroke to the page (t6-02 AC2)', () => {
+  it('opens the field without default-preventing the keystroke', async () => {
+    const { wiring } = await openWithPageCaret('cta-ac2');
+    const field = fieldOf(wiring);
+    const event = keyPress({ key: 'a' });
+    const notCancelled = document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(notCancelled).toBe(true);
+    expect(wiring.root.activeElement).toBe(field);
+  });
+
+  it('ships no preventDefault call in the page wiring of the card', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/content/overlay/card-events.ts'),
+      'utf8',
+    );
+    // A call, not the word: the module's own comments are allowed to say it does not
+    // call it.
+    expect(source).not.toMatch(/\.\s*preventDefault\s*\(/);
+  });
+});
+
+describe('a keystroke that is not the door (t6-02 AC3)', () => {
+  const NON_TRIGGERS: ReadonlyArray<{
+    label: string;
+    init: { key: string; ctrl?: boolean; meta?: boolean; alt?: boolean };
+  }> = [
+    { label: 'Space', init: { key: ' ' } },
+    { label: 'Tab', init: { key: 'Tab' } },
+    { label: 'Enter', init: { key: 'Enter' } },
+    { label: 'Backspace', init: { key: 'Backspace' } },
+    { label: 'Escape', init: { key: 'Escape' } },
+    { label: 'ArrowDown', init: { key: 'ArrowDown' } },
+    { label: 'a with ctrlKey', init: { key: 'a', ctrl: true } },
+    { label: 'п with metaKey', init: { key: 'п', meta: true } },
+    { label: 'a with altKey', init: { key: 'a', alt: true } },
+  ];
+
+  // One case per key, each showing the card received **no** focus: a single table loop
+  // would let one key silently inherit another's verdict.
+  for (const testCase of NON_TRIGGERS) {
+    it(`${testCase.label} leaves the card unfocused and the page caret where it was (t6-02 AC3)`, async () => {
+      const { wiring, control } = await openWithPageCaret('cta-ac3');
+      const recorder = recordFocusCalls();
+      try {
+        const event = keyPress(testCase.init);
+        const notCancelled = document.dispatchEvent(event);
+        expect(wiring.root.activeElement).toBeNull();
+        expect(document.activeElement).toBe(control);
+        expect(recorder.calls()).toEqual([]);
+        expect(event.defaultPrevented).toBe(false);
+        expect(notCancelled).toBe(true);
+        expect(wiring.isOpen()).toBe(true);
+        expect(wiring.cardCount()).toBe(1);
+      } finally {
+        recorder.restore();
+      }
+    });
+  }
+});
+
+describe('no door when there is no card, and none a second time (t6-02 AC4)', () => {
+  it('moves nothing for a printable keystroke while no card is open', async () => {
+    const wiring = await wire();
+    const control = pageControl('cta-ac4-closed');
+    selectPageText('p1', 4, 15);
+    await openCard(wiring);
+    window.dispatchEvent(new Event('scroll'));
+    expect(wiring.isOpen()).toBe(false);
+
+    const recorder = recordFocusCalls();
+    try {
+      document.dispatchEvent(keyPress({ key: 'a' }));
+      expect(recorder.calls()).toEqual([]);
+      expect(document.activeElement).toBe(control);
+      expect(wiring.isOpen()).toBe(false);
+      expect(wiring.cardCount()).toBe(0);
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('stops being a door once the page wiring is detached', async () => {
+    const { wiring } = await openWithPageCaret('cta-ac4-detached');
+    const recorder = recordFocusCalls();
+    try {
+      wiring.dispose();
+      document.dispatchEvent(keyPress({ key: 'a' }));
+      expect(recorder.calls()).toEqual([]);
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('does not move a caret that already stands inside the overlay host', async () => {
+    const { wiring } = await openWithPageCaret('cta-ac4-inside');
+    const field = fieldOf(wiring);
+    const recorder = recordFocusCalls();
+    try {
+      document.dispatchEvent(keyPress({ key: 'a' }));
+      expect(recorder.calls()).toHaveLength(1);
+
+      // The caret answers as the host from now on (shadow retargeting), whichever node
+      // the press was dispatched on: the field keeps its own keys, and the page's keys
+      // are not touched a second time.
+      document.dispatchEvent(keyPress({ key: 'b' }));
+      field.dispatchEvent(keyPress({ key: 'c' }));
+      wiring.root.dispatchEvent(keyPress({ key: 'п' }));
+      expect(recorder.calls()).toHaveLength(1);
+      expect(wiring.root.activeElement).toBe(field);
+      expect(document.activeElement).toBe(wiring.host);
+      expect(wiring.isOpen()).toBe(true);
+    } finally {
+      recorder.restore();
+    }
+  });
+});
+
+describe('no artifact claims that Tab is the way in (t6-02 AC7, AC8)', () => {
+  const spec = readFileSync(join(process.cwd(), 'docs/specs/content-overlay-ui.md'), 'utf8');
+  const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+
+  it('keeps the sentence Run 3 measured false out of both artifacts', () => {
+    expect(spec).not.toContain('is now the only way in');
+    expect(spec).not.toContain('the only way the card puts it anywhere');
+    expect(readme).not.toContain('единственный');
+  });
+
+  it('states the door in both artifacts', () => {
+    expect(spec).toContain('Typing is the card');
+    expect(spec).toContain('key.length === 1');
+    expect(spec).toContain('`Space`');
+    expect(readme).toContain('Дверь в карточку — **набор текста**');
+    expect(readme).toContain('A112');
   });
 });

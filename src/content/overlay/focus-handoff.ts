@@ -1,30 +1,35 @@
 /**
- * The focus handover of one open widget: where the caret goes when a widget opens,
- * and where it goes back when the widget closes (task `t5-04`, ruling `A97`, which
- * overturns `A74`, the shape ruling `A105`, and the split ruling `A111`, which narrowed
- * `A97` to the `editor` alone).
+ * The focus handover of one open widget: the moment a widget takes the caret, and the
+ * moment it gives it back (task `t5-04`, ruling `A97`, which overturns `A74`, the shape
+ * ruling `A105`, the split ruling `A111`, which narrowed `A97` to the `editor` alone, and
+ * the typing door of ruling `A112`, which opens this module for the `selection card` at
+ * the keystroke and not at the open).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Terms / Aliases -> `focus on
  * open` and `focus restore`, Rules / Semantics -> the `focus on open` bullet, and
- * AC17. The one shipped call site is `editor-controller.tsx` (`open`, `close`): since
- * ruling `A111` the selection card calls this module nowhere, because a focus that
- * enters an editable element ends the very page selection that card is opened from. This
- * module owns the handover and nothing else — not which widget is open, not the write,
- * not the placement.
+ * AC17. Its shipped call sites are `editor-controller.tsx` (`open`, `close`) and,
+ * since ruling `A112` (task `t6-02`), `create-card-controller.tsx` (`takeCaretForTyping`,
+ * which runs at the printable keystroke and never at the open, and `close`): the card
+ * still takes nothing at its open, because a focus that enters an editable element ends
+ * the very page selection that card is opened from (ruling `A111`), and it takes the
+ * caret only when the reader types it in. This module owns the handover and nothing else
+ * — not which widget is open, not the write, not the placement, and not which keystroke
+ * counts as the door (that decision is `card-events.ts`).
  *
  * Two decisions live here and nowhere else:
  *
- * - **the caret goes into the note field on open**, because ruling `A97` is the
- *   reader's own request: a `tooltip` click, and the field already holds the comment.
- *   The widget that asks for this is the `editor`; the selection card never reaches this
- *   module (ruling `A111`). Every focus call of the overlay passes `preventScroll: true`
- *   — the exported `FIELD_FOCUS_OPTIONS` is the one shape for it. The overlay host is
- *   `position: fixed`, so a focus that scrolled
- *   the page would move the article out from under the widget the reader is looking
- *   at; and because no test DOM can show a scroll, the option is pinned at the call
- *   shape rather than by an outcome (`t5-04` AC3).
+ * - **the caret goes into the note field**, because ruling `A97` is the reader's own
+ *   request for the `editor` (a `tooltip` click, the field already holds the comment) and
+ *   ruling `A112` is the reader's own request for the `selection card`: the keystroke the
+ *   reader types to get the caret in. Every focus call of the overlay passes
+ *   `preventScroll: true` — the exported `FIELD_FOCUS_OPTIONS` is the one shape for it.
+ *   The overlay host is `position: fixed`, so a focus that scrolled the page would move
+ *   the article out from under the widget the reader is looking at; and because no test
+ *   DOM can show a scroll, the option is pinned at the call shape rather than by an
+ *   outcome (`t5-04` AC3).
  * - **closing hands the caret back** (`focus restore`), the `Assumption:` half of the
- *   ruling and, since ruling `A111`, the half the `editor` alone uses: without it the
+ *   ruling and, since ruling `A111`, the half the `editor` takes at its open and since
+ *   ruling `A112` the half of a `selection card` the reader typed into: without it the
  *   document's active element would stand inside a shadow tree
  *   that was just emptied, and the reader would have to tab through the whole page to
  *   get back. Only an element that is **still connected** gets it back; when it is
@@ -54,13 +59,17 @@ export interface FocusHandoff {
   /**
    * Records what the page had focused, then moves the caret into the note field of
    * `wrapper`. Call it **after** the host is revealed: a field inside a hidden host is
-   * not focusable, so the order is part of the rule, not a detail.
+   * not focusable, so the order is part of the rule, not a detail. The `editor` calls it
+   * at its open (`A97`); the `selection card` calls it at the typing keystroke and never
+   * at its open (`A111`, `A112`).
    */
   open(wrapper: HTMLElement): void;
   /**
    * Hands the caret back to the element recorded at `open`, and only while that element
    * is still connected. Call it **after** the widget was unmounted: restoring before
-   * the unmount would have the unmount take the caret away again.
+   * the unmount would have the unmount take the caret away again. A widget that never
+   * called `open` restores nothing, which is what keeps the `A111` proof of a card
+   * nobody typed into intact.
    */
   restore(): void;
 }

@@ -4,25 +4,36 @@
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Flow / Sequence 1-2, Rules /
  * Semantics -> "Card placement" (ruling `A30`), "Card lifetime" (ruling `A32`),
  * "Settings gate before the card" (ruling `A31`), "The `contained own selection`"
- * (ruling `A103`), "Refusal message map" (ruling `A33`), "`focus on open`" (rulings
- * `A97`, `A105`, **split by ruling `A111`**); task `t3-01` AC1, AC3, AC4, AC5, task
- * `t5-03` AC4, AC5, AC6, and task `t6-01` AC1 — the card half of `t5-04` AC1, AC3, AC4
- * was rewritten to that ruling, not dropped.
+ * (ruling `A103`), "Refusal message map" (ruling `A33`), "`focus on open`" and "`focus
+ * restore`" (rulings `A97`, `A105`, **split by ruling `A111`**, **typing door by ruling
+ * `A112`**); task `t3-01` AC1, AC3, AC4, AC5, task `t5-03` AC4, AC5, AC6, task `t6-01`
+ * AC1 — the card half of `t5-04` AC1, AC3, AC4 was rewritten to that ruling, not
+ * dropped — and task `t6-02` AC5, AC6 for the keystroke door and the restore it opens.
  *
  * One card at a time, and the controller is the only writer of the host's visible
  * state for this widget: it opens, it closes, and it never repositions an open card
  * (ruling `A32` — a card over moved text is closed, not chased).
  *
- * **The card takes no focus** (ruling `A111`, task `t6-01` AC1, which restores the
- * `A74` half for this path and leaves the caret-into-the-field of `A97` to the
- * `editor`): `open` makes **no focus call at all**, and no close path hands anything
- * back. The reason is this module's own shape: the card is opened **from** the page
- * selection and reads it once here, and in Chrome a focus that enters an editable
- * element ends that selection — so the caret `A97` moved into the field destroyed the
- * gesture that opened the card. Nothing is taken, so nothing is restored, and this
- * module calls `focus-handoff.ts` nowhere; that module stays the single owner of the
- * focus rules for the widget that does take the caret. The reader reaches the controls
- * with `Tab`, in the rendered order.
+ * **The card takes no focus on open** (ruling `A111`, task `t6-01` AC1, which restores
+ * the `A74` half for this path and leaves the caret-into-the-field of `A97` to the
+ * `editor`): `open` makes **no focus call at all**. The reason is this module's own
+ * shape: the card is opened **from** the page selection and reads it once here, and in
+ * Chrome a focus that enters an editable element ends that selection — so the caret
+ * `A97` moved into the field destroyed the gesture that opened the card.
+ *
+ * **Typing is the door** (ruling `A112`, task `t6-02`, after Run 3 item 2 of
+ * `docs/state/browser-verification-run.md` measured in Chrome that `Tab` does not reach
+ * an open card): `takeCaretForTyping` is the card's **only** focus moment, and it runs
+ * at the keystroke, never at the open. `card-events.ts` decides which keystroke counts
+ * and calls this method; the caret move itself goes through `focus-handoff.ts`, the
+ * overlay's one focus owner, so the handover records what the page held **before that
+ * keystroke**, the field is focused with `FIELD_FOCUS_OPTIONS` (`preventScroll: true`),
+ * and from that moment every close path of this card hands the caret back (`close` →
+ * `restore`), exactly as the `editor` has since `A105`. A card nobody typed into still
+ * makes no focus call on any close path: the handover was never opened, so `restore`
+ * has nothing to restore and forces nothing. This module holds no `focus()` call of its
+ * own, and no `tabindex` and no `Tab` interception appear anywhere — the rule is
+ * layout-independent by construction.
  *
  * The two moments of a capture, and they are deliberately not shared:
  * - **opening** measures the selection once (one stream, one pass) to decide
@@ -83,6 +94,7 @@ import type { Viewport } from './card-placement';
 import { CARD_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
 import { isContainedOwnSelection } from './contained-own-selection';
 import { CreateCard } from './create-card';
+import { createFocusHandoff } from './focus-handoff';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
 import type { PaintedEntry } from '../paint/paint-plan';
@@ -138,6 +150,13 @@ export interface CreateCardController {
    * card keeps its text, because the user may be typing.
    */
   selectionMovedElsewhere(range: Range | null): boolean;
+  /**
+   * Ruling `A112` (task `t6-02`): the printable keystroke that enters the card. Moves
+   * the caret into the open card's note field and records what the page held **before
+   * that keystroke**, so every close of this card hands it back (`A105`). It is the
+   * card's only focus moment: `open` still calls nothing (ruling `A111`).
+   */
+  takeCaretForTyping(): void;
 }
 
 /**
@@ -156,6 +175,13 @@ export function createCreateCardController(
   const viewport = options.viewport ?? defaultViewportOf(doc);
 
   let session: CardSession | null = null;
+
+  /**
+   * The card's focus handover: opened by the typing keystroke of ruling `A112` and
+   * restored by every close. One instance per controller, like the editor's, and this
+   * module never calls `focus()` itself.
+   */
+  const focus = createFocusHandoff(doc, overlay);
 
   async function submit(comment: string): Promise<CreateNoteResult> {
     if (session === null) {
@@ -196,7 +222,22 @@ export function createCreateCardController(
     positionCard(anchorBox);
     // `A111` (task `t6-01` AC1): no focus call here. The page keeps the element it had
     // focused, because a focus moving into this `textarea` is what ends the page
-    // selection this card was opened from; the reader reaches the controls with `Tab`.
+    // selection this card was opened from. The reader gets the caret in by typing
+    // (`A112`, `takeCaretForTyping`), which happens later and is a keystroke the reader
+    // chose, not an intrusion at open.
+  }
+
+  /**
+   * `A112` (task `t6-02`): the door is the keystroke. Guarded here as well as in
+   * `card-events.ts` — a keystroke that finds no open card moves nothing — and the
+   * reveal has already happened, because a field inside a hidden host takes no focus
+   * (`t5-04` AC2).
+   */
+  function takeCaretForTyping(): void {
+    if (session === null) {
+      return;
+    }
+    focus.open(wrapper);
   }
 
   function close(): void {
@@ -208,8 +249,12 @@ export function createCreateCardController(
     wrapper.style.left = '';
     wrapper.style.top = '';
     setOverlayHostHidden(overlay, true);
-    // `A111`: no restore call either. This path never took the caret, so it has nothing
-    // to hand back, and inventing a focus here would be a focus the reader never had.
+    // `A112` + the `focus restore` half of `A105`: after the unmount, and on **every**
+    // close path. Only a card the reader typed into has a handover open at this point,
+    // so for a card nobody typed into this call restores nothing and forces nothing —
+    // the `A111` negative proof of task `t6-01` AC1 still holds, and a page element that
+    // left the document is never substituted (`t5-04` AC4).
+    focus.restore();
   }
 
   /**
@@ -318,6 +363,7 @@ export function createCreateCardController(
     close,
     isOpen: (): boolean => session !== null,
     selectionMovedElsewhere,
+    takeCaretForTyping,
   };
 }
 
