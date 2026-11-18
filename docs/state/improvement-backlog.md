@@ -161,3 +161,13 @@ These three name the shape, so the engineer's only job is to implement and test 
   consequence, pinned by name: a page that already holds a stale selection when the tooltip is clicked saves cleanly (no overlap
   refusal), and only a **new** selection differing from the note's own words asks the own-author overlap question. Rejected
   alternative: the page-selection baseline, which would let a selection the reader never made refuse a save.
+
+- `A107` (**what a `re-selection` is; amends `A106`**): the overlap baseline remains the painted span of the entry the tooltip
+  click opened, **and** a page selection that was **already present when the editor opened** is never a `re-selection` — a
+  `re-selection` is a selection that **appears or changes while the editor stands**. The engineer's escalation produced this
+  ruling: my `A106` sentence asserted an outcome ("a stale selection saves cleanly") instead of a rule, and the shipped code
+  judged a stale selection lying across another of my own notes as an `overlap` and refused the save. That refusal is the defect
+  class `A104` exists to avoid: a selection the reader never made during the editing session decides whether their save lands.
+  Authorized narrowly: the code half may change **only** in `src/content/overlay/editor-controller.tsx` (capture the open-moment
+  selection state; compare at the press). Pinned as four cases: stale over free words → lands; new across my own other note →
+  refused; **stale across my own other note → lands** (the discriminating case); none-then-new over free words → asked and lands.
