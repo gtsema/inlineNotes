@@ -124,3 +124,25 @@ Ruled and **scheduled**: Stage 5 = `t5-01-author-overlap`, `t5-02-author-colors`
 - Process note for the retro: the escalation arrived **before** any line was written, and it caught a contradiction inside my own
   brief (AC8 vs the card's own identity sentence) plus a scope hole the spec made visible. That is the brief-reading behavior I
   want; the fix on my side is to never write "exact equality" and "the same identity as X" in one paragraph.
+
+## Shape rulings issued at delegation time (`A102`–`A104`)
+
+The user's answers fix **behavior**, not implementation; a brief that leaves the shape to the engineer invites a redesign mid-task.
+These three name the shape, so the engineer's only job is to implement and test it.
+
+- `A102` (**the palette lives in the paint layer, 6 slots, index = `fnv1a32(authorName) % 6`**): a new
+  `src/content/paint/paint-palette.ts` holds exactly six declaration sets; slot 0 keeps the shipped blue `rgba(122, 162, 247, 0.26)`
+  verbatim so a one-author page can look unchanged. The slot index reuses the hash core already ships
+  (`fnv1a32`, `src/core/slot-key.ts:117`) by **import** — content→core is the allowed direction, so no core file is edited and no
+  second hash appears. `paint-plan.ts` attaches the slot from the entry's `authorName`; `paint-style.ts` keeps emitting **one rule
+  per entry name** (`A70`) and only swaps the declarations. Rejected alternatives: one highlight name per author (breaks the
+  per-entry hit-testing `A70` depends on), a per-author unbounded palette (a stylesheet that grows with the page), and storing the
+  color in the entry (a display property in a stored record would strand old records when the palette changes).
+- `A103` (**when a selection opens nothing**): only a selection **wholly inside one of my own** entry's resolved range is silent.
+  A selection inside a **foreign** note opens the create card (legal since `A93`), and a selection **partially** covering my own
+  note opens the create card whose save is then refused by the own-author overlap rule of `t5-01`. Narrowing the silence to the
+  strictly-contained own case is what keeps one rule instead of three near-duplicates.
+- `A104` (**how the editor opens with no selection**): the tooltip click opens the editor over the entry's **own resolved range
+  from the paint pass**; no selection, no re-derivation, `A78` untouched (`comment` + `updatedAt` only). The re-selection overlap
+  check stays where it is with the self-exclusion of `A45`/`A100` — it simply has nothing to collide with. Deleting it would be a
+  silent behavior change under a task that did not ask for one.
