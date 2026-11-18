@@ -26,6 +26,9 @@ interface ManifestShape {
   host_permissions?: string[];
   optional_permissions?: string[];
   action?: { default_popup?: string };
+  /** Ruling `A118`: the settings surface is a Chrome window, not a tab. */
+  options_ui?: { page?: string; open_in_tab?: boolean };
+  /** Declared in this shape only so the `A118` absence pin compiles; Chrome rejects the pair. */
   options_page?: string;
   content_scripts?: { matches?: string[]; js?: string[] }[];
 }
@@ -80,12 +83,36 @@ function readManifest(): ManifestShape {
 }
 
 describe('manifest contract', () => {
-  it('is an MV3 manifest with popup, options and a content script', () => {
+  it('is an MV3 manifest with popup, an options window and a content script', () => {
     const manifest = readManifest();
     expect(manifest.manifest_version).toBe(3);
     expect(typeof manifest.action?.default_popup).toBe('string');
-    expect(typeof manifest.options_page).toBe('string');
+    // Ruling `A118`: the settings surface is a Chrome **window**, not a tab. The shape is
+    // pinned all three ways: the key that sizes it is `open_in_tab: false`, the page it
+    // renders is the options build, and the key Chrome rejects beside `options_ui` —
+    // `options_page` — is absent, so the pair can never come back.
+    expect(manifest.options_ui?.page).toBe('options/index.html');
+    expect(manifest.options_ui?.open_in_tab).toBe(false);
+    expect(manifest.options_page).toBeUndefined();
     expect(manifest.content_scripts?.[0]?.js).toContain('content.js');
+  });
+
+  it('resolves the options window in the dist/ reference check, not an options tab (ruling A118)', () => {
+    // The build script's reference check is the only mechanical proof that every file the
+    // manifest points at really ships. Reading only `manifest.options_page` would make it
+    // check nothing the moment the manifest moved to `options_ui`, so the check itself is
+    // pinned: it reads the key the manifest really declares, and it still reads the popup,
+    // the content script and the background worker.
+    const script = codeOnly(
+      readFileSync(join(projectRoot, 'scripts', 'build-extension.mjs'), 'utf8'),
+    );
+    expect(script).toMatch(/manifest\.options_ui\?\.page/);
+    expect(script).not.toMatch(/manifest\.options_page/);
+    expect(script).toMatch(/manifest\.action\?\.default_popup/);
+    expect(script).toMatch(/entry\.js/);
+    expect(script).toMatch(/entry\.css/);
+    expect(script).toMatch(/manifest\.background\?\.service_worker/);
+    expect(script).toMatch(/manifest\.icons/);
   });
 
   it('registers the content script for http and https only', () => {

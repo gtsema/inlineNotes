@@ -98,8 +98,11 @@ function verifyManifestReferences(manifest) {
   if (typeof manifest.action?.default_popup === 'string') {
     references.push(manifest.action.default_popup);
   }
-  if (typeof manifest.options_page === 'string') {
-    references.push(manifest.options_page);
+  // Ruling `A118`: the settings surface is declared as `options_ui`, and Chrome rejects
+  // the `options_page` + `options_ui` pair, so this is the only options key the check
+  // resolves. `tests/toolchain-contract.spec.ts` pins the absence of `options_page`.
+  if (typeof manifest.options_ui?.page === 'string') {
+    references.push(manifest.options_ui.page);
   }
   if (typeof manifest.background?.service_worker === 'string') {
     references.push(manifest.background.service_worker);
