@@ -239,3 +239,19 @@ These three name the shape, so the engineer's only job is to implement and test 
   **rewritten** to the surviving close path, never deleted; (7) tab order becomes card `textarea` → save, editor `textarea` → save
   → delete, still no `tabindex`; (8) unchanged by this ruling and still pinned: save disabled while the trimmed comment is empty or
   over the cap, `Ctrl/Cmd+Enter` saves, `Esc` writes nothing, no delete affordance for a foreign entry.
+
+- `A115` (**the rule duplicated across two specs, and the clause the shipped build never matched — PM decision on `t7-01`'s
+  blocking finding**): edit rights are owned by `docs/specs/inline-comment-model.md`, and its AC7 still promised
+  "Save/Cancel/Delete" while the shipped editor renders Save and Delete only. Ruled: the model line follows the ruling, not the
+  other way round — AC7 now names the two surviving controls of the compact icon-only row and states that closing is a click
+  outside the overlay host or `Esc`. The same ruling corrects model AC2, which claimed the Save control is disabled at the cap:
+  a draft is cut to the cap as it is typed or pasted (`src/content/overlay/create-card.tsx:82-88`), so an over-cap value is never
+  representable in the field; Save is disabled **only** while the trimmed comment is empty, which is what
+  `tests/content-card-actions.spec.ts:395-397` already asserted. A rule that lives in two specs must be edited in both in the same
+  commit — that is the defect class this ruling closes.
+- `A116` (**historical browser rows are never rewritten**): `t7-01`'s review noticed that Runs 1–4 of
+  `docs/state/browser-verification-run.md` still tell the reader to press `Отмена` and to read the order
+  `textarea → Сохранить → Отмена`. Those rows are observations of the build of their own time; rewriting them would falsify the
+  record. Ruled: a superseding note at the top of the file names what changed and from which run, and old rows stay byte-for-byte
+  intact. This is the opposite case of the `A112` fix, where a **live** spec sentence was corrected because it described the
+  current build.

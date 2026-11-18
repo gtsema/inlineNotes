@@ -376,6 +376,7 @@ checker 0/0/115; typecheck exit 0; `dist/` 10 files. Two comment/test debt items
 
 | Task | Slice | Spec / AC anchor | Children |
 |---|---|---|---|
-| `t7-01-card-compact-actions` | `Отмена` removed from both widgets; save and delete become 24×24 inline-SVG icon buttons with `aria-label`/`title` in Russian; popup and options untouched | `content-overlay-ui.md` (controls, keyboard order, editor AC) + `A114` | engineer, reviewer |
+| `t7-01-card-compact-actions` | **accepted** (`922b068`+`f20ec92`+`f1a5fc0`, 954 tests over 45 files, 0 code findings) — `Отмена` gone from both widgets, save/delete are 24×24 inline-SVG icon buttons with Russian `aria-label`/`title`, every removed pin has a named replacement in the reviewer's destruction audit | `content-overlay-ui.md` + `A114`; the reviewer's **`blocked`** verdict was a spec-vs-code conflict inside a file the task was forbidden to touch, closed by PM rulings `A115`/`A116` | engineer, reviewer |
+| `t7-01b-actions-row-cleanup` | opened: an action row with **no** controls is not rendered (a foreign entry's read-only editor was showing an empty 24px band), the three frame-color declarations get their pin, and the new test file's AC labels are corrected | `content-overlay-ui.md` action-row line + `A115` | engineer, reviewer |
 
 One task. It carries the two debt items `t6-02` left (`card-events.ts` comment, the restore-options assertion).

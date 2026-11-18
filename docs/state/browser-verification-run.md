@@ -5,6 +5,12 @@ inferred from tests: jsdom pins the shape, this file is the only place where rea
 
 Run log lives in this file only. A `failed` item opens a fix task; it is never fixed by rewording a spec.
 
+> **Historical rows are not rewritten** (ruling `A116`). Runs 1–4 were executed against the build of their own time, and several of
+> their rows name controls and keyboard paths that no longer exist: the `Отмена` button and the tab order
+> `textarea → Сохранить → Отмена` belonged to every build before ruling `A114` (Stage 8, 2026-11-18). From **Run 5** the control set
+> is the compact icon-only row: card `поле → ✓`, editor `поле → ✓ → корзина`, and closing is a click outside the card or `Esc`.
+> Reading an old row as an instruction is a mistake; reading it as a record of what was true then is the point of this file.
+
 ## Preflight (record once)
 
 - Chrome version: **157.0.8103.38**

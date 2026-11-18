@@ -131,12 +131,12 @@ Out of scope: how the highlight is painted and how the popup is rendered (`conte
 Each verifiable without re-reading the implementation:
 
 1. With a name set, selecting text and saving a ≤256-char comment stores exactly one entry under `notes:v1:<slotKey>` of its `pageKey`; reopening the same URL shows it again.
-2. A 257-code-point comment cannot be saved; the counter shows `256/256` at the cap and the Save button is disabled.
+2. A 257-code-point comment cannot be saved; the counter shows `256/256` at the cap and the card keeps the **Save control enabled** there, because a draft is cut to the cap as it is typed or pasted, so an over-cap value is never representable in the field; Save is disabled only while the trimmed comment is empty (ruling `A115`, which corrects a clause that the shipped build never matched — `src/content/overlay/create-card.tsx:82-88`, pinned at `tests/content-card-actions.spec.ts:395-397`).
 3. The 21st entry on a page cannot be created and the refusal message is shown.
 4. An entry created on `https://example.com/a?utm_source=x#sec` is found on `https://example.com/a?utm_source=y&fbclid=1`.
 5. An entry whose text was deleted from the page shows no highlight but is still listed in the popup and can be deleted.
 6. A selection intersecting the range of an entry **of the current author** is refused with the overlap message; a selection intersecting only an entry of another author is accepted and creates (ruling `A93`); a selection touching a range at one boundary is accepted.
-7. With `authorName` of the entry equal to the current name, the editor offers Save/Cancel/Delete and Save updates `comment` + `updatedAt` without changing `id`.
+7. With `authorName` of the entry equal to the current name, the editor offers the **Save and Delete** controls of the compact icon-only action row (ruling `A114` — there is no Cancel control in either widget, closing is a click outside the overlay host or `Esc`), and Save updates `comment` + `updatedAt` without changing `id`.
 8. With a different current name, the same entry offers no Save/Delete; its tooltip is read-only.
 9. With no name in settings, no card opens on selection and the popup shows the name-required message.
 10. Deleting one entry and clearing a page affect only that entry / only that page's entries.
