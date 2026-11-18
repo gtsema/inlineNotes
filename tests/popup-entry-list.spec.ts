@@ -194,6 +194,12 @@ describe('AC1 the popup lists the current page through core', () => {
       {
         url: PAGE_URL,
         withEntry: false,
+        name: OWN_NAME,
+        forbidden: ['example.com', 'https://'],
+      },
+      {
+        url: PAGE_URL,
+        withEntry: false,
         name: null,
         forbidden: ['example.com', 'https://'],
       },
@@ -241,6 +247,12 @@ describe('AC1 the popup lists the current page through core', () => {
     expect(template).toMatch(/class="notice notice--not-injectable"/);
     expect(template).toMatch(/class="empty"/);
     expect(template).toMatch(/class="rows"/);
+
+    // No Russian string of this layer smuggles an address back in: every value is a
+    // finished sentence, and none of them carries a scheme, a host or a punycode form.
+    for (const sentence of [...Object.values(POPUP_STRINGS), ...Object.values(POPUP_NOTICE_TEXT)]) {
+      expect(sentence).not.toMatch(/https?:|www\.|xn--|\.com|\.рф|\/\//);
+    }
   });
 
   it('shows no row for a record the core read guard skips', async () => {
