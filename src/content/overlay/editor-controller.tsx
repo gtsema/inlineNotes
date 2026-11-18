@@ -12,7 +12,7 @@
  * `docs/specs/inline-comment-model.md` -> "Edit rights", "Overlap", "Staleness".
  * Task `t3-03` AC2-AC5 for the editor itself, and task `t5-03` AC1, AC2, AC3, AC7,
  * AC8, AC9 for the half ruling `A96` and ruling `A104` changed; rulings `A42`, `A43`,
- * `A44`, `A45`, `A64`, `A65`, `A74`, `A78`, `A96`, `A104`.
+ * `A44`, `A45`, `A64`, `A65`, `A74`, `A78`, `A96`, `A104`, `A106`, `A107`.
  *
  * One editor at a time, and this controller is the only writer of the widget's open
  * state. It never repositions an open editor: the overlay spec's answer to moved text
@@ -39,18 +39,33 @@
  * waiting behind it.
  *
  * **The range rule, and where it is decided.** Saving an unchanged selection is a
- * comment edit: the entry keeps the span it has (ruling `A45`). The baseline of that
- * comparison is the `resolved span` the editor was opened over — the fragment set the
- * `paint pass` registered (ruling `A104`) — and it is compared with the page selection
- * at the moment the save button is pressed; only a difference is a `re-selection`, and
- * only a `re-selection` is handed to the edit path as a new span to check. So the reader
- * who clicks the `tooltip`, selects the note's own words again (a selection that opens
- * nothing, ruling `A103`) and then saves has changed the comment and nothing else, while
- * a reader who selects other text has moved the note's subject and gets the `overlap`
- * answer of ruling `A78`. The comparison is identity plus offsets — the same comparison
+ * comment edit: the entry keeps the span it has (ruling `A45`). Two page states answer
+ * "no `re-selection`", and both are decided from the page selection read at the open
+ * moment and again at the press:
+ * - the selection the editor **found when it opened** is still the selection at the
+ *   press — or there was none and there still is none (ruling `A107`). Whatever words
+ *   that selection lies across, the reader did not make it during the editing session, so
+ *   it decides nothing about the save. This is the half ruling `A106` stated as an outcome
+ *   instead of a rule, and it is why the open read exists at all: a baseline of "whatever
+ *   the page happened to hold" was never the point of ruling `A104`;
+ * - the page selection at the press sits on the very boundary points of the
+ *   `resolved span` this editor was opened over — the fragment set the `paint pass`
+ *   registered (ruling `A106`). A reader who clicks the `tooltip`, selects the note's own
+ *   words again (a selection that opens nothing, ruling `A103`) and saves has changed the
+ *   comment and nothing else.
+ *
+ * Anything else is a `re-selection`: a page selection that **appears or changes while the
+ * editor stands**, and it is the only thing handed to the edit path as a new span for the
+ * `overlap` question of ruling `A78` — answered per author (`A93`, `A99`, `A100`) and with
+ * the edited entry excluded from the list the check scans (`A45`), so an entry never
+ * collides with itself.
+ *
+ * Every comparison is identity plus offsets — the same comparison
  * `sameSelectionBoundaries` performs for the card's `A32` rule — because comparing a
  * remembered *range* with a freshly resolved one is the failure the `A37` contract
- * warns about: two measurements of two different page states.
+ * warns about: two measurements of two different page states. Neither kept state is ever
+ * resolved, painted from or written; each is a pair of boundary points kept only to answer
+ * "did the page selection move while this editor stood".
  *
  * **No focus is taken** (ruling `A74`, and overlay AC17 for the card). Nothing here
  * calls `focus()`: the page keeps the element it had focused, and the reader reaches
@@ -91,9 +106,10 @@ export interface EditorControllerOptions {
   /** One ISO stamp per write (ruling `A9`). */
   clock: () => string;
   /**
-   * Test seam: which page selection to read at save time, where the `re-selection`
-   * question of ruling `A45` is asked. Ruling `A104`: the click brings no selection, so
-   * this read is never what decides *which* entry the editor belongs to.
+   * Test seam: the page selection, read twice — once when the editor opens, to record
+   * what the click found (ruling `A107`), and once at the save moment, where the
+   * `re-selection` question of rulings `A45`, `A106`, `A107` is asked. Ruling `A104`: the
+   * click brings no selection, so neither read decides *which* entry the editor is for.
    */
   readSelection?: (doc: Document, host: HTMLElement) => CapturedSelection | null;
   /** Test seam: how a fragment is measured. */
@@ -142,11 +158,19 @@ interface EditorSession {
   readonly authorName: string;
   /**
    * The boundary points of the `resolved span` this editor was opened over — the
-   * fragments the last `paint pass` registered (ruling `A104`). It is the baseline the
+   * fragments the last `paint pass` registered (ruling `A104`). It is one baseline the
    * `re-selection` question of ruling `A45` is asked against: a page selection on those
-   * very points is the same selected text, not a move.
+   * very points is the note's own selected text, not a move (ruling `A106`).
    */
   readonly boundaries: SelectionBoundaries;
+  /**
+   * The boundary points of the page selection the editor **found at its open moment**,
+   * or `null` for "the page held no selection when this editor opened" (ruling `A107`). A
+   * page selection still standing on those points at the press is not a `re-selection`,
+   * whichever words it lies across: it is a selection the reader did not make while the
+   * editor stood, so it asks no `overlap` question.
+   */
+  readonly openSelection: SelectionBoundaries | null;
 }
 
 /**
@@ -193,6 +217,17 @@ export function createEditorController(
   }
 
   /**
+   * The page selection as the open moment finds it, kept as boundary points only (ruling
+   * `A107`). Read **before** the widget is mounted, so a selection inside the overlay host
+   * is the `null` the capture rule already answers for it, and what is recorded is the
+   * page the click landed on.
+   */
+  function openSelectionState(): SelectionBoundaries | null {
+    const found = readSelection(doc, overlay.host);
+    return found === null ? null : selectionBoundaries(found.range);
+  }
+
+  /**
    * Mounts the editor over the entry's own `resolved span` (ruling `A104`): the only
    * range this module ever sees is the fragment set the `paint pass` registered, and
    * the only thing the measurement above decided is where the widget stands. No page
@@ -209,6 +244,7 @@ export function createEditorController(
       root: doc.body,
       authorName,
       boundaries: openedOver,
+      openSelection: openSelectionState(),
     };
     render(
       <EntryEditor
@@ -229,14 +265,17 @@ export function createEditorController(
 
   /**
    * The save button. The re-selection question is answered here, at the moment of the
-   * press, and never from a span remembered at open time.
+   * press, against the two boundary states the open moment recorded — and never from a
+   * span remembered at open time.
    *
-   * A page selection that is gone (`null`) or that sits on the very boundary points of
-   * the span the editor was opened over is not a re-selection: the entry keeps its range
-   * (ruling `A45`), and no overlap question is asked — which is the ordinary case of an
-   * editor a `tooltip` click opened and a reader then selected the same words in again
-   * (rulings `A104`, `A103`). A selection inside the overlay host is `null` by the
-   * capture rule of `page-selection.ts`, which is what keeps a
+   * A page selection that is gone (`null`), or that still stands where the open moment
+   * found it (ruling `A107`), or that sits on the very boundary points of the span the
+   * editor was opened over (ruling `A106`), is not a re-selection: the entry keeps its
+   * range (ruling `A45`) and no overlap question is asked. Those are the ordinary states
+   * of an editor a `tooltip` click opened — the page usually holds no selection, or holds
+   * one the reader made before the click, or the reader selects the note's own words,
+   * which opens nothing (rulings `A104`, `A103`). A selection inside the overlay host is
+   * `null` by the capture rule of `page-selection.ts`, which is what keeps a
    * caret moving inside the editor's own textarea from looking like a moved note.
    *
    * On a refusal the editor stays open with its draft and the widget shows the
@@ -255,7 +294,7 @@ export function createEditorController(
       comment,
       currentName: session.authorName,
       now: options.clock(),
-      reselection: reselectionOf(session.boundaries),
+      reselection: reselectionOf(session),
     });
     if (result.ok) {
       close();
@@ -302,7 +341,11 @@ export function createEditorController(
   }
 
   /**
-   * The page selection at this moment, as a re-selection or as `null` (`A45`).
+   * The page selection at this moment, as a re-selection or as `null` (`A45`, `A106`,
+   * `A107`). Only a selection that **appeared or changed while the editor stands** is a
+   * re-selection, so two boundary states of the open moment are consulted here: the
+   * selection the click found (ruling `A107`) and the `resolved span` the pass painted
+   * (ruling `A106`).
    *
    * `sameSelectionBoundaries` is the comparison the card's `A32` rule already uses:
    * node identity plus offsets. It is deliberately not a comparison of resolved
@@ -310,14 +353,25 @@ export function createEditorController(
    * that may no longer exist, and the pair (that range, a range resolved now) is two
    * measurements of two different strings (`A37`).
    */
-  function reselectionOf(boundaries: SelectionBoundaries): Range | null {
+  function reselectionOf(session: EditorSession): Range | null {
     const current = readSelection(doc, overlay.host);
     if (current === null) {
+      // Nothing to move the note with: the ordinary `A104` state.
       return null;
     }
-    return sameSelectionBoundaries(boundaries, selectionBoundaries(current.range))
-      ? null
-      : current.range;
+    const now = selectionBoundaries(current.range);
+    if (sameBoundaryState(session.openSelection, now)) {
+      // The reader made no selection during this editing session (`A107`). What that
+      // selection covered is not this question's business: the `overlap` rule answers for
+      // a span the reader chose now, and this one was already on the page at the click.
+      return null;
+    }
+    if (sameSelectionBoundaries(session.boundaries, now)) {
+      // The note's own words, selected again (`A106`, and ruling `A103` opened no card
+      // for them): a comment edit, not a move.
+      return null;
+    }
+    return current.range;
   }
 
   /**
@@ -368,6 +422,19 @@ export function createEditorController(
 
 /** The outcome of one measurement attempt (`A64`, not `A65`). */
 type AnchorMeasurement = { ok: true; box: Box | null } | { ok: false };
+
+/**
+ * "Did the page selection move from where the open moment found it" (ruling `A107`),
+ * where the kept side may be `null` for "the page held no selection". The present/present
+ * half is `sameSelectionBoundaries`; this is the nullable wrapper around it, kept local
+ * because no shipped module owns a nullable boundary comparison.
+ */
+function sameBoundaryState(kept: SelectionBoundaries | null, now: SelectionBoundaries): boolean {
+  if (kept === null) {
+    return false;
+  }
+  return sameSelectionBoundaries(kept, now);
+}
 
 /**
  * The boundary points of an entry's `resolved span` as the paint pass holds it: the

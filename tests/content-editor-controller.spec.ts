@@ -38,6 +38,14 @@
  *   the editor stays open with its draft; the entry being edited is excluded from the
  *   check by list exclusion, so it never collides with itself, and a crossing of a
  *   foreign entry's span saves, because the `overlap` rule is per author (`A93`, `A100`);
+ * - **rulings `A106` and `A107`** — what a `re-selection` is, decided at the press from
+ *   two states the open moment recorded: the baseline is the `PaintedEntry`'s own boundary
+ *   points as the `paint pass` registered them (`A106`), and a page selection that was
+ *   already there when the editor opened is never a `re-selection`, whatever it lies
+ *   across (`A107`). Only a selection that appears or changes **while the editor stands**
+ *   asks the own-author `overlap` question. The last block of this file pins all six
+ *   states of that rule, including the one state where the pre-`A107` reading and the
+ *   shipped one store different bytes;
  *
  * `A68` is pinned at the end: closing an editor leaves the overlay host visible while
  * another widget still needs it.
@@ -937,5 +945,181 @@ describe('AC5: a re-selection inside the editor answers the overlap rule, with t
     // The core delete path itself has no author gate (`A25`): the absence of the
     // control above is the rule, and the editor is the only shipped caller.
     expect(fixture.editor.openEntryId()).toBeNull();
+  });
+});
+
+/**
+ * Rulings `A106` and `A107`: what counts as a `re-selection`, and what does not.
+ *
+ * The baseline the editor keeps is the boundary points of the `PaintedEntry` its
+ * `tooltip` click opened, exactly as the `paint pass` registered them (`A106`) — never
+ * "whatever selection the page happened to hold". On top of that, `A107` decides the half
+ * `A106` had stated as an outcome: a page selection that was **already present at the open
+ * moment** is not a `re-selection` at all, whichever words it lies across, because the
+ * tooltip click carries no selection semantics (`A104`) and a selection the reader did not
+ * make during the editing session must not decide whether the save is refused.
+ *
+ * The fixture keeps the page selection in a seam the test moves by hand: setting it before
+ * `openOwn` is "the page already held this when the click came", setting it afterwards is
+ * "a selection that appeared or changed while the editor stood". One test — the second —
+ * is the only state in which the pre-`A107` reading and the shipped reading store
+ * different bytes, and it is named for that.
+ */
+describe('Rulings `A106` + `A107`: the painted span is the baseline, and the selection the click found never is', () => {
+  /** The three records every case below boots with: the edited note, my other note,
+   *  somebody else's note. `'lazy dog'` is mine, `'fox jumps'` is not. */
+  const THREE_RECORDS = (): Record<string, unknown>[] => [
+    ownRecord(),
+    ownSecondRecord(),
+    foreignRecord(),
+  ];
+
+  /** `'Second'` — words that hold no entry of anyone. */
+  const freeWordsAtClick = (): CapturedSelection => selection('p2', 0, 6);
+  /** `'lazy dog'` — the span of a second note **of my own** (`A100` blocker). */
+  const myOtherNote = (): CapturedSelection => selection('p1', 35, 43);
+  /** `'quick brown'` — the edited note's own `resolved span`, point for point. */
+  const ownNotePoints = (): CapturedSelection => selection('p1', 4, 15);
+
+  it('A107: the click found other words on the page, and a press with no new selection saves comment and updatedAt only (A106, A78)', async () => {
+    const fixture = await boot({ records: THREE_RECORDS() });
+    const before = (await stored(port))[0];
+    // A selection the reader made before the click and has not touched since.
+    fixture.setPageSelection(freeWordsAtClick());
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'edited while the page held an old selection');
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBeNull();
+    expect(fixture.editor.isOpen()).toBe(false);
+    const after = await stored(port);
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe('edited while the page held an old selection');
+    expect(edited?.anchor).toEqual(before?.anchor);
+    expect(edited?.text).toBe(before?.text);
+    expect(edited?.createdAt).toBe(before?.createdAt);
+    expect(edited?.updatedAt).toBe(SAVED_AT);
+  });
+
+  it('A107 is what separates the readings: the click found a selection lying across my own other note, and the save still lands with no refusal line (A100, A45)', async () => {
+    // The state the two baselines disagreed on. With a painted-span baseline alone, this
+    // unchanged selection is a difference from the note's own span, so the own-author
+    // `overlap` check runs and the press is refused with «Выделение пересекается с
+    // существующей записью» for a selection the reader never made in this session. With
+    // ruling `A107` the open moment records the selection, the press finds it unmoved, and
+    // no overlap question is asked at all. Different stored bytes either way, so this pin
+    // is the one that stops the baseline from drifting back.
+    const fixture = await boot({ records: THREE_RECORDS() });
+    const before = (await stored(port))[0];
+    fixture.setPageSelection(myOtherNote());
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'edited over a selection the page already held');
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBeNull();
+    expect(fixture.editor.isOpen()).toBe(false);
+    const after = await stored(port);
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe('edited over a selection the page already held');
+    expect(edited?.anchor).toEqual(before?.anchor);
+    expect(edited?.text).toBe(before?.text);
+    expect(edited?.updatedAt).toBe(SAVED_AT);
+    // The note the stale selection lay across is byte-identical: the save touched one
+    // record's comment and nothing else.
+    const other = after.find((entry: Entry) => entry.id === 'c3d4e5f6a1b2');
+    expect(other?.comment).toBe('another note of mine');
+    expect(other?.updatedAt).toBe(OPENED_AT);
+    expect(other?.anchor).toEqual(storedAnchorOf('lazy dog'));
+  });
+
+  it('A107: the same editor with a NEW selection across my own other note asks the own-author overlap question and is refused (A45, A100)', async () => {
+    const fixture = await boot({ records: THREE_RECORDS() });
+    fixture.setPageSelection(freeWordsAtClick());
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'moved onto my own other note');
+    // The selection moves **while the editor stands**: that is a re-selection, and the
+    // span it names is the one the per-author `overlap` rule answers for.
+    fixture.setPageSelection(myOtherNote());
+
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBe(REFUSAL_TEXT.overlap);
+    expect(fixture.editor.isOpen()).toBe(true);
+    expect(fieldOf(overlay).value).toBe('moved onto my own other note');
+    expect(fixture.port.calls.filter((call) => call.op === 'set' || call.op === 'remove')).toEqual(
+      [],
+    );
+    const after = await stored(port);
+    expect(after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6')?.comment).toBe(OWN_COMMENT);
+  });
+
+  it('A107 positive half: no selection at the open moment, a later selection over free words asks the question and the save lands (A78)', async () => {
+    const fixture = await boot({ records: THREE_RECORDS() });
+    const before = (await stored(port))[0];
+    fixture.setPageSelection(null);
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'a new selection over unclaimed words');
+    // `'paragraph'` holds no entry of anyone: the question is asked and its answer is
+    // free, which is the pair of the case below — same fixture, other words, refused.
+    fixture.setPageSelection(selection('p2', 7, 16));
+
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBeNull();
+    const after = await stored(port);
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe('a new selection over unclaimed words');
+    // A successful `re-selection` moves nothing (ruling `A78`): the `anchor` and `text`
+    // keep the span the note was created on, and moving a note stays a delete plus a
+    // create.
+    expect(edited?.anchor).toEqual(before?.anchor);
+    expect(edited?.text).toBe(before?.text);
+    expect(edited?.updatedAt).toBe(SAVED_AT);
+  });
+
+  it('A107 positive half, other answer: no selection at the open moment, a later selection across my own other note is refused (A45, A100)', async () => {
+    const fixture = await boot({ records: THREE_RECORDS() });
+    fixture.setPageSelection(null);
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'a new selection over my own other note');
+    fixture.setPageSelection(myOtherNote());
+
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBe(REFUSAL_TEXT.overlap);
+    expect(fixture.editor.isOpen()).toBe(true);
+    expect((await stored(port)).find((entry: Entry) => entry.id === 'a1b2c3d4e5f6')?.comment).toBe(
+      OWN_COMMENT,
+    );
+  });
+
+  it('A106 half: re-selecting the note’s own painted points is not a re-selection, so the save is a plain comment edit (A103, A104)', async () => {
+    const fixture = await boot({ records: THREE_RECORDS() });
+    const before = (await stored(port))[0];
+    fixture.setPageSelection(null);
+
+    expect(openOwn(fixture)).toBe(true);
+    await typeDraft(overlay, 'I selected the note’s own words again');
+    // Point for point the span the pass registered for this entry. Ruling `A103` opened no
+    // card for that selection, and ruling `A106` makes it the note's own words rather than
+    // a move — so no `overlap` question is asked about the neighbouring note at all.
+    fixture.setPageSelection(ownNotePoints());
+
+    await press(overlay, CONTENT_STRINGS.save);
+
+    expect(refusalLineOf(overlay)).toBeNull();
+    const after = await stored(port);
+    const edited = after.find((entry: Entry) => entry.id === 'a1b2c3d4e5f6');
+    expect(edited?.comment).toBe('I selected the note’s own words again');
+    expect(edited?.anchor).toEqual(before?.anchor);
+    expect(edited?.text).toBe(before?.text);
+    expect(after.find((entry: Entry) => entry.id === 'c3d4e5f6a1b2')?.comment).toBe(
+      'another note of mine',
+    );
   });
 });
