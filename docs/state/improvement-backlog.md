@@ -146,3 +146,10 @@ These three name the shape, so the engineer's only job is to implement and test 
   from the paint pass**; no selection, no re-derivation, `A78` untouched (`comment` + `updatedAt` only). The re-selection overlap
   check stays where it is with the self-exclusion of `A45`/`A100` — it simply has nothing to collide with. Deleting it would be a
   silent behavior change under a task that did not ask for one.
+
+- `A105` (**`B5` shape**): focus goes to the `textarea` of the create card **and** of the editor on open; both calls pass
+  `preventScroll: true` (the host is `position: fixed`, so a scroll would move the page under the reader, and no test DOM can
+  demonstrate a scroll — hence the pin is on the call shape); closing hands focus back to the element the page had focused
+  **if it is still connected**, and forces nothing otherwise (no `body` hijack). No `tabindex` is introduced, so the rendered
+  order stays the tab order. The focus-restore half is **my** decision, not the user's word, and is recorded in the spec with an
+  `Assumption:` marker: without it, closing a card would leave the active element inside a removed shadow tree.
