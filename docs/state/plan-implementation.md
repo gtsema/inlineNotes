@@ -325,7 +325,7 @@ until the whole set is implemented; the PM rules on anything new and records it.
 |---|---|---|---|
 | `t5-01-author-overlap` | **accepted** (`7fb52ea`+`731ea9c`+`f1093f3`, +17 tests → 807, 0 blocking) — the overlap and duplicate refusals answer per author at both call sites; one author identity (`isSameAuthor`) everywhere | `inline-comment-model.md` (overlap, duplicate) + `A93`, `A99`, `A100` | engineer, reviewer |
 | `t5-02-author-colors` | **accepted** (`c43f64d`+`31f2a2f`, +26 tests → 833, 0 blocking) — a six-slot `author palette`, slot = `fnv1a32(authorName) % 6`; the highlight name stays per entry (`A70`), only the declarations follow the author | `content-overlay-ui.md` (painting, AC25) + `A94`, `A102` | engineer, reviewer |
-| `t5-03-tooltip-click-editor` | tooltip opaque on hover; **click opens the editor**; selecting text inside one's own note opens **nothing**; Flow 6 and `claimSelection` are retired with their pins | `content-overlay-ui.md` AC3 / Flow 4 / Flow 6 + `A96` | engineer, reviewer |
+| `t5-03-tooltip-click-editor` | **accepted** (`0f19bec`+`b064301`+`31977fe`+`b6643b1`+`8f84a0b`, 857 tests, 0 blocking at the 4-child ceiling) — tooltip opaque on hover, the click opens the editor, a strictly-contained own selection opens nothing, Flow 6 and `claimSelection` deleted | `content-overlay-ui.md` AC1–AC9 + `A96`, `A103`, `A104`, `A106`, `A107` | engineer, reviewer |
 
 ## Stage 6 — the surfaces follow (rulings `A97`, `A95`, `A98`)
 

@@ -177,3 +177,18 @@ the six-item browser list is deliberately still open (`прогон будет �
   half of an AC unverifiable, which is exactly what happened to item 1.
 - The run also generated six improvement requests; they live in `docs/state/improvement-backlog.md` as B1–B6 with fourteen
   observable-behavior questions, and two of them overturn rulings (`A74`, and the click half of overlay AC3).
+
+## Stage 5 — per-author overlap, colours, the tooltip as the way in (2026-11-18)
+
+- **What worked:** the reviewer's `blocked` verdict did its job for the first time — `t5-03` passed all nine AC yet carried a
+  spec-vs-code contradiction inside its own commit, and the reviewer refused to pick a side instead of accepting a green tree.
+- **What failed (brief, not code):** I wrote `A106` as an **outcome** ("a stale selection saves cleanly") instead of a **rule**,
+  and the engineer's pin attempt found the code disagreeing with it. Rule for future rulings: state the predicate (what counts as
+  a `re-selection`), never the resulting verdict; `A107` is that predicate.
+- **What failed (brief, again):** the `t5-03` brief said "do not touch code, the code already implements this" while its own AC
+  implied a different outcome. A brief must not assert what the code does from memory — measure the file or drop the claim.
+- **Recurring defect class:** four dead or stale comment pointers in one task (a deleted module, a path that never existed, a
+  deleted rule name, a `.ts`/`.tsx` suffix), plus stale AC numbers in comments and test names. Carried into `t5-04` as six
+  numbered comment-only items. Standing cheap mitigation: grep every cross-file path a comment names before committing.
+- **Process:** the 60-minute wall hit `t5-03` attempt 1 with nothing committed; the same-session resume with three
+  commit-per-green checkpoints delivered everything (`A80` a second time, `A73` proved again).

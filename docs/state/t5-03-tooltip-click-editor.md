@@ -79,8 +79,8 @@ comment pointer before committing — this is the third dead-pointer finding of 
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **3** — attempt 1 (timeout, not an attempt, resumed in-session),
-reviewer, attempt 2 (`A106` spec + pin). One re-review remains in budget.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **4 of 4 — at the ceiling**: attempt 1 (timeout, not an attempt,
+resumed in-session), reviewer, attempt 2 (`A106`→`A107`), re-review.
 
 ## Attempts log
 
@@ -98,3 +98,14 @@ reviewer, attempt 2 (`A106` spec + pin). One re-review remains in budget.
   four further comment-pointer defects (its items 3–6).
 - **attempt 2 opened** under ruling `A106` (the baseline is the `PaintedEntry`, never the page selection): rewrite the two spec
   sentences and pin the observable case by ruling name; no `src/` change.
+- **attempt 2 escalated again before writing**: my own `A106` sentence stated an outcome, and the shipped code refused a save when
+  the page held a stale selection across another of the reader's own notes. I ruled **`A107`** (a selection already present at
+  editor open is never a `re-selection`; only one that appears or changes while it stands is), which amends `A106`, and
+  authorized a narrowed `src/` change in `src/content/overlay/editor-controller.tsx` only.
+- **attempt 2 delivered one commit** `8f84a0b` (spec + `editor-controller.tsx` + tests, 3 files). PM-measured gates: typecheck
+  exit 0, `npm test` exit 0 → **857 / 43 files** (+6), build exit 0 (10 files), checker 0/0/104, tree clean.
+- **re-review verdict: `accepted`** (`docs/state/t5-03-review-attempt2.md`) — the attempt-1 `blocked` state is resolved, 0 blocking
+  findings, the discriminator named (`tests/content-editor-controller.spec.ts:1005`, first failing assertion `:1021`), and the
+  carried list confirms all six attempt-1 items are either closed or numbered into `t5-04`.
+- **task status: accepted.** Children used: **4 of 4** — at the ceiling, exactly as `t4-04` was. Two escalations in one task both
+  produced rulings rather than silent choices, and neither cost an attempt.

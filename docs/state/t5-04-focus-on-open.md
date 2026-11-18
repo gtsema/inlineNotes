@@ -58,12 +58,18 @@ browser verification item 1.
    selection, never by a foreign entry" — `t5-03` deleted that rule and renumbered the flows. Point the header at the shipped
    rule ("opened by a click on the `tooltip`, never by a page `selection`"). Comment text only.
 4. `src/content/overlay/create-card.tsx:22` cites `create-card-controller.ts`; the file is `.tsx`.
+5. Stale AC numbers in shipped comments: `src/content/overlay/tooltip-style.ts:9` and `:41` and `src/content/overlay/tooltip.tsx:31`
+   cite "task `t5-03` AC7" for the single-opacity rule, which is AC1 of that task. Comment text only.
+6. Stale AC numbers in five test names: `tests/content-editor-controller.spec.ts:480` ("t5-03 AC1" → AC2 material), `:505`
+   (AC2 → AC3), `:523` (AC3 → AC7), `:563` (AC8 → AC3/AC9), and `tests/content-tooltip.spec.ts:472` ("AC8" → AC2 material).
+   Rename to the AC they actually pin; do not touch the assertions.
 
 Every item above is a **comment line**; report each as `done` + `path:line` or `skipped` + reason (`A72`).
 
-**Boundary exception (`A90` naming rule):** items 1–4 are **comment-only** changes in `src/content/paint/paint-plan.ts`,
-`src/content/overlay/contained-own-selection.ts`, `src/content/overlay/editor.tsx` and `src/content/overlay/create-card.tsx`.
-No shipped string, no code, no signature, no rule. Cite the carried number in the commit message.
+**Boundary exception (`A90` naming rule):** items 1–5 are **comment-only** changes in `src/content/paint/paint-plan.ts`,
+`src/content/overlay/contained-own-selection.ts`, `src/content/overlay/editor.tsx`, `src/content/overlay/create-card.tsx`,
+`src/content/overlay/tooltip-style.ts` and `src/content/overlay/tooltip.tsx`; item 6 changes **test names only**. No shipped
+string, no code, no signature, no rule, no assertion. Cite the carried number in the commit message.
 
 ## Gate and commit order (`A62`, `A73`, `A101`)
 
