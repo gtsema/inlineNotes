@@ -50,6 +50,13 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
  * renders below them, because stored entries that become invisible are stored entries
  * the reader can no longer delete. The name-required notice is a real `<button>`: it is
  * the control that opens the options page, and it writes nothing.
+ *
+ * Ruling `A98` (task `t5-05`) removed the page-address line that used to stand under the
+ * title: it printed `new URL(tab.url).host`, which is punycode for an internationalized
+ * page, and it answered no question the reader had. What did **not** go is the address
+ * read behind it — the token's `pageUrl` half is the active-tab read of ruling `A49`, and
+ * the page key of the list still comes from it. This component renders no address in any
+ * state, and the `tabs` permission stays for a read that is not a display.
  */
 @Component({
   selector: 'app-root',
@@ -57,10 +64,6 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
   template: `
     <main class="popup">
       <h1 class="title">{{ title }}</h1>
-
-      @if (view().host !== null) {
-        <p class="host">{{ view().host }}</p>
-      }
 
       @for (notice of view().notices; track notice) {
         @if (notice === 'name_required') {
@@ -107,12 +110,6 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       margin: 0 0 4px;
       font-size: 14px;
       font-weight: 600;
-    }
-
-    .host {
-      margin: 0 0 8px;
-      color: #6b6b6b;
-      word-break: break-all;
     }
 
     .notice {
@@ -179,7 +176,7 @@ export class PopupComponent implements OnInit {
   private readonly service = new PageEntriesService(inject(PAGE_ENTRIES_SOURCE));
 
   /** The whole popup state, as the core reads answered for the active tab. */
-  readonly view = signal<PageEntriesView>({ host: null, rows: [], notices: [] });
+  readonly view = signal<PageEntriesView>({ rows: [], notices: [] });
 
   readonly title: string = POPUP_STRINGS.title;
   readonly emptyState: string = POPUP_STRINGS.emptyState;

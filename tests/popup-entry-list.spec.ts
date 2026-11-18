@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { sortByCreatedAtAsc } from '../src/core/entry-rules';
 import { loadEntries } from '../src/core/entry-store-read';
+import { pageKeyFromUrl } from '../src/core/page-key';
 import { entryStorageKey, PAGE_INDEX_KEY, SETTINGS_KEY } from '../src/core/storage-keys';
 import {
   FOREIGN_ROW_CLASS,
@@ -30,7 +31,8 @@ import { MemoryStoragePort, indexValue, slotValue, storedEntry, storedIndexOf } 
  * the greps in `tests/toolchain-contract.spec.ts` and its behavior is pinned here.
  *
  * Rulings under test: `A49` (the address comes from the active tab, `tabs`
- * permission), `A50` (the checkbox writes storage and messages nobody), `A25` (every
+ * permission), `A98` (that address is read but never rendered: the popup shows no
+ * page address in any state), `A50` (the checkbox writes storage and messages nobody), `A25` (every
  * row is deletable, no edit affordance for a foreign one), `A1`/`A12` (a checkbox
  * never reorders the list), `A81` (the restricted-page line), `A82` (the ownership
  * header plus a row class), `A83` (notice above a list that still renders).
@@ -158,11 +160,87 @@ describe('AC1 the popup lists the current page through core', () => {
     }
   });
 
-  it('shows the host of the page under the title', async () => {
-    const f = fixture({ records: [storedEntry()] });
+  it('renders no page address in any state, and carries none in the view (A98)', async () => {
+    // Ruling `A98`: the line under the title printed `new URL(url).host`, which is punycode
+    // for an internationalized page, and it answered no question the reader had. Every
+    // state the popup can be in is walked here — a page with entries, an IDN page (the
+    // shape the user called «кракозябры»), a page the content script is not registered for,
+    // the no-name notice — and each one holds the list and the notices and nothing that
+    // could be an address: no host, no punycode form, no origin, no scheme.
+    const states: Array<{
+      url: string | null;
+      withEntry: boolean;
+      name: string | null;
+      forbidden: readonly string[];
+    }> = [
+      {
+        url: PAGE_URL,
+        withEntry: true,
+        name: OWN_NAME,
+        forbidden: ['example.com', 'https://example.com', 'https:', 'xn--'],
+      },
+      {
+        url: 'https://xn--80ak6aa92e.com/',
+        withEntry: true,
+        name: OWN_NAME,
+        forbidden: ['xn--80ak6aa92e.com', 'https://xn--'],
+      },
+      {
+        url: 'file:///home/user/article.html',
+        withEntry: true,
+        name: OWN_NAME,
+        forbidden: ['/home/user/article.html', 'file://'],
+      },
+      {
+        url: PAGE_URL,
+        withEntry: false,
+        name: null,
+        forbidden: ['example.com', 'https://'],
+      },
+    ];
 
-    const view = await f.service.open();
-    expect(view.host).toBe('example.com');
+    for (const state of states) {
+      const pageKey = state.url === null ? PAGE_KEY : (pageKeyFromUrl(state.url) ?? PAGE_KEY);
+      const f = fixture({
+        url: state.url,
+        pageKey,
+        records: state.withEntry ? [storedEntry({ pageKey })] : [],
+        name: state.name,
+      });
+
+      const view = await f.service.open();
+      // The list is still there in the states that have one: the address line went, the
+      // rows did not (ruling `A49` is what keeps them reachable here).
+      expect(view.rows).toHaveLength(state.withEntry ? 1 : 0);
+      // The shape itself: the view is rows plus notices, with no address field to read.
+      expect(Object.keys(view).sort()).toEqual(['notices', 'rows']);
+      const rendered = JSON.stringify(view);
+      for (const fragment of state.forbidden) {
+        expect(rendered).not.toContain(fragment);
+      }
+    }
+  });
+
+  it('renders no address element in the component template either (A98)', () => {
+    // The render half of AC1 is a template fact, and the scan file that normally holds
+    // template facts (`tests/toolchain-contract.spec.ts`) is outside this task's boundary,
+    // so the deletion is pinned here: the popup document has no address node at all. The
+    // title, the two notices, the empty state and the rows are still rendered.
+    const template = /template:\s*`([\s\S]*?)`/.exec(
+      readFileSync(join(projectRoot, 'src', 'popup', 'popup.component.ts'), 'utf8'),
+    )?.[1];
+    if (template === undefined) {
+      throw new Error('the popup component has no inline template to scan');
+    }
+
+    expect(template).not.toMatch(/class="host"/);
+    expect(template).not.toMatch(/view\(\)\.host/);
+    expect(template).not.toMatch(/\bhostOf\b/);
+    expect(template).toMatch(/<h1 class="title">\{\{ title \}\}<\/h1>/);
+    expect(template).toMatch(/class="notice notice--name"/);
+    expect(template).toMatch(/class="notice notice--not-injectable"/);
+    expect(template).toMatch(/class="empty"/);
+    expect(template).toMatch(/class="rows"/);
   });
 
   it('shows no row for a record the core read guard skips', async () => {
@@ -175,11 +253,22 @@ describe('AC1 the popup lists the current page through core', () => {
   });
 
   it('reads the address from the injected active-tab read, not from the popup document', async () => {
-    const f = fixture({ url: 'https://other.example/post', pageKey: 'https://other.example/post', records: [] });
+    // Ruling `A98` deleted the line, not the read: the injected address is still what the
+    // page key is computed from, so the row of the tab the popup was opened in arrives and
+    // the key of any other page is never asked for. That is also why the `tabs` permission
+    // stays in `src/manifest.json` (pinned in `tests/toolchain-contract.spec.ts`).
+    const otherKey = 'https://other.example/post';
+    const f = fixture({
+      url: otherKey,
+      pageKey: otherKey,
+      records: [storedEntry({ pageKey: otherKey })],
+    });
 
     const view = await f.service.open();
-    expect(view.host).toBe('other.example');
-    expect(view.rows).toEqual([]);
+    expect(view.rows.map((row) => row.id)).toEqual(['a1b2c3d4e5f6']);
+    const asked = new Set(f.calls.flatMap((call) => call.keys));
+    expect(asked.has(entryStorageKey(otherKey))).toBe(true);
+    expect(asked.has(entryStorageKey(PAGE_KEY))).toBe(false);
   });
 });
 
@@ -381,7 +470,6 @@ describe('AC4 the states that are not a list', () => {
     const view = await f.service.open();
     expect(view.notices).toEqual(['page_not_injectable']);
     expect(view.rows).toEqual([]);
-    expect(view.host).toBeNull();
   });
 
   it('no active tab address gets the same line rather than a crash', async () => {

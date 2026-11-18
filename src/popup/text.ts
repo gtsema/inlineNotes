@@ -24,7 +24,11 @@
 import type { EntryRowView, PopupNoticeCode } from './page-entries-service';
 
 export const POPUP_STRINGS = {
-  /** Popup heading: host of the page plus the list of its entries. */
+  /**
+   * Popup heading: the list of entries of the page the reader is on. Ruling `A98`
+   * deleted the page-address line that used to stand under it, so this heading names
+   * the page without printing anything of its address.
+   */
   title: 'Заметки на этой странице',
   /** Empty state of the entry list. */
   emptyState: 'На этой странице нет записей',

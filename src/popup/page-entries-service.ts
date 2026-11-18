@@ -14,7 +14,11 @@
  * - `A49` **the page address comes from the active tab.** `pageUrl()` is the tab
  *   read of `src/popup/active-tab.ts`, so the popup works on pages the content
  *   script is not registered for — the whole reason the `tabs` permission was
- *   chosen over the service-worker mapping.
+ *   chosen over the service-worker mapping. Ruling `A98` deleted the **display**
+ *   of that address — the host line under the title, with the `hostOf` derivation
+ *   that fed it — and kept this read, because the `pageKey` the list is loaded
+ *   under is computed from it. The address is an input to the core key rules here,
+ *   never a rendered value.
  * - `A1`, `A12` **a checkbox never reorders the list.** The write goes through core
  *   `setVisible`, which touches `visible` only, and the view is rebuilt with core
  *   `sortByCreatedAtAsc`; a row that was second is second afterwards.
@@ -75,10 +79,15 @@ export interface EntryRowView {
   visible: boolean;
 }
 
-/** Everything the popup renders for one page open. */
+/**
+ * Everything the popup renders for one page open.
+ *
+ * There is **no address in this view** (ruling `A98`, task `t5-05`): the host line
+ * the reader saw under the title printed punycode for an internationalized page and
+ * answered no question. The view is the list and the notices, and the page address
+ * stays inside `viewOf` as the input to the core key rules.
+ */
 export interface PageEntriesView {
-  /** Host shown under the title; `null` when the address is unreadable. */
-  host: string | null;
   /** Rows in creation order (`sortByCreatedAtAsc`), `[]` for an empty page. */
   rows: readonly EntryRowView[];
   /** Notice lines above the list, in this fixed order (ruling `A83`). */
@@ -133,19 +142,6 @@ export function isInjectableUrl(url: string | null): boolean {
     return false;
   }
   return pageKeyFromUrl(trimmed) !== null;
-}
-
-/** Host shown under the title ("Popup contract: title with the page host"). */
-export function hostOf(url: string | null): string | null {
-  if (url === null) {
-    return null;
-  }
-  try {
-    const host = new URL(url.trim()).host;
-    return host.length > 0 ? host : null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -230,6 +226,6 @@ export class PageEntriesService {
       notices.push('page_not_injectable');
     }
 
-    return { host: hostOf(url), rows, notices };
+    return { rows, notices };
   }
 }
