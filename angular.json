@@ -62,6 +62,13 @@
             "polyfills": [],
             "styles": [],
             "scripts": [],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "src/options/assets",
+                "output": "assets"
+              }
+            ],
             "outputPath": {
               "base": "dist/options",
               "browser": ""

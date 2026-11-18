@@ -31,6 +31,16 @@ export const OPTIONS_STRINGS = {
   nameLabel: 'Имя',
   save: 'Сохранить',
   /**
+   * The one `name explanation line` of the settings window (task `t9-02`, ruling
+   * `A121`): it says what the field is for, because the mascot and the palette make
+   * the page look like a product screen and the reader still has to know that this
+   * one value signs every note the extension stores. One sentence, no second
+   * variant, and it is the **only** string this task adds: `tests/options-window-look.spec.ts`
+   * pins the key set of this object, so a new sentence needs a ruling and a spec
+   * row, not a quiet edit.
+   */
+  nameHint: 'Это имя подписывает каждую заметку',
+  /**
    * Confirmation after a successful `Сохранить` (ruling `A56`). It is shown for an
    * unchanged value too: the save went through core, and a name that was already
    * stored is still the name the store holds.

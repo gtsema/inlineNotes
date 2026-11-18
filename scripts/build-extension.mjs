@@ -141,6 +141,22 @@ function verifyContentBundleHasNoAngular() {
   }
 }
 
+/**
+ * The options page's `settings mascot` ships as a real file, not as an inline data
+ * URI (rulings `A123`, `A126`, task `t9-02`). The manifest never names it, so the
+ * manifest reference check cannot notice its absence: this is the check that does.
+ * A `dist/` whose options page would render a broken image fails the build.
+ */
+function verifyOptionsAssetShips() {
+  const asset = 'options/assets/cat-mascot.png';
+  if (!existsSync(join(distDir, asset))) {
+    fail(
+      `dist/${asset} is missing; angular.json must copy src/options/assets into dist/options/assets`,
+    );
+  }
+  logStep(`options asset present: dist/${asset}`);
+}
+
 function listDistFiles(dir = distDir) {
   const files = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -173,6 +189,7 @@ async function main() {
   const manifest = readDistManifest();
   verifyManifestReferences(manifest);
   verifyContentBundleHasNoAngular();
+  verifyOptionsAssetShips();
   report();
 }
 

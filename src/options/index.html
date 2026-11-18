@@ -3,6 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title>inlineNotes — настройки</title>
+    <!--
+      The only rule this document owns. The page fills the Chrome dialog box
+      (`options_ui.open_in_tab: false`) from edge to edge, and the body's default
+      margin is the one thing between the page background and that box; the palette
+      and every other visual rule live in the component stylesheet, not here
+      (task `t9-02`, ruling `A124`).
+    -->
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <app-root></app-root>
