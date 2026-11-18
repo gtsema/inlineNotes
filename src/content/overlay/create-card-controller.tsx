@@ -5,20 +5,24 @@
  * Semantics -> "Card placement" (ruling `A30`), "Card lifetime" (ruling `A32`),
  * "Settings gate before the card" (ruling `A31`), "The `contained own selection`"
  * (ruling `A103`), "Refusal message map" (ruling `A33`), "`focus on open`" (rulings
- * `A97`, `A105`); task `t3-01` AC1, AC3, AC4, AC5, task `t5-03` AC4, AC5, AC6 and task
- * `t5-04` AC1, AC3, AC4.
+ * `A97`, `A105`, **split by ruling `A111`**); task `t3-01` AC1, AC3, AC4, AC5, task
+ * `t5-03` AC4, AC5, AC6, and task `t6-01` AC1 — the card half of `t5-04` AC1, AC3, AC4
+ * was rewritten to that ruling, not dropped.
  *
  * One card at a time, and the controller is the only writer of the host's visible
  * state for this widget: it opens, it closes, and it never repositions an open card
  * (ruling `A32` — a card over moved text is closed, not chased).
  *
- * **The caret goes with the card** (ruling `A97`, which overturns `A74`; shape ruling
- * `A105`, task `t5-04` AC1, AC3, AC4): `open` hands the caret to the note field after
- * the host is revealed, and `close` hands it back to whatever the page had focused
- * before, when that element is still connected. Both decisions belong to
- * `focus-handoff.ts`; this module only decides **when** the handover happens, and the
- * order is part of the rule — reveal, then focus, because a field inside a hidden host
- * is not focusable, and unmount, then restore, or the unmount would take the caret back.
+ * **The card takes no focus** (ruling `A111`, task `t6-01` AC1, which restores the
+ * `A74` half for this path and leaves the caret-into-the-field of `A97` to the
+ * `editor`): `open` makes **no focus call at all**, and no close path hands anything
+ * back. The reason is this module's own shape: the card is opened **from** the page
+ * selection and reads it once here, and in Chrome a focus that enters an editable
+ * element ends that selection — so the caret `A97` moved into the field destroyed the
+ * gesture that opened the card. Nothing is taken, so nothing is restored, and this
+ * module calls `focus-handoff.ts` nowhere; that module stays the single owner of the
+ * focus rules for the widget that does take the caret. The reader reaches the controls
+ * with `Tab`, in the rendered order.
  *
  * The two moments of a capture, and they are deliberately not shared:
  * - **opening** measures the selection once (one stream, one pass) to decide
@@ -79,7 +83,6 @@ import type { Viewport } from './card-placement';
 import { CARD_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
 import { isContainedOwnSelection } from './contained-own-selection';
 import { CreateCard } from './create-card';
-import { createFocusHandoff } from './focus-handoff';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
 import type { PaintedEntry } from '../paint/paint-plan';
@@ -151,7 +154,6 @@ export function createCreateCardController(
   const rangeFor = options.rangeFor ?? documentRangeForFragment(doc);
   const readSelection = options.readSelection ?? capturePageSelection;
   const viewport = options.viewport ?? defaultViewportOf(doc);
-  const focus = createFocusHandoff(doc, overlay);
 
   let session: CardSession | null = null;
 
@@ -192,10 +194,9 @@ export function createCreateCardController(
     render(<CreateCard onSubmit={submit} onCancel={close} />, wrapper);
     setOverlayHostHidden(overlay, false);
     positionCard(anchorBox);
-    // `A97`: the reader asked for the caret in the field, and `preventScroll` is what
-    // keeps the article still while it moves there. After the reveal, because a field
-    // inside a hidden host takes no focus.
-    focus.open(wrapper);
+    // `A111` (task `t6-01` AC1): no focus call here. The page keeps the element it had
+    // focused, because a focus moving into this `textarea` is what ends the page
+    // selection this card was opened from; the reader reaches the controls with `Tab`.
   }
 
   function close(): void {
@@ -207,10 +208,8 @@ export function createCreateCardController(
     wrapper.style.left = '';
     wrapper.style.top = '';
     setOverlayHostHidden(overlay, true);
-    // `focus restore` (`Assumption:` of ruling `A105`, `t5-04` AC4): after the unmount,
-    // so the emptied widget cannot take the caret back, and it forces nothing when the
-    // page's element is gone.
-    focus.restore();
+    // `A111`: no restore call either. This path never took the caret, so it has nothing
+    // to hand back, and inventing a focus here would be a focus the reader never had.
   }
 
   /**

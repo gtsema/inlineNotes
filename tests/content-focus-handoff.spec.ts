@@ -5,11 +5,13 @@
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Terms / Aliases -> `focus on open`
  * and `focus restore`, Rules / Semantics -> the `focus on open` bullet, and AC17
  * (ruling `A97`, which overturns `A74`; the shape and the `Assumption:` half come from
- * ruling `A105`).
+ * ruling `A105`; ruling `A111` narrowed `A97` to the `editor` alone).
  *
- * The two controller specs (`tests/content-create-card-controller.spec.ts`,
- * `tests/content-editor-controller.spec.ts`) pin the rule **at the call site**: the card
- * and the editor really move the caret. This file pins what those call sites cannot see
+ * Since ruling `A111` the `editor` is the widget this handover serves, and
+ * `tests/content-editor-controller.spec.ts` pins the rule **at that call site**: the
+ * editor really moves the caret. `tests/content-create-card-controller.spec.ts` pins the
+ * other half of the split — the card path makes **no** focus call at all, which is only
+ * observable through this same recorder. This file pins what those call sites cannot see
  * without a fake, and what the ruling says about the half that has no widget left to
  * hold it:
  *

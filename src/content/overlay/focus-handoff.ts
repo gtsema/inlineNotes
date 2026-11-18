@@ -1,26 +1,31 @@
 /**
  * The focus handover of one open widget: where the caret goes when a widget opens,
  * and where it goes back when the widget closes (task `t5-04`, ruling `A97`, which
- * overturns `A74`, and the shape ruling `A105`).
+ * overturns `A74`, the shape ruling `A105`, and the split ruling `A111`, which narrowed
+ * `A97` to the `editor` alone).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Terms / Aliases -> `focus on
  * open` and `focus restore`, Rules / Semantics -> the `focus on open` bullet, and
- * AC17. The two call sites are `create-card-controller.tsx` (`open`, `close`) and
- * `editor-controller.tsx` (`open`, `close`); this module owns the handover and
- * nothing else — not which widget is open, not the write, not the placement.
+ * AC17. The one shipped call site is `editor-controller.tsx` (`open`, `close`): since
+ * ruling `A111` the selection card calls this module nowhere, because a focus that
+ * enters an editable element ends the very page selection that card is opened from. This
+ * module owns the handover and nothing else — not which widget is open, not the write,
+ * not the placement.
  *
  * Two decisions live here and nowhere else:
  *
  * - **the caret goes into the note field on open**, because ruling `A97` is the
- *   reader's own request: select text and the caret is already in the field, click a
- *   `tooltip` and the field already holds the comment. Every focus call of the
- *   overlay passes `preventScroll: true` — the exported `FIELD_FOCUS_OPTIONS` is the
- *   one shape for it. The overlay host is `position: fixed`, so a focus that scrolled
+ *   reader's own request: a `tooltip` click, and the field already holds the comment.
+ *   The widget that asks for this is the `editor`; the selection card never reaches this
+ *   module (ruling `A111`). Every focus call of the overlay passes `preventScroll: true`
+ *   — the exported `FIELD_FOCUS_OPTIONS` is the one shape for it. The overlay host is
+ *   `position: fixed`, so a focus that scrolled
  *   the page would move the article out from under the widget the reader is looking
  *   at; and because no test DOM can show a scroll, the option is pinned at the call
  *   shape rather than by an outcome (`t5-04` AC3).
  * - **closing hands the caret back** (`focus restore`), the `Assumption:` half of the
- *   ruling: without it the document's active element would stand inside a shadow tree
+ *   ruling and, since ruling `A111`, the half the `editor` alone uses: without it the
+ *   document's active element would stand inside a shadow tree
  *   that was just emptied, and the reader would have to tab through the whole page to
  *   get back. Only an element that is **still connected** gets it back; when it is
  *   gone the handover does nothing at all — it never substitutes `body` or

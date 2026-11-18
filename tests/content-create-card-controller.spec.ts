@@ -28,8 +28,8 @@
  *   and answers a re-selection as `duplicate` (`A23`, `t3-01` review finding 1);
  * - the two carried findings of `t3-01` that `t3-02` did not close, now pinned at
  *   the only call site where they exist: the keyboard contract of an **open** card
- *   (`t3-01` remark 4, task `t3-02b` AC1, and since task `t5-04` the caret in the note
- *   field of ruling `A97`) and the ruling-`A29`
+ *   (`t3-01` remark 4, task `t3-02b` AC1, and since ruling `A111` the card's **no focus
+ *   call** contract of task `t6-01` AC1) and the ruling-`A29`
  *   re-derive-at-save moment, driven by a DOM that changes **between `open()` and
  *   `Сохранить`** (`t3-01` remark 5, task `t3-02b` AC2).
  *
@@ -913,15 +913,16 @@ describe('a measurement that throws leaves the card closed (ruling A64)', () => 
 
 describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)', () => {
   /**
-   * Ruling `A97` **overturns** `A74` (shape ruling `A105`, task `t5-04` AC1): opening
-   * the card puts the caret **in the note field**, because the reader asked for it. This
-   * pin is the rewritten form of the `A74` pin "opens with the page focus exactly where
-   * it was" — same fixture, same page element focused first, opposite expectation.
-   * The page's own element is the document's answer again only after a close restored
-   * it (AC4), and the `Tab` order of the three controls is untouched, because no
-   * control gained a `tabindex` (AC6).
+   * Ruling `A111` (task `t6-01` AC1) restores the `A74` half for this path: opening the
+   * card makes **no focus call at all**, so the page keeps the element it had focused.
+   * This pin is that `A74` pin **again** — same fixture, same page element focused first
+   * — after `A97` had inverted it for one task and `A111` narrowed `A97` to the
+   * `editor`. The recorder runs across the whole open, so the proof is a **count of
+   * zero**, not an absence of evidence. The caret reaches the field only when the reader
+   * presses `Tab`, and the `Tab` order of the three controls is untouched, because no
+   * control gained a `tabindex` (`t5-04` AC6).
    */
-  it('opens with the caret in the note field (A97, A105, t5-04 AC1)', async () => {
+  it('opens with the page focus exactly where it was, and no focus call at all (A111, t6-01 AC1)', async () => {
     const article = document.getElementById('art');
     if (article === null) {
       throw new Error('fixture article is missing');
@@ -935,17 +936,26 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
 
     const fixture = mount(selection('p1', 4, 15));
     await seedAuthor(fixture.port);
-    await fixture.controller.capture();
 
-    // The card really is open — and the shadow tree answers its own note field, because
-    // the host is revealed before the caret moves (a field inside a hidden host takes no
-    // focus). The document answers the host, not the page's button: shadow retargeting,
-    // the same isolation AC1 of `t3-01` pins for the element count.
-    expect(fixture.controller.isOpen()).toBe(true);
-    expect(cardOf(fixture.overlay)).not.toBeNull();
-    expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
-    expect(document.activeElement).toBe(fixture.overlay.host);
-    expect(document.activeElement).not.toBe(pageButton);
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      await fixture.controller.capture();
+
+      // The card really is open — and it opened without touching the caret. The page's
+      // own button is still the document's answer, the shadow tree answers no active
+      // element of its own, and the note field is a field the reader has to `Tab` into.
+      // The host itself is never focused: the card does not ask for a focus at all.
+      expect(fixture.controller.isOpen()).toBe(true);
+      expect(cardOf(fixture.overlay)).not.toBeNull();
+      expect(document.activeElement).toBe(pageButton);
+      expect(fixture.overlay.root.activeElement).toBeNull();
+      expect(fixture.overlay.root.activeElement).not.toBe(inputOf(fixture.overlay));
+      // The negative proof, as a count: the recorder was running over the whole
+      // `capture()` — mount, reveal, placement — and saw nothing.
+      expect(recorder.calls()).toEqual([]);
+    } finally {
+      recorder.restore();
+    }
   });
 
   it('renders textarea, then Сохранить, then Отмена, as the rendered tab order', async () => {
@@ -1034,12 +1044,14 @@ describe('an open card is reachable by the keyboard (t3-02b AC1, t3-01 remark 4)
   });
 });
 
-describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', () => {
+describe('the card takes no focus and hands nothing back (A111, t6-01 AC1; the rewritten t5-04 AC3, AC4 pins)', () => {
   /**
    * The page control the reader had focused before the selection. Each case focuses one
-   * first: `focus restore` is a promise **about that element**, so a fixture in which
-   * nothing was focused cannot pin it. Ruling `A97` is what makes the question exist at
-   * all — before it the card never took the caret, so there was nothing to hand back.
+   * first: since ruling `A111` the promise **about that element** is that the card
+   * leaves it alone, so a fixture in which nothing was focused could not show what was
+   * not done. Before `A111` these cases pinned the opposite — that the card took the
+   * caret and gave it back (`t5-04` AC3, AC4) — and every pin in this block is that
+   * earlier pin rewritten in place, not a deletion.
    */
   function pageControl(id: string): HTMLElement {
     const article = document.getElementById('art');
@@ -1054,77 +1066,90 @@ describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', 
     return control;
   }
 
-  /** Opens one card over a page that holds a focused control. */
-  async function openCard(fixture: Fixture): Promise<void> {
+  /**
+   * Opens one card over a page that holds a focused control, and states the A111 half
+   * while it is at it: the card is open, its own field holds no caret, and the page's
+   * control is still the document's answer.
+   */
+  async function openCard(fixture: Fixture, control: HTMLElement): Promise<void> {
     await seedAuthor(fixture.port);
     await fixture.controller.capture();
     expect(fixture.controller.isOpen()).toBe(true);
-    expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
+    expect(fixture.overlay.root.activeElement).toBeNull();
+    expect(document.activeElement).toBe(control);
   }
 
-  it('asks the note field for the caret with `preventScroll: true` (A105, t5-04 AC3)', async () => {
-    pageControl('page-cta-shape');
+  it('makes no focus call when it opens, so `preventScroll` has no call to ride on (A111, t6-01 AC1; the rewritten t5-04 AC3 pin)', async () => {
+    const control = pageControl('page-cta-none');
     const fixture = mount(selection('p1', 4, 15));
-    // The option is the whole promise of ruling `A105`: the host is `position: fixed`, so
-    // moving the caret must not scroll the article. No test DOM shows a scroll, so the pin
-    // reads the argument of the call — the same way the `settle delay` is pinned as a
-    // constant rather than as a timer.
+    // `t5-04` AC3 pinned the **shape** of a call this card no longer makes. Ruling `A111`
+    // leaves that pin with one observable half, and it is the stronger one: the recorder
+    // over `HTMLElement.prototype.focus` sees **zero** calls across the whole open, and
+    // the page's own element is still the document's active element. The `preventScroll`
+    // call shape stays pinned for the widget that does focus — see
+    // `tests/content-editor-controller.spec.ts` and `tests/content-focus-handoff.spec.ts`.
     const recorder: FocusCallRecorder = recordFocusCalls();
     try {
-      await openCard(fixture);
+      await openCard(fixture, control);
 
-      const field = inputOf(fixture.overlay);
-      const fieldCalls = recorder.callsOn(field);
-      expect(fieldCalls).toHaveLength(1);
-      expect(fieldCalls[0]?.options).toEqual({ preventScroll: true });
-      expect(fixture.overlay.root.activeElement).toBe(field);
+      expect(recorder.calls()).toEqual([]);
+      expect(recorder.callsOn(inputOf(fixture.overlay))).toEqual([]);
+      expect(document.activeElement).toBe(control);
       expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
     } finally {
       recorder.restore();
     }
   });
 
-  it('hands the caret back on `Отмена`, on Esc and on a successful save (A105, t5-04 AC4)', async () => {
+  it('keeps the page control focused through `Отмена`, Esc and a successful save (A111, t6-01 AC1; the rewritten t5-04 AC4 pin)', async () => {
     for (const [index, close] of ['cancel', 'esc', 'save'].entries()) {
       const control = pageControl(`page-cta-${String(index)}`);
       const fixture = mount(selection('p1', 4, 15));
-      await openCard(fixture);
+      await openCard(fixture, control);
       await typeDraft(fixture.overlay, 'a note of some length');
-      expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
-
-      if (close === 'cancel') {
-        cancelButtonOf(fixture.overlay).click();
-        await settle();
-      } else if (close === 'esc') {
-        pressKey(fixture.overlay, 'Escape');
-        await settle();
-      } else {
-        await pressSave(fixture.overlay);
-      }
-
-      expect(fixture.controller.isOpen()).toBe(false);
-      expect(fixture.overlay.host.hidden).toBe(true);
-      // The `Assumption:` half of ruling `A105`: the widget is gone and the page control
-      // answers the document again.
+      // The draft is typed into a field the reader never got a caret in, and the page
+      // control still answers the document.
       expect(document.activeElement).toBe(control);
       expect(fixture.overlay.root.activeElement).toBeNull();
-      expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+
+      const recorder: FocusCallRecorder = recordFocusCalls();
+      try {
+        if (close === 'cancel') {
+          cancelButtonOf(fixture.overlay).click();
+          await settle();
+        } else if (close === 'esc') {
+          pressKey(fixture.overlay, 'Escape');
+          await settle();
+        } else {
+          await pressSave(fixture.overlay);
+        }
+
+        expect(fixture.controller.isOpen()).toBe(false);
+        expect(fixture.overlay.host.hidden).toBe(true);
+        // Nothing to hand back: the close of a card that never took the caret makes no
+        // focus call at all, and the page control answers the document throughout.
+        expect(recorder.calls()).toEqual([]);
+        expect(document.activeElement).toBe(control);
+        expect(fixture.overlay.root.activeElement).toBeNull();
+        expect(fixture.overlay.host.getAttribute('tabindex')).toBeNull();
+      } finally {
+        recorder.restore();
+      }
     }
   });
 
-  it('hands the caret back when a page event closes the card (t5-04 AC4, A32, t5-05 carried 4)', async () => {
+  it('takes no focus and hands nothing back when a page event closes the card (A111, t6-01 AC1; the rewritten t5-04 AC4 and t5-05 carried 4 pins)', async () => {
     // The two close paths that carry no button press: a `pointerdown` outside the overlay
     // host and a page scroll (`src/content/overlay/card-events.ts`, ruling `A32`). They go
-    // through the same `close()` as `Отмена`, so the `Assumption:` half of ruling `A105`
-    // owes them the same handover. The page wiring is attached for the case and detached
-    // again in it: the controller fixture owns no listeners, and `card-events.ts` is not
-    // changed by this task — the pin proves the construction, exactly as it must.
+    // through the same `close()` as `Отмена`, so ruling `A111` leaves them the same
+    // negative proof it left the button paths. The page wiring is attached for the case
+    // and detached again in it: the controller fixture owns no listeners, and
+    // `card-events.ts` is not changed by this task — the pin proves the construction.
     for (const [index, close] of ['pointerdown', 'scroll'].entries()) {
       const control = pageControl(`page-cta-event-${String(index)}`);
       const fixture = mount(selection('p1', 4, 15));
-      await openCard(fixture);
+      await openCard(fixture, control);
       await typeDraft(fixture.overlay, 'a note the reader never saved');
-      expect(fixture.overlay.root.activeElement).toBe(inputOf(fixture.overlay));
 
       const detach = attachCreateCardEvents(
         fixture.controller,
@@ -1145,12 +1170,9 @@ describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', 
         expect(fixture.overlay.host.hidden).toBe(true);
         expect(fixture.overlay.root.activeElement).toBeNull();
         expect(document.activeElement).toBe(control);
-        // Exactly one focus call ran after the recorder was on, and it is the handover:
-        // the page control, with the same `preventScroll: true` the open call passes.
-        const calls = recorder.calls();
-        expect(calls).toHaveLength(1);
-        expect(calls[0]?.element).toBe(control);
-        expect(calls[0]?.options).toEqual({ preventScroll: true });
+        // Not one focus call ran after the recorder was on: an event-driven close closes
+        // a card that never had the caret, so it restores nothing and invents nothing.
+        expect(recorder.calls()).toEqual([]);
         // A close is not a write (ruling `A32`): the port saw nothing but reads.
         expect(writesOtherThanSettings(fixture.port)).toEqual([]);
       } finally {
@@ -1160,15 +1182,16 @@ describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', 
     }
   });
 
-  it('forces nothing when the page control the card took the caret from is gone', async () => {
+  it('makes no focus call at all when the page control is removed while the card stands (A111, t6-01 AC1)', async () => {
     const control = pageControl('page-cta-gone');
     const fixture = mount(selection('p1', 4, 15));
-    await openCard(fixture);
+    await openCard(fixture, control);
 
     const recorder: FocusCallRecorder = recordFocusCalls();
     try {
       // The page removed the control while the card stood — a re-rendered reader pane is
-      // the normal way this happens.
+      // the normal way this happens. The card never took the caret from it, so the close
+      // has nothing to hand back and nothing to substitute.
       control.remove();
       pressKey(fixture.overlay, 'Escape');
       await settle();
@@ -1177,12 +1200,40 @@ describe('the caret moves with the card and back to the page (t5-04 AC3, AC4)', 
       expect(fixture.overlay.root.activeElement).toBeNull();
       // Nothing was forced: the recorder was already running when the close ran, and it
       // saw no call at all — no `body`, no `documentElement`, no shadow host, no detached
-      // control. What the document answers is the browser's own default for an emptied
-      // shadow tree.
+      // control. What the document answers is the browser's own default.
       expect(recorder.calls()).toEqual([]);
       expect(document.activeElement).not.toBe(control);
       expect(document.activeElement).not.toBe(fixture.overlay.host);
       expect(document.activeElement).not.toBe(document.documentElement);
+    } finally {
+      recorder.restore();
+    }
+  });
+
+  it('hands nothing back when the caret stood inside the card at the close (A111, t6-01 AC1)', async () => {
+    // The reader reached the field with `Tab`, so the caret was inside the shadow tree
+    // when the card closed. There is no handover on this path: the close makes no focus
+    // call, restores nothing and invents nothing — where the caret goes when its field is
+    // unmounted is the browser's answer, not a decision of this controller. This is the
+    // pin that proves the old `focus.restore()` left `close()` and not only `open()`.
+    const control = pageControl('page-cta-inside');
+    const fixture = mount(selection('p1', 4, 15));
+    await openCard(fixture, control);
+    const field = inputOf(fixture.overlay);
+    field.focus();
+    expect(fixture.overlay.root.activeElement).toBe(field);
+    expect(document.activeElement).toBe(fixture.overlay.host);
+
+    const recorder: FocusCallRecorder = recordFocusCalls();
+    try {
+      pressKey(fixture.overlay, 'Escape');
+      await settle();
+
+      expect(fixture.controller.isOpen()).toBe(false);
+      expect(fixture.overlay.root.activeElement).toBeNull();
+      expect(recorder.calls()).toEqual([]);
+      expect(document.activeElement).not.toBe(control);
+      expect(document.activeElement).not.toBe(field);
     } finally {
       recorder.restore();
     }
