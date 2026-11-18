@@ -198,3 +198,15 @@ These three name the shape, so the engineer's only job is to implement and test 
   create, and product rules need a spec line, which this has none of.
 
 | B7 | «если я медленно выделяю текст, то окно появляется и срывает выделение» | Reported live in Run 2 of the browser pass. Opening the create card moves focus into the note field (`A97`, `A105`), and in Chrome focusing an editable element drops the page's active selection — so the reader mid-selection sees the words they were selecting go plain again. Reported against the **create-card** path; the editor path opens from a tooltip click, where no live selection is at stake | `A97` itself, or only its create-card half, or the focus call shape | the user offered a revert to `A74`; alternatives exist (keep focus only in the editor path, or defer focus until the reader types). The decision is observable behavior, so it is asked, not made |
+
+- `A111` (**`B7`: the caret moves only where nothing is being lost; the user chose this shape on 2026-11-18**): opening the
+  **create card** moves **no** focus — the `A74` half is restored for that path — while opening the **editor** still focuses its
+  `textarea` (`A97` survives there) with `preventScroll: true` and the focus-restore of `A105`. Reason, from the code rather than
+  from a guess: the create card reads the page selection once at open (`src/content/overlay/create-card-controller.tsx:284`) and
+  Chrome drops the page's active selection when focus enters an editable element, so focusing there destroys the very thing the
+  reader is doing mid-gesture; the editor opens from a tooltip click over the entry's own painted range (`A104`) and has no live
+  selection to lose. Rejected at the same time: deferring the focus until the reader types (a new key-capture mechanism with
+  host-page risk), and re-applying the selection after focusing (may bounce the focus back; unspecified in Chrome).
+  Consequence recorded honestly: the "selection survives the card opening" half **cannot be pinned in jsdom** (jsdom does not drop
+  a selection on focus), so it is a browser-verification item, and the jsdom proof is the negative one — the card path performs
+  **no** focus call at all.
