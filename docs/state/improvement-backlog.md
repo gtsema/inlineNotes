@@ -196,3 +196,5 @@ These three name the shape, so the engineer's only job is to implement and test 
   the shape is documented as unreachable-by-construction and inert, which stops a later refactor from quietly starting to write to
   such a row. Rejected alternative: a normalize-or-drop rule in `groupsOf` — it would invent a product rule for a state no path can
   create, and product rules need a spec line, which this has none of.
+
+| B7 | «если я медленно выделяю текст, то окно появляется и срывает выделение» | Reported live in Run 2 of the browser pass. Opening the create card moves focus into the note field (`A97`, `A105`), and in Chrome focusing an editable element drops the page's active selection — so the reader mid-selection sees the words they were selecting go plain again. Reported against the **create-card** path; the editor path opens from a tooltip click, where no live selection is at stake | `A97` itself, or only its create-card half, or the focus call shape | the user offered a revert to `A74`; alternatives exist (keep focus only in the editor path, or defer focus until the reader types). The decision is observable behavior, so it is asked, not made |

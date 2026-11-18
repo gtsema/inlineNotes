@@ -181,3 +181,25 @@ assumption that an unpacked reload shows a permission warning.
 10. **The `A110` blank-author row.** Reachable only by hand-seeding `chrome.storage.local`; either probe it explicitly (label
     renders as « — 1», both controls do nothing, two such rows do not corrupt the list) or record it as `not verified`. Do not
     infer it from `tests/popup-entry-list.spec.ts:849`.
+
+### Run 2 outcome (2026-11-18, Chrome 157.0.8103.38, unpacked `dist/`)
+
+Reported by the user as "1,2 / 3 / 4-5 / 6-9 ok", recorded per item, nothing inferred:
+
+| Item | Result | Note |
+|---|---|---|
+| 1 focus on open (`A97`, `A105`) | **passed** | caret in the field on select and on tooltip click; no page scroll observed; caret returns to the page on close |
+| 2 tooltip as the way in (`A96`, `A104`) | **passed** | opaque from first hover; own click opens the editor; foreign click does nothing; own-note selection opens nothing |
+| 3 `A106`/`A107` stale-selection baseline | **passed** | stale selection saves cleanly; a new selection across my own other note is refused |
+| 4 per-author colours (`A94`, `A102`) | **passed** | two authors, two colours, overlaps blend |
+| 5 per-author overlap (`A93`, `A99`, `A100`) | **passed** | own words refused, foreign words allowed |
+| 6 popup with no address + `?utm_…` resolution (`A98`) | **passed** | no address line anywhere; notes resolve on the parameter variant |
+| 7 cross-tab repaint from the aggregate write | **passed** | one checkbox press in one tab hides/re-shows all of that author's highlights in the other tab |
+| 8 the `onChanged` record count for one aggregate write | **passed** | observed behavior correct; the exact record count was not counted separately, and behavior is what matters here |
+| 9 popup group `Удалить` on a real page | **passed** | other authors untouched; the page is clean after the last row is removed |
+| 10 the `A110` blank-author row | **not verified** | needs hand-seeded storage; the user did not run it. The pin stays `tests/popup-entry-list.spec.ts:849` and no browser claim is made |
+
+- Items passed: 9 / 10. Failed: 0. Not verified: item 10.
+- **A new problem was reported during this run, not covered by any item:** selecting text slowly makes the card appear and
+  **clear the page selection**. The user attributes it to the focus move of `A97` and asks whether to revert it. Tracked as
+  backlog **B7** in `docs/state/improvement-backlog.md`; no ruling yet, the shape is a question for the user.
