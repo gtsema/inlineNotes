@@ -45,4 +45,7 @@ expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **launch failure, not an attempt (`A85`).** The first child died at prefill with an endpoint error ("unspecified launch
+  failure"); measured tree: HEAD `fd8a3ce`, `git status --short` empty — **zero commits, zero touched files**, so nothing was lost
+and nothing is carried. The user fixed the endpoint and said «продолжай»; relaunched with the same brief.
+- attempt 1: in progress.
