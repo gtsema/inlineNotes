@@ -153,3 +153,11 @@ These three name the shape, so the engineer's only job is to implement and test 
   **if it is still connected**, and forces nothing otherwise (no `body` hijack). No `tabindex` is introduced, so the rendered
   order stays the tab order. The focus-restore half is **my** decision, not the user's word, and is recorded in the spec with an
   `Assumption:` marker: without it, closing a card would leave the active element inside a removed shadow tree.
+
+- `A106` (**what the editor keeps as its baseline**): the boundary points of the **`PaintedEntry` the tooltip click opened**, from
+  the paint pass — never "whatever selection the page happened to hold" at the click. The `t5-03` review verdict was `blocked` on
+  a spec-vs-code contradiction of exactly this kind (`content-overlay-ui.md:19` and `:95` vs `editor-controller.tsx` `keepBaseline`);
+  the engineer had flagged it as an open question and my brief had not answered it, so the fault is the brief's. Observable
+  consequence, pinned by name: a page that already holds a stale selection when the tooltip is clicked saves cleanly (no overlap
+  refusal), and only a **new** selection differing from the note's own words asks the own-author overlap question. Rejected
+  alternative: the page-selection baseline, which would let a selection the reader never made refuse a save.
