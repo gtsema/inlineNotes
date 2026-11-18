@@ -1,10 +1,12 @@
 /**
  * The paint stylesheet: the `::highlight()` rules the highlights need in order to be
- * visible at all (task `t3-02` AC2; ruling `A41`).
+ * visible at all (task `t3-02` AC2; ruling `A41`; per-author declarations since task
+ * `t5-02`, rulings `A94`, `A102`).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Highlight
- * painting" ("one shared style for all entries", the translucent frame) and the
- * page-respect rule of ruling `A41` (the extension owns the overlay host and one
+ * painting" (one rule per entry) and "Author colour and `paint slot`" (the declarations
+ * of a rule come from the author's palette slot — task `t5-02`, rulings `A94`, `A102`),
+ * plus the page-respect rule of ruling `A41` (the extension owns the overlay host and one
  * paint stylesheet, and nothing else in the page DOM).
  *
  * Why a document-level sheet is required: a custom highlight is not an element, so
@@ -33,29 +35,36 @@
  * holds, so a page that adopts its own sheets keeps them. The extension's sheet is
  * then rewritten in place (`replaceSync`), which never touches the page's sheets.
  *
+ * What did **not** change with `A94`: the rule count. One painted entry is still one rule
+ * under one `inlinenotes-<entryId>` name (ruling `A70`), and a palette of six slots does
+ * not add six shared rules. A per-slot rule set would break the teardown of ruling `A39`
+ * — dropping one entry has to be possible without touching what its neighbours paint —
+ * and it would make the number of rules a function of the palette rather than of the
+ * page.
+ *
  * The name prefix is shared with `highlight-name.ts`: a rule and a registered name
  * that disagree paint nothing, and the disagreement is invisible from the outside.
  */
 
 import { PAINT_NAME_PREFIX } from './highlight-name';
+import type { PaintSlot } from './paint-palette';
+import { paintDeclarationsOfSlot } from './paint-palette';
 
 /**
- * The one declaration block every painted span shares (spec: "one shared style for
- * all entries", a translucent frame rather than the author's own colour).
+ * The rule this module writes for one painted entry: its `paint name` plus the palette
+ * slot its author maps to.
  *
- * `background-color` and `text-decoration` are inside the small set of properties the
- * CSS Custom Highlight spec applies to a highlight pseudo-element; `outline` is not an
- * inherited property and is not applied there, which is why the frame is drawn as an
- * underline instead of a border. Both colours are `rgba`, and neither depends on the
- * entry, its author or its `visible` flag: own and foreign entries look identical, and
- * the only place the two are told apart is the tooltip header
- * (`docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Own entries and
- * foreign entries are visually distinguished only in the tooltip header").
+ * The pair arrives together because a rule cannot be built from a name alone once the
+ * declarations vary: a `sync(names)` signature would leave this module guessing which
+ * colour the caller meant, and a second parallel array of slots would be a second
+ * contract to keep in step with the first.
  */
-export const PAINT_DECLARATIONS: readonly string[] = [
-  'background-color: rgba(122, 162, 247, 0.26);',
-  'text-decoration: underline solid rgba(31, 111, 235, 0.7);',
-];
+export interface PaintStyleRule {
+  /** The `paint name` of the entry: `inlinenotes-<entryId>` (ruling `A70`). */
+  readonly name: string;
+  /** The palette slot its `authorName` maps to (ruling `A102`). */
+  readonly slot: PaintSlot;
+}
 
 /**
  * A custom highlight name inside `::highlight()` has to be one CSS name token.
@@ -73,26 +82,35 @@ export function isStyleableHighlightName(name: string): boolean {
   return STYLEABLE_NAME.test(name);
 }
 
-/** The rule that paints one named highlight. */
-export function paintRuleOf(name: string): string {
-  return `::highlight(${name}) {\n  ${PAINT_DECLARATIONS.join('\n  ')}\n}`;
+/** The rule that paints one named highlight, with the declarations of its slot. */
+export function paintRuleOf(name: string, slot: PaintSlot): string {
+  return `::highlight(${name}) {\n  ${paintDeclarationsOfSlot(slot).join('\n  ')}\n}`;
 }
 
-/** The rules of the current page, one per painted entry, unsafe names dropped. */
-export function paintRulesOf(names: readonly string[]): string[] {
-  const rules: string[] = [];
-  for (const name of names) {
-    if (isStyleableHighlightName(name)) {
-      rules.push(paintRuleOf(name));
+/**
+ * The rules of the current page, one per painted entry, unsafe names dropped.
+ *
+ * The order is the caller's order — the paint pass hands over its own entry order — and
+ * nothing is sorted, deduplicated or grouped by slot here. Grouping by slot is exactly
+ * what the count of rules must not do (rulings `A70`, `A94`).
+ */
+export function paintRulesOf(rules: readonly PaintStyleRule[]): string[] {
+  const written: string[] = [];
+  for (const rule of rules) {
+    if (isStyleableHighlightName(rule.name)) {
+      written.push(paintRuleOf(rule.name, rule.slot));
     }
   }
-  return rules;
+  return written;
 }
 
 /** The owner of the document's paint stylesheet. */
 export interface PaintStyleOwner {
-  /** Writes the rules of exactly these names; `[]` leaves the sheet empty. */
-  sync(names: readonly string[]): void;
+  /**
+   * Writes the rules of exactly these entries — one rule each, with the declarations of
+   * that author's palette slot; `[]` leaves the sheet empty.
+   */
+  sync(rules: readonly PaintStyleRule[]): void;
   /** The rule texts the owner wrote last, for a test or a devtools check. */
   ruleTexts(): readonly string[];
   /** Removes every rule the extension owns (the teardown of ruling `A39`). */
@@ -127,8 +145,8 @@ export function paintStyleOwnerOf(doc: Document): PaintStyleOwner | null {
 
   let rules: string[] = [];
   const owner: PaintStyleOwner = {
-    sync(names): void {
-      rules = paintRulesOf(names);
+    sync(entries): void {
+      rules = paintRulesOf(entries);
       sheet.replaceSync(rules.join('\n'));
     },
     ruleTexts(): readonly string[] {

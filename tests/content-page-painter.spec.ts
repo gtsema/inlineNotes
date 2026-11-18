@@ -36,7 +36,12 @@
  *   what the two watches of `src/content/refresh/` read per change, and it keeps the key
  *   of a pass that did resolve this page but reported a read it would not paint from. The
  *   consequence for the watch is pinned end-to-end in
- *   `tests/content-cross-tab-refresh.spec.ts`.
+ *   `tests/content-cross-tab-refresh.spec.ts`;
+ * - `t5-02` (rulings `A94`, `A102`): the rule count stays one per painted entry on a page
+ *   of six authors, the declarations of a rule come from the author's palette slot, a
+ *   repaint keeps the colour of the entry that stayed and drops the rule of the one that
+ *   went, and two `foreign entry` ranges that overlap the reader's own are **both**
+ *   registered — the paint pass owns no `overlap` answer of its own.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -57,6 +62,7 @@ import { paintStyleOwnerOf } from '../src/content/paint/paint-style';
 import { createPagePainter } from '../src/content/paint/page-painter';
 import type { PagePainter } from '../src/content/paint/page-painter';
 import type { PaintedFragment } from '../src/content/paint/paint-plan';
+import { paintDeclarationsOfSlot, paintSlotOf } from '../src/content/paint/paint-palette';
 import type { PaintSurface } from '../src/content/paint/paint-surface';
 import type { Entry } from '../src/core/entry';
 import {
@@ -608,5 +614,162 @@ describe('the page key of the last pass (`pageKeyOfPass`, t4-03 review remark 4)
     expect(outcome.readCodes).toEqual(['index_malformed']);
     expect(outcome.pageKey).toBe(PAGE_KEY);
     expect(painter.pageKeyOfPass()).toBe(PAGE_KEY);
+  });
+});
+
+describe('the colour of a highlight follows its author (t5-02 AC1, AC5, AC7, AC8; A94, A102)', () => {
+  /** The `paint name` one written rule paints. */
+  function ruleNameOf(ruleText: string): string {
+    return /::highlight\(([^)]+)\)/.exec(ruleText)?.[1] ?? '';
+  }
+
+  /** The declaration block of one written rule, selector removed. */
+  function ruleBodyOf(ruleText: string): string {
+    return ruleText.slice(ruleText.indexOf('{'));
+  }
+
+  /** The background declaration the palette gives one author. */
+  function backgroundOf(authorName: string): string {
+    return paintDeclarationsOfSlot(paintSlotOf(authorName))[0];
+  }
+
+  it('keeps one rule per painted entry on a page of six authors, and adds none for the palette (AC5)', async () => {
+    // Six authors chosen to occupy all six slots, so the sheet shows six hues at once.
+    // The count is the criterion: a rule set grouped by slot would answer 6 for six slots
+    // and 1 for one author, and the teardown of `A39` would stop working.
+    const authors = ['reader', 'reader-four', 'ann', 'reader-one', 'Я', 'Вася'];
+    const needles = ['quick', 'brown', 'fox', 'jumps', 'lazy dog', 'Second paragraph'];
+    const ids = [
+      'a1b2c3d4e5f6',
+      'b2c3d4e5f6a1',
+      'c3d4e5f6a1b2',
+      'd4e5f6a1b2c3',
+      'e5f6a1b2c3d4',
+      'f6a1b2c3d4e5',
+    ];
+    seedPage(
+      port,
+      authors.map((authorName, index) =>
+        recordFor(ids[index] ?? '', needles[index] ?? 'quick', { authorName }),
+      ),
+    );
+    const surface = new RecordingSurface();
+    const painter = needPainter(surface, seam().rangeFor, port);
+
+    const outcome = await painter.refresh();
+
+    expect(outcome.painted).toHaveLength(6);
+    expect(outcome.skipped).toEqual([]);
+    expect(surface.writes).toEqual(ids.map((id) => `inlinenotes-${id}`));
+
+    const rules = styleRules();
+    expect(rules).toHaveLength(6);
+    expect(rules.map(ruleNameOf)).toEqual(ids.map((id) => `inlinenotes-${id}`));
+    // Six distinct authors on six distinct slots answer six distinct bodies: the palette
+    // is the only source, and it is not walked to make extra rules.
+    expect(new Set(rules.map(ruleBodyOf)).size).toBe(6);
+    // The slot-0 author keeps the frame that shipped before ruling `A94`, character for
+    // character, so a one-author page can look unchanged after this task.
+    expect(rules[0]).toContain('background-color: rgba(122, 162, 247, 0.26);');
+    expect(rules[0]).toContain('text-decoration: underline solid rgba(31, 111, 235, 0.7);');
+  });
+
+  it('paints two entries of one author with the same declarations (AC1)', async () => {
+    seedPage(port, [
+      recordFor('a1b2c3d4e5f6', 'quick brown'),
+      recordFor('b2c3d4e5f6a1', 'Second paragraph'),
+    ]);
+    const surface = new RecordingSurface();
+    const painter = needPainter(surface, seam().rangeFor, port);
+
+    await painter.refresh();
+
+    const rules = styleRules();
+    expect(rules).toHaveLength(2);
+    expect(rules[0]).not.toBe(rules[1]);
+    expect(ruleBodyOf(rules[0])).toBe(ruleBodyOf(rules[1]));
+    expect(rules[0]).toContain(backgroundOf(AUTHOR));
+  });
+
+  it('registers both ranges of two authors on the same words, and colours them apart (AC8)', async () => {
+    // The `overlap` refusal is core's and answers at the write (`A93`, `A100`); the paint
+    // pass has no rejection of its own, so both names reach `CSS.highlights` and the
+    // blend the Highlight API produces is the answer the spec accepts (`A94`).
+    seedPage(port, [
+      recordFor('a1b2c3d4e5f6', 'quick brown', { authorName: AUTHOR }),
+      recordFor('b2c3d4e5f6a1', 'quick brown', { authorName: 'ann' }),
+    ]);
+    const surface = new RecordingSurface();
+    const painter = needPainter(surface, seam().rangeFor, port);
+
+    const outcome = await painter.refresh();
+
+    expect(outcome.skipped).toEqual([]);
+    expect(surface.writes).toEqual([
+      'inlinenotes-a1b2c3d4e5f6',
+      'inlinenotes-b2c3d4e5f6a1',
+    ]);
+    expect(surface.fragmentCountOf('inlinenotes-a1b2c3d4e5f6')).toBe(1);
+    expect(surface.fragmentCountOf('inlinenotes-b2c3d4e5f6a1')).toBe(1);
+
+    const rules = styleRules();
+    expect(rules).toHaveLength(2);
+    expect(rules[0]).toContain(backgroundOf(AUTHOR));
+    expect(rules[1]).toContain(backgroundOf('ann'));
+    expect(ruleBodyOf(rules[0])).not.toBe(ruleBodyOf(rules[1]));
+  });
+
+  it('paints two authors that share a slot alike, and keeps their names apart (AC2, A94)', async () => {
+    seedPage(port, [
+      recordFor('a1b2c3d4e5f6', 'quick brown', { authorName: 'reader-one' }),
+      recordFor('b2c3d4e5f6a1', 'Second paragraph', { authorName: 'reader-two' }),
+    ]);
+    const surface = new RecordingSurface();
+    const painter = needPainter(surface, seam().rangeFor, port);
+
+    await painter.refresh();
+
+    const rules = styleRules();
+    expect(rules).toHaveLength(2);
+    expect(rules.map(ruleNameOf)).toEqual([
+      'inlinenotes-a1b2c3d4e5f6',
+      'inlinenotes-b2c3d4e5f6a1',
+    ]);
+    // The accepted collision, on the page: one colour, two names, two entries, and the
+    // per-entry teardown still addresses each of them alone.
+    expect(ruleBodyOf(rules[0])).toBe(ruleBodyOf(rules[1]));
+    // And no marker of ownership reaches the page: the reader's own entry occupies the
+    // same slot as this foreign one and is drawn exactly alike, and no author name appears
+    // in the sheet at all (ruling `A94`).
+    expect(rules[0]).not.toContain(AUTHOR);
+    expect(rules[1]).not.toContain('reader-two');
+  });
+
+  it('keeps the colour of the entry that stayed and drops the rule of the one that went (AC7, A39)', async () => {
+    seedPage(port, [
+      recordFor('a1b2c3d4e5f6', 'quick brown', { authorName: AUTHOR }),
+      recordFor('b2c3d4e5f6a1', 'Second paragraph', { authorName: 'ann' }),
+    ]);
+    const surface = new RecordingSurface();
+    const painter = needPainter(surface, seam().rangeFor, port);
+    await painter.refresh();
+    expect(styleRules()).toHaveLength(2);
+
+    seedPage(port, [
+      recordFor('a1b2c3d4e5f6', 'quick brown', { authorName: AUTHOR }),
+      recordFor('b2c3d4e5f6a1', 'Second paragraph', { authorName: 'ann', visible: false }),
+    ]);
+    const outcome = await painter.refresh();
+
+    expect(outcome.skipped).toEqual([{ entryId: 'b2c3d4e5f6a1', reason: 'hidden' }]);
+    const rules = styleRules();
+    expect(rules).toHaveLength(1);
+    expect(ruleNameOf(rules[0])).toBe('inlinenotes-a1b2c3d4e5f6');
+    expect(rules[0]).toContain(backgroundOf(AUTHOR));
+
+    // The sheet is reset by the same teardown that removes the names (`A39`): a pass with
+    // nothing to paint leaves no rule behind in any slot.
+    painter.clearPaint();
+    expect(styleRules()).toEqual([]);
   });
 });

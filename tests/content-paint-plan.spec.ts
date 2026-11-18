@@ -46,6 +46,7 @@ import type { Box, RangeForFragment } from '../src/content/capture/fragment-rect
 import { highlightNameOf, isPaintHighlightName } from '../src/content/paint/highlight-name';
 import { buildPaintPlan } from '../src/content/paint/paint-plan';
 import type { PaintedFragment } from '../src/content/paint/paint-plan';
+import { paintSlotOf } from '../src/content/paint/paint-palette';
 import { placementFragmentBox } from '../src/content/capture/fragment-rect';
 
 const ARTICLE =
@@ -255,6 +256,100 @@ describe('one entry, one named highlight (AC1, A70)', () => {
     expect(plan.skipped).toEqual([]);
     expect(plan.painted[0]?.fragments[0]?.box).toEqual(BOX_A);
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe('the `paint slot` one pass attaches to each entry (`t5-02`, A94, A102)', () => {
+  it('gives two entries of one author the same slot, and therefore the same colour', () => {
+    // AC1. The slot is attached per entry, so equality of two entries of one author is
+    // the whole promise: the stylesheet turns it into two rules with the same body.
+    const first = entryFor(anchorOf('quick brown'), { id: 'a1b2c3d4e5f6' });
+    const second = entryFor(anchorOf('Second paragraph'), { id: 'b2c3d4e5f6a1' });
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({ entries: [first, second], root: document.body, rangeFor });
+
+    expect(plan.painted.map((painted) => painted.paintSlot)).toEqual([3, 3]);
+    expect(plan.painted[0]?.paintSlot).toBe(paintSlotOf('reader-one'));
+    expect(plan.painted[1]?.paintSlot).toBe(plan.painted[0]?.paintSlot);
+  });
+
+  it('gives two entries of two authors the slots of their own names', () => {
+    // AC2, pinned as literals rather than as "different": the literal is what fails when
+    // the mapping is renamed, and the pair is the one the page-level suites use.
+    const own = entryFor(anchorOf('quick brown'), { id: 'a1b2c3d4e5f6' });
+    const foreign = entryFor(anchorOf('Second paragraph'), {
+      id: 'b2c3d4e5f6a1',
+      authorName: 'ann',
+    });
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({ entries: [own, foreign], root: document.body, rangeFor });
+
+    expect(plan.painted.map((painted) => painted.paintSlot)).toEqual([3, 2]);
+  });
+
+  it('is the slot of the stored record, never of the name the reader happens to use', () => {
+    // The pass reads no settings: `paint-plan.ts` sees the entries only. Two records of
+    // one page therefore keep the colours they were written with, which is what makes a
+    // foreign author's colour stable while the reader changes their own name.
+    const foreign = entryFor(anchorOf('quick brown'), { authorName: 'Вася' });
+    const other = entryFor(anchorOf('Second paragraph'), { id: 'b2c3d4e5f6a1' });
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({ entries: [foreign, other], root: document.body, rangeFor });
+
+    expect(plan.painted.map((painted) => painted.paintSlot)).toEqual([5, 3]);
+  });
+
+  it('follows the stored name verbatim, so a stored space moves the colour (A99 contrast)', () => {
+    // The honest half of the mapping: core `isSameAuthor` trims and calls these two names
+    // one author, while a colour is a hash of the bytes that were stored. The spec states
+    // this in "Author colour and `paint slot`", because it is observable and is not an
+    // ownership answer.
+    const trimmed = entryFor(anchorOf('quick brown'), { id: 'a1b2c3d4e5f6' });
+    const spaced = entryFor(anchorOf('Second paragraph'), {
+      id: 'b2c3d4e5f6a1',
+      authorName: 'reader-one ',
+    });
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({ entries: [trimmed, spaced], root: document.body, rangeFor });
+
+    expect(plan.painted.map((painted) => painted.paintSlot)).toEqual([3, 5]);
+  });
+
+  it('carries the slot and no colour of its own, so the palette stays the only one', () => {
+    const anchor = anchorOf('quick brown');
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({
+      entries: [entryFor(anchor)],
+      root: document.body,
+      rangeFor,
+    });
+
+    const painted = plan.painted[0];
+    if (painted === undefined) {
+      throw new Error('fixture entry is not painted');
+    }
+    expect(painted.paintSlot).toBe(paintSlotOf('reader-one'));
+    // A copied colour would be a second palette to keep in step with the first.
+    expect(painted).not.toHaveProperty('color');
+    expect(painted).not.toHaveProperty('declarations');
+    expect(painted).not.toHaveProperty('authorColor');
+  });
+
+  it('attaches nothing to an entry that never reached the page (A40, A24, A66)', () => {
+    // The skipped half of AC6: a hidden entry has no rule to colour, and its skip record
+    // is still exactly `entryId` + `reason` — no slot, no colour, no new field.
+    const hidden = entryFor(anchorOf('quick brown'), { visible: false });
+    const { rangeFor } = recorder();
+
+    const plan = buildPaintPlan({ entries: [hidden], root: document.body, rangeFor });
+
+    expect(plan.painted).toEqual([]);
+    expect(plan.skipped).toEqual([{ entryId: hidden.id, reason: 'hidden' }]);
   });
 });
 

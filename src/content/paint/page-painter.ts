@@ -26,7 +26,8 @@
  *    cached one;
  * 3. remove the names this pass no longer needs (ruling `A39`), then write each
  *    entry's ranges under its own name (ruling `A70`), then sync the paint rules
- *    (ruling `A41`).
+ *    (ruling `A41`), every rule taking its declarations from the palette slot of its
+ *    author (rulings `A94`, `A102`).
  *
  * Teardown runs before painting, and it removes **only** names carrying the
  * extension prefix: `CSS.highlights` is a document-global map, and a page script's
@@ -49,7 +50,7 @@ import { isPaintHighlightName } from './highlight-name';
 import { buildPaintPlan } from './paint-plan';
 import type { PaintedEntry, PaintPlan, PaintSkipReason, SkippedEntry } from './paint-plan';
 import { paintStyleOwnerOf } from './paint-style';
-import type { PaintStyleOwner } from './paint-style';
+import type { PaintStyleOwner, PaintStyleRule } from './paint-style';
 import { documentPaintSurface } from './paint-surface';
 import type { PaintSurface } from './paint-surface';
 
@@ -327,6 +328,12 @@ function skippedForFailedPass(
  * same page deletes nothing, writes each name once, and cannot leave a range behind
  * for an entry that went hidden, stale or unmeasurable between the two passes
  * (ruling `A39`).
+ *
+ * The sheet is handed `name` + `paint slot` pairs rather than bare names, because since
+ * task `t5-02` a rule is no longer derivable from its name alone: its declarations come
+ * from the author's palette slot (rulings `A94`, `A102`). One pair per painted entry, in
+ * the plan's own order — the palette is never walked, so the number of rules stays a
+ * function of the page and never of the palette.
  */
 function registerPlan(
   surface: PaintSurface,
@@ -334,8 +341,10 @@ function registerPlan(
   plan: PaintPlan,
 ): void {
   const kept = new Set<string>();
+  const styleRules: PaintStyleRule[] = [];
   for (const entry of plan.painted) {
     kept.add(entry.name);
+    styleRules.push({ name: entry.name, slot: entry.paintSlot });
   }
 
   for (const held of surface.heldNames()) {
@@ -349,6 +358,6 @@ function registerPlan(
   }
 
   if (style !== null) {
-    style.sync([...kept]);
+    style.sync(styleRules);
   }
 }

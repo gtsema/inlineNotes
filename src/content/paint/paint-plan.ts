@@ -3,7 +3,7 @@
  * `A40`, `A66`, `A67`, `A70`).
  *
  * Rule owner: `docs/specs/content-overlay-ui.md` -> Rules / Semantics -> "Highlight
- * painting", "Paint-path measurement", "Tooltip anchor";
+ * painting", "Author colour and `paint slot`", "Paint-path measurement", "Tooltip anchor";
  * `docs/specs/inline-comment-model.md` -> Flow / Sequence 6, which is the sentence
  * this module implements: on load, build **one** stream, resolve every anchor of the
  * page against it, paint the resolved ones, and leave the unresolvable ones alone.
@@ -35,6 +35,12 @@
  * stylesheet, the teardown of ruling `A39` — is `paint-surface.ts`,
  * `paint-style.ts` and `page-painter.ts`.
  *
+ * The plan also carries the `paint slot` of every painted entry (task `t5-02`, ruling
+ * `A102`): this module is the only place that sees the stored `authorName` and the
+ * `paint name` together, so it is the only place allowed to turn one into the other. The
+ * mapping itself lives in `paint-palette.ts`, and the plan keeps no colour string of its
+ * own — a colour copied here would be a second palette.
+ *
  * **No box measured here leaves the pass for a widget to place itself with.** The plan
  * used to carry a `tooltipBox` per entry — the first fragment box with an area, the
  * paint pass's own snapshot of the tooltip-anchor rule — and nothing read it: the
@@ -55,6 +61,8 @@ import type { TextFragment } from '../anchor/text-stream';
 import { fragmentBox } from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
 import { highlightNameOf } from './highlight-name';
+import { paintSlotOf } from './paint-palette';
+import type { PaintSlot } from './paint-palette';
 
 /** One fragment of a resolved span, with the box the page gives it. */
 export interface PaintedFragment {
@@ -74,6 +82,21 @@ export interface PaintedEntry {
   readonly entry: Entry;
   /** The `CSS.highlights` name of this entry (ruling `A70`). */
   readonly name: string;
+  /**
+   * The palette slot this entry's `authorName` maps to (task `t5-02`, rulings `A94`,
+   * `A102`).
+   *
+   * It is attached here and nowhere else: the plan is the one place that has the stored
+   * record and the `paint name` in the same object, and `paint-style.ts` needs the pair
+   * to write a rule. Carrying it on the plan rather than recomputing it in the stylesheet
+   * keeps the colour a fact about the entry the pass decided to paint, and keeps
+   * `paint-style.ts` free of any author rule of its own.
+   *
+   * The slot answers no other question. It is not an ownership marker (ruling `A94`): the
+   * tooltip header and the popup row still ask core `canEdit`, and a foreign author who
+   * hashes to the reader's slot wears the same colour.
+   */
+  readonly paintSlot: PaintSlot;
   /**
    * Every fragment of the span, in document order (ruling `A36`).
    *
@@ -158,6 +181,7 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
     painted.push({
       entry,
       name: highlightNameOf(entry.id),
+      paintSlot: paintSlotOf(entry.authorName),
       fragments,
     });
   }
