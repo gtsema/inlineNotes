@@ -58,9 +58,19 @@ one note.
   `docs/specs/code-review-flow.md` (`A76`, `A89`).
 - Do not touch the task state file `docs/state/t5-06-popup-author-groups.md`; write your report to your own artifact.
 
-## Carried-fix checklist
+## Carried-fix checklist (`A72`, from the `t5-05` review)
 
-None — the comment-pointer items belong to `t5-04`.
+1. `tests/content-tooltip.spec.ts:460` — the `describe` name cites `t5-03 AC1` (opacity) although that describe holds no opacity
+   pin (the opacity pin is `:389`). **Name-only.**
+2. `README.md:12-13` — still describes the pre-`A96` two-state tooltip (translucent until clicked). Rewrite it to the shipped
+   rule: the tooltip is opaque from the first hover, clicking my own tooltip opens the editor, clicking a foreign one does
+   nothing, selecting inside my own note opens nothing. Fact-check every sentence you write there against the code — README prose
+   is reviewed as a factual document, not as marketing.
+3. **Do not move** the popup template scan out of `tests/popup-entry-list.spec.ts` — ruling `A109` settles that question: a scan
+   of a UI layer's own template belongs in that layer's spec; `tests/toolchain-contract.spec.ts` keeps harness-level greps only.
+4. The view-shape pin at `tests/popup-entry-list.spec.ts:222` and the "no address node" scan at `:230-255` are what make AC1 of
+   this task true. `A108` changes that view shape (author rows replace entry rows), so both must be **carried through the
+   refactor**: re-check them against the new shape, do not delete or weaken them. Deleting either is a blocking finding.
 
 ## Gate and commit order (`A62`, `A73`, `A101`)
 

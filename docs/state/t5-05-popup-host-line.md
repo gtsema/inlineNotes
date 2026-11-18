@@ -60,8 +60,18 @@ manifest does not change. If `hostOf` has no other caller, delete the function r
 
 ## Delegation count
 
-expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: 0.
+expected 2 (engineer + reviewer); ceiling (×2) = 4. Used: **2 of 4** — engineer (four commits, no escalation), reviewer.
 
 ## Attempts log
 
-- attempt 1: not started.
+- **attempt 1 delivered** in four commits: `c5964aa` (spec + carried 3), `5bc2580` (behavior: the host line, its `.host` style,
+  `hostOf` and the `host` field of `PageEntriesView` are gone), `fe43182` (carried 1, 2, 4), `64d0c48` (the AC1 state walk,
+  including an IDN page). PM-measured gates: typecheck exit 0, `npm test` exit 0 → **875 / 44 files**, build exit 0 → `dist/`
+  10 files, checker exit 0 → 0/0/108, tree clean. PM also verified independently that `chrome.tabs.query` survived in
+  `src/popup/active-tab.ts:27` and `"tabs"` in `src/manifest.json:6`.
+- **review verdict: `accepted`** (`docs/state/t5-05-review.md`) — 6/6 AC pass, 0 blocking, carried 1–4 delivered. Seven remarks;
+  the one worth carrying is that the popup's "no address" pin scans the **template source** rather than rendered DOM, which is
+  sufficient only while the view-shape pin next to it holds.
+- **PM closed two of the reviewer's findings personally**: backlog row B6 was written in present tense with two now-dead
+  `path:line` pointers (rewritten as a closed row, pointers marked historical), and the reviewer's question about where a popup
+  template scan lives is answered by ruling **`A109`** instead of a code move.
