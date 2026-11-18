@@ -345,3 +345,16 @@ invited then.
 checker 0 errors / 0 warnings / 113 INFO, typecheck exit 0.** Stages 5 and 6 together shipped every answered backlog item
 (B1–B6). Nothing in Stage 5/6 has a real-Chrome confirmation yet — that is Run 2 of `docs/state/browser-verification-run.md`,
 ten numbered items, and the user is invited for it now.
+
+## Stage 7 — the browser pass pays one defect back (ruling `A111`)
+
+Run 2 of the browser verification (2026-11-18) recorded **9 items passed, 0 failed, 1 not verified**, and produced one new defect
+report from the user: slow selection + `A97` focus = the page selection is dropped. That is backlog **B7**, ruled **`A111`** with
+the user's chosen shape.
+
+| Task | Slice | Spec / AC anchor | Children |
+|---|---|---|---|
+| `t6-01-focus-editor-only` | the create card takes no focus again; the editor keeps the caret | `content-overlay-ui.md` `focus on open` + `A111` (narrows `A97`, restores the `A74` half for one path) | engineer, reviewer |
+
+One task only. After it is accepted, `dist/` is rebuilt and the user re-checks **Run 2 item 1** (and item 10 remains `not
+verified` unless they choose to hand-seed storage).
