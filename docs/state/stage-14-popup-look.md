@@ -1,0 +1,75 @@
+# Stage 14 — the popup is brought into the settings window's design
+
+Opened by the owner's request (2026-11-19): «теперь нужно привести в порядок дизайн попап окна. он должен соответствовать
+дизайну окна настройки».
+
+## What the PM measured before writing anything
+
+The two surfaces are visually unrelated today, and the popup's colours are a **third palette** that belongs to neither the
+settings window nor the page overlay:
+
+| Role | Settings window (`A125`, `src/options/options.component.ts`) | Popup today (`src/popup/popup.component.ts`) |
+|---|---|---|
+| page / card background | `#fdf7ee` (cream) | — (browser default white) |
+| ink | `#1b2a33` | `#1f1f1f` |
+| secondary text | `#7b6a55` | `#6b6b6b` |
+| decorative border | `#a6cbdc` | — |
+| rule / separator | — | `#e3e3e3` |
+| refusal | `#b3261e` | `#b3261e` (already shared) |
+| primary action | `#b8480d` | — |
+| confirmation band | `#0f5f7a` on `#eef4f7` | — |
+
+Structurally the popup is a different kind of page too: `width: 320px; padding: 12px; font: 13px/1.45 system-ui`, a plain
+`<h1>` with no card, no rounded corners, no border, and rows separated by a hairline. The settings window is a bordered,
+rounded cream card (`max-width: 360px`, `padding: 16px`, `border: 1px solid #a6cbdc`, `border-radius: 12px`), centred, with
+the `13px/1.45` type scale and the `A125` palette.
+
+**So "match the settings design" is not one change.** It is at least: adopt the palette, adopt the card shape, decide
+whether the popup gains the mascot, and decide what happens to the popup's own control shapes (the row checkbox and the
+`Удалить` button are unstyled browser controls today). Four decisions, and three of them are observable.
+
+## What the spec says today, and where it will have to move
+
+- `docs/specs/content-overlay-ui.md:155` — the **Popup contract** sentence. It fixes the popup's *content* (title, notices,
+  rows, no address anywhere, one row per author, row order, the checkbox semantics, `Удалить` for every row) and says nothing
+  about colour or shape. It stays true under any look; the look rules are new text, not a rewrite of it.
+- `:291` — **AC 27** pins the `action row` of the page widgets as icon-only with no cancel control. That is the **page**
+  overlay, not the popup; the popup's `Удалить` is a labelled button today and stays labelled unless the owner says
+  otherwise.
+- `:286` — **AC 22** describes the popup's behaviour through core; unaffected.
+- There is **no** AC about the popup's colours, and no test reads the popup's stylesheet for a palette. The popup look is
+  therefore unruled and unpinned: whatever this stage decides becomes the first ruling about it.
+
+## Rulings
+
+| Ruling | Decision |
+|---|---|
+| `A140` | The popup adopts the **`A125` palette** rather than keeping its own `#1f1f1f` / `#6b6b6b` / `#e3e3e3` trio: cream surface, `#1b2a33` ink, `#7b6a55` secondary, `#a6cbdc` decorative, `#b3261e` refusal (already shared). No new colour is invented, and the page overlay's palette (`A94`/`A102` paint slots) is **not** touched — the popup is an extension surface, not a page surface. |
+| `A141` | The popup becomes a **card in the same shape as the settings surface**: the same border, the same corner radius, the same type scale. Its width stays the popup's own (`320px` is what fits the toolbar panel; the settings card's `360px` is a dialog-box value, not a popup value) — the shape is shared, the width is not. |
+| `A142` | **No mascot in the popup.** The settings window shows it because it has room for a header; the popup is a 320 px toolbar panel whose job is a list, and the owner's Stage 11 word was «только в шапке окна настройки». |
+
+## Questions for the owner, each with the default
+
+**Q1 — the card shape.** A card identical in shape to the settings card (border `1px solid #a6cbdc`, `border-radius: 12px`,
+cream fill) **plus** the popup's own body margin, or the card only? *Default: the card*, with the document's default body
+margin zeroed the way `src/options/index.html` does it, because a bordered card with a browser-default margin around it
+looks like a floating tile rather than a page.
+
+**Q2 — the mascot.** `A142` says no. If the owner wants it after all, it goes in the popup's header at a smaller size and
+that is a different task. *Default: no mascot.*
+
+**Q3 — the row's controls.** Today the row is an unstyled `<input type="checkbox">` plus a default `<button>Удалить</button>`.
+Do they get the settings surface's control styling (the `#a6cbdc` border, the 6 px radius, the `#b8480d` action colour on the
+delete button), or stay native? *Default: style the delete button and the checkbox's box to the `A125` palette*, because
+otherwise the card looks designed and its controls do not.
+
+**Q4 — the empty state and the notices.** The empty line takes the `#7b6a55` secondary ink; the two notices take the
+`#b3261e` refusal ink (already shipped) — the `name_required` one is a button and keeps its underline. *Default: as stated.*
+
+## Ledger
+
+| Row | What is unresolved | Class |
+|---|---|---|
+| `S14-1` | The `A125` palette was sampled from the **old** mascot artwork (`S11-1`/`S12-1`); extending it to the popup spreads a palette whose own provenance is already stale. It is not this stage's job to re-sample it, but the two are now coupled: re-sampling later moves the popup too. | ruling + spec |
+| `S14-2` | No test reads the popup's stylesheet, so this stage's look rules will be the first popup-look pins. If they are written the way the settings look is pinned (`tests/options-window-look.spec.ts`), the popup gets a look suite of its own; if not, the ruling is unpinned prose. The stage decides which, and says so. | test |
+| `S14-3` | The popup's `320px` width and the settings card's `360px` are two numbers with no shared rule. `A141` deliberately keeps them apart; if the owner wants one width, that is a third value and a new ruling. | ruling |
