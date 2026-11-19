@@ -87,6 +87,27 @@ declares an icon — one 128×128 PNG — for Chrome's toolbar and the extension
   in the final message as well.**
 - One commit for code/tests/asset/spec. One writer for this repo.
 
+## Attempt 2 — AC 10, 11 (after the review; the same slice, nothing new)
+
+10. **The mascot bullet stops describing the old file.** `docs/specs/content-overlay-ui.md:91` still reads as if the shipped
+    mascot were the byte-identical copy of `Mistension/img/128.png` with SHA-256 `a899a910…d446b4` and 27 414 bytes — that is
+    now false, and the file it describes is the file this task replaced. Restate the bullet for the **shipped** artwork: it is
+    a full-grid `1254 → 128` downscale of the owner's `cat-mascot_new.png` (source SHA-256
+    `0c2f1fc8…01593e0`, 1 306 640 bytes, kept out of the repository), the shipped file's own SHA-256 is
+    `c26769ca…af475e` at 20 009 bytes, the `IHDR` numbers are 128×128 8-bit RGBA, and the `A126`-style provenance is the
+    source hash plus the conversion record in `docs/state/t11-01-engineer.md`. Keep the rest of the bullet (the `dist/` copy
+    mechanism, the relative URL, the four absences) exactly as it is — it is still true and still pinned.
+11. **The blind-spot sentence names both files.** `docs/specs/content-overlay-ui.md:87` says the named list of files under
+    `src/` that no text scan can read «is exactly `src/options/assets/cat-mascot.png`». The code at
+    `tests/toolchain-contract.spec.ts:909-912` now lists **two** — `src/icons/icon-128.png` and
+    `src/options/assets/cat-mascot.png`. The sentence is the one the reviewer caught as a contradiction between a spec
+    sentence and the code it describes; fix the sentence (not the list), and state that the list is the thing the same test
+    pins.
+
+No other file moves. Constraints are unchanged: tests and `docs/` only, no `src/` or `scripts/` file, baseline
+**1031 / 46** with the count only growing, `dist/` 12 files, checker 175 info, `typecheck` green, one commit, commit before
+the report.
+
 ## Attempts log
 
 | # | Child | Result |
@@ -130,3 +151,22 @@ the test cannot drift): painted **12 619**, bounds x `0…127`, y `0…124`, `ou
 `maxAlphaOutside` **108**, `maxAlphaInside` **255**, `farthestPaintedRadius` **64.55**; file SHA-256
 `c26769caa24310bb4c9f54d34436b1a2d091fb3f5ca2e408a23627e2e3af475e`, **20 009** bytes; source SHA-256
 `0c2f1fc86c8a3e95fe25b799ba1d813279034908136806c7be259425601593e0`, `1 306 640` bytes.
+
+## Review verdict and the two stale spec sentences (PM, 2026-11-19)
+
+Review `0d471052-6661-4493-aacc-b7d4e8f52aa9` → **changes requested**: AC 1–6, 8, 9 pass (the icon and mascot bytes verified by
+the reviewer from `git cat-file`; the copy mechanism fails loudly; the presence pin is real; exactly five `expect(` lines were
+removed and all five are the ones the brief authorized), and **AC 7 fails** on two sentences the slice left behind:
+
+- `docs/specs/content-overlay-ui.md:91` — the mascot bullet still claims the shipped file is the byte-identical copy of
+  `Mistension/img/128.png`, SHA-256 `a899a910…d446b4`, 27 414 bytes. The file it describes no longer exists in the repository.
+- `docs/specs/content-overlay-ui.md:87` — the blind-spot sentence still says the named unreadable-file list is «exactly
+  `src/options/assets/cat-mascot.png`», while `tests/toolchain-contract.spec.ts:909-912` now names two files.
+
+Both are the same defect class the stage opened with: a spec sentence outliving the artifact it described. They are AC 10 and
+AC 11 of this brief, and neither needs a shipped file to change — the sentence is what is wrong, and in the second case the
+code is already right.
+
+Worth recording because it is the third instance this stage: **`A126` was a hash of an artwork that no longer ships.** A
+provenance ruling that names a file by hash does not survive the file being replaced; the replacement has to restate it, and
+the reviewer found it only because it looked at the spec line rather than the tests — no test reads the spec for a hash.

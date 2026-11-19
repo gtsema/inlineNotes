@@ -1,0 +1,74 @@
+Exactly 5 removed `expect(` lines, all authorized: `object-fit: cover` (AC 2), the three t9-02b pixel pins (AC 3 recalc), and the two `toBeUndefined` icon absence asserts (AC 6). No other assertion removed. Test count +5 matches the 5 new cases.
+
+No test reads `docs/specs/content-overlay-ui.md` for the hash, confirming the stale spec line at :91 rots silently.
+
+I now have complete evidence. Let me compose the artifact.
+
+**AC summary:**
+1. pass-with-remark: reproducible record exists in report (command, both hashes, algorithm); source file itself uncommitted → defensibility judgment below.
+2. pass: only `object-fit: cover` → `contain` changed in options.component.ts.
+3. pass: pins recalculated, non-vacuity kept; margin case theoretically vacuous alone but guarded.
+4. pass
+5. pass: file reaches dist, copy mechanism fails loudly.
+6. pass: presence pin real, no absence assert left anywhere.
+7. **fail**: `docs/specs/content-overlay-ui.md:91` still states the old hash/size/provenance; `:87` still states the unreadable-file list is exactly the mascot. → blocking finding 1.
+8. pass
+9. pass: gates quoted; but README stale (PM's, ledgered).
+
+Now write the artifact.
+
+<final answer>
+
+---
+
+# Review — `t11-01` (the owner's new mascot and the extension's first icon)
+
+**Verdict: `changes requested`** — one numbered blocking finding (AC 7 not met in full). Everything else passes.
+
+Reviewed range: code commit `48f3446` (8 files, +207/−26) and docs commit `009b80f`. Spec: `docs/specs/content-overlay-ui.md`. Brief: `docs/state/t11-01-mascot-and-icon.md` (+ "Correction 1"). Report: `docs/state/t11-01-engineer.md`. Evidence re-read by me on the committed bytes: `git cat-file -p 48f3446:src/icons/icon-128.png | sha256sum` and `…:src/options/assets/cat-mascot.png | sha256sum` both answer `c26769caa24310bb4c9f54d34436b1a2d091fb3f5ca2e408a23627e2e3af475e`.
+
+## Acceptance criteria — one line each
+
+1. **pass** (with the debt note below) — `src/options/assets/cat-mascot.png` is replaced by a real converted PNG; the report gives the exact command (`node .t11-source/convert.mjs`), the algorithm (PNG decode → whole-grid box filter, premultiplied by alpha → fresh PNG), both hashes (`0c2f1f…` source / `c26769…` result), and the source's byte size (`1 306 640`); `git show --name-only 48f3446` proves the 1.3 MB source is **not** committed. Provenance is reproducible-on-paper; the honest limits are in non-blocking finding N1.
+2. **pass** — the only framing change in `src/options/options.component.ts` is `object-fit: cover` → `contain` at line 127 (diff has exactly one changed line in that file; `object-position: center`, `width/height: 80px`, `border-radius: 50%`, `border: 2px solid #a6cbdc` untouched). No `transform`/`scale`/`zoom`; `contain` on a square source in a square box is the identity, so the downscale really is the fitting rule. Consistent with "Correction 1".
+3. **pass** — the `t9-02b` pixel claim is recalculated, not deleted: `paintedPixels` `13 054 → 12 619`, `bounds.maxY` `127 → 124`, and `outsidePainted`/`maxAlphaOutside`/`farthestPaintedRadius` moved to the new file's values while `outsideOpaque === 0` is asserted against the new bytes. Non-vacuity kept (`maxAlphaInside === 255`, `outsidePainted` in `(0, 1000)`, `farthestPaintedRadius > 64`) plus the new margin case `farthestPaintedRadius − 64 < 1`. The five recalculated pins are hash-locked and cannot pass vacuously; the margin case alone could (`0 − 64 < 1`), but it is guarded by the sibling `farthestPaintedRadius > 64`, `outsidePainted > 0` and `bounds.minY === 0` in the same describe — non-blocking N2.
+4. **pass** — `src/icons/icon-128.png` is a real committed file (`git ls-files src/icons` lists it), byte-identical to the mascot (`c26769ca…`, 20 009 bytes), 128×128 8-bit RGBA; no second size, no `.ico`, no `data:` URI, no `web_accessible_resources` (the last two pinned).
+5. **pass** — `src/manifest.json:7-9` declares `icons` and `:13-15` `action.default_icon`, both `{"128": "icons/icon-128.png"}`; `scripts/build-extension.mjs` adds `copyDir()` (lines 56-68) and `copyIcons()` (lines 109-116), called at line 225 **before** `verifyManifestReferences()` (line 227). The copy is honest: with `src/icons/` present the reference check resolves both keys; with the icon absent the shipped `fail` fires; if `src/icons/` itself were deleted, `readdirSync` throws `ENOENT`, caught by `main().catch()` → `process.exitCode = 1` (loud, if the message is raw — N3). `verifyOptionsAssetShips` is untouched.
+6. **pass** — the presence pin is real: `tests/toolchain-contract.spec.ts:1048-1052` asserts both keys **equal** `{'128': 'icons/icon-128.png'}` and `Object.keys(...) === ['128']`, `:1056-1061` asserts `dist/icons/icon-128.png` exists and its `IHDR` is 128×128; `:1063` keeps the one absence (`content_scripts[0].css === undefined`). The old `expect(manifest.icons).toBeUndefined()` / `expect(manifest.action?.default_icon).toBeUndefined()` are gone; `grep` over `tests/`+`src/`+`scripts/` finds no surviving `icons`/`default_icon` absence assertion in a second place.
+7. **fail** — see blocking finding 1. The line-89 sentence is correctly narrowed and true as written, and its item-28 sentence is consistent with code and pins, but the spec still carries a contradictory statement of the shipped file's hash and provenance at line 91 and a stale binary-file list at line 87.
+8. **pass** — `git diff --name-only d4d536f 48f3446 -- src/popup src/content src/core` answers 0 files; `src/options/text.ts` untouched; no new string, no new artwork in the popup.
+9. **pass** — all four gates quoted in the report and re-run by the PM on `48f3446`: `npm run build` exit 0 (`dist/` 12 files, reference line `… icons/icon-128.png, icons/icon-128.png`), `npm test` exit 0 (1031/46), checker exit 0 (175 info), `npm run typecheck` exit 0. These are exactly the gates this commit can invalidate. Note `docs/specs/` changed → `code-review-flow.md` Edge Cases requires the checker quote in the same task; it is present. `README.md` untouched (`git show --name-only 48f3446 009b80f` lists no `README.md`), as expected.
+
+## Blocking findings
+
+1. **`docs/specs/content-overlay-ui.md:91` still states the replaced file's old hash, old size and old provenance — the spec now contradicts the shipped artifact, the tests and its own item 28.** The bullet "Settings mascot: an owned file that ships" reads: the file "is a **byte-identical copy** of the owner's own artwork `Mistension/img/128.png` … identified by hash: SHA-256 `a899a9106d0ebefc978e493db61663917703803ebb5f9c703d9e67bb00d446b4`, 27 414 bytes". The committed file is `c26769caa24310bb4c9f54d34436b1a2d091fb3f5ca2e408a23627e2e3af475e`, 20 009 bytes, and is a 1254 → 128 downscale of `cat-mascot_new.png`, not a copy of `Mistension/img/128.png`. `tests/options-window-look.spec.ts:45-46` pins the new hash/size, and spec item 28 (`:292`) is already updated to the new hash and says "ruling `A130` supersedes `A126`'s byte-identity clause" — but the clause it claims to supersede is still standing at `:91`. AC 7 ("state the new facts") is therefore met only in two of three places, and no test reads this prose, so the stale line rots silently. *Resolution is determined, not open:* the artwork replacement is this task's whole point and code + tests + item 28 agree, so the fix is a spec edit by the owning role (extension-engineer), not a code change — hence this is an AC failure (`changes requested`), not `blocked`.
+
+## Non-blocking findings (debt ledger)
+
+1. **`docs/specs/content-overlay-ui.md:87` is stale the same way.** "every file under `src/` that is not in that text set has to sit on a named list, and today that list is exactly `src/options/assets/cat-mascot.png`" — the shipped list is now two entries (`tests/toolchain-contract.spec.ts:909-912` names `src/icons/icon-128.png` as well). Fix alongside blocking finding 1.
+2. **The margin pin at `tests/options-window-look.spec.ts:1056` (`farthestPaintedRadius − 64 < 1`) is vacuous on its own** for an artwork whose painted content sits entirely inside the circle (e.g. `farthestPaintedRadius ≈ 0` → `−64 < 1` passes). Today it is guarded by `farthestPaintedRadius > 64`, `outsidePainted > 0` and `bounds.minY === 0` in the same describe and by the hash pin, so the shipped combo is not vacuous; a future artwork change should carry the guard with it. Worth a ledger row.
+3. **`scripts/build-extension.mjs` → `copyDir()` (line 56-68) fails with a raw Node message when `src/icons/` is missing** (`ENOENT … scandir`), not a descriptive `fail(...)` sentence like the reference check. It still exits 1, so it is loud, but a one-line "`src/icons/` is missing" would match the script's own style. Ledger as debt.
+4. **Provenance of the conversion is documented-on-paper only.** The one-off `convert.mjs` lives in the uncommitted, locally-excluded `.t11-source/` and is not in `scripts/`; the 1.3 MB source is likewise uncommitted. `A130` authorises this ("no committed original", "the report records the exact command and the hash of both ends"), and the report does name the command, the algorithm (whole-grid box filter, premultiplied by alpha, fresh PNG, source `eXIf`/`tEXt`/`pHYs` dropped) and both hashes — enough for a future reader to redo the conversion in principle, but **not** enough to reproduce it byte-for-byte, because the exact zlib compression settings and filter/strategy choices of the fresh PNG writer are not recorded, and the source bytes exist nowhere in the repository (only its hash and size). Committing the result alone is defensible *for a personal extension where the result is hash-pinned and the source is the owner's*, but the honest statement is "verifiable by hash, not reproducible in-place"; a `scripts/`-committed one-off would have closed that gap without adding a build-time dependency. Ledger as provenance debt alongside `S11-5`.
+5. **The report and the spec quote the same measurement origin in two different conventions.** The report (`§AC 2`) says the image centre is `(627, 627)`; "Correction 1" writes `(626.5, 626.5)`. Both denote the same geometric point under the pixel-centre convention (`x+0.5` with `centerX = width/2`, which is how the test's decoder computes `distance`), and the resulting `628.00` is convention-independent — but a reader comparing the two documents may think they disagree. Worth one clarifying clause; the underlying numbers are correct. This is the stage's own failure class (a distance without a named origin) surviving only as naming noise, not as a wrong number.
+6. **Spec item 28 (`:292`) and the "framed by CSS" bullet (`:92`) retain "the lifebuoy" as evidence.** `:92` says Run 6 "saw the whole cat with its lifebuoy inside the circular frame", and the old wording dropped "the lifebuoy included"; the Run 6 sight was recorded for the `A126` artwork, so it is historical evidence for a file that no longer ships. Not a behavior claim; a staleness note for the next spec pass.
+7. **The brief carries no `Carried-fix checklist: none` line.** `docs/state/t11-01-mascot-and-icon.md` closes no earlier review finding, but `code-review-flow.md` → Rules requires a brief with no carried fixes to state that explicitly. Nothing was carried and nothing was dropped, so no deliverable is unanswered — this is a process remark on the brief, not on the engineer.
+8. **`README.md:58` and `:140` still state `dist/` = 11 files and 1025 tests**, which the 12-file/1031-test reality now falsifies. Ledgered as `S11-3` and explicitly the PM's to sync; recorded here so it is not lost.
+
+## Harness / boundary checks
+
+- No file under `.pi/agents/`, `.pi/skills/`, `.pi/settings.json` or `scripts/check-agent-config.mjs` changed in either commit, so no harness re-verification was required of me; the checker gate quote is present in the report and was re-run by the PM (175 info).
+- `git status --short` is clean at the reviewed range; one writer, one code commit plus one docs commit; the spec edit is inside the reviewed range (`48f3446`), and rule `A69` is not needed here because code and spec landed in the *same* commit.
+- No network call, no new runtime dependency (`esbuild` and `node:zlib`/`node:fs` only), no host-DOM mutation for painting, no `src/popup/` or `src/content/` change.
+- Exactly **5** removed `expect(` lines in the whole diff, and all five are the ones AC 2/AC 3/AC 6 authorise (`object-fit: cover`; the three `t9-02b` pixel values; the two icon-absence asserts). No other pin was weakened or deleted. Test count grew 1026 → 1031 (46 files), matching the 5 new cases; `dist/` 11 → 12 as the report states.
+
+## Is the artwork replacement honestly documented?
+
+**Yes, with one caveat.** The report names the source (its hash and byte size, its rescue out of the ignored `dist/` before the first `cleanDist`), the exact command, the algorithm including alpha premultiplication and the dropped `eXIf`/`tEXt`/`pHYs` chunks, and both end hashes; the commit message repeats the command, the hashes and the framing arithmetic; the spec's item 28 and the "framed by CSS" bullet are updated to the new hash, the downscale and the 628.00 → 64.10 fit; and the delegation, ledger rows (`S11-1`…`S11-6`) and rulings (`A130`–`A133`) are written down. The caveat is the same one in non-blocking finding N4: the conversion is **verifiable by hash, not byte-reproducible**, because only the result is committed and the one-off script and the source bytes are not. That is a deliberate, ruled (`A130`) choice and it is documented as such — but it is the one place where a future reader gets a hash to check rather than a recipe to rerun, and it should stay ledgered.
+
+**Bottom line:** the engineering half of this task is sound — the framing change is minimal and correct, the icon reaches `dist/` through an honest, fail-loud copy, the absence pin is genuinely replaced by a real presence pin, and the pixel pins are recalculated rather than relaxed. The task is not accepted because the same commit left two spec sentences (`content-overlay-ui.md:91` and `:87`) stating facts that the shipped artifact, the tests and the spec's own item 28 falsify; blocking finding 1 must be closed by a spec edit before `t11-01` can be marked `accepted`.
+
+</final answer>
+
+That is the complete review artifact. Because this run has no write-capable tool, the content above is the artifact the runtime should persist at `C:\Users\user\.pi\agent\sessions\--C--Users-user-Desktop-test-inlineNotes--\subagent-artifacts\outputs\0d471052-6661-4493-aacc-b7d4e8f52aa9\docs\state\t11-01-review.md`.
+
+Verdict: **changes requested**, one blocking finding (spec line 91 / 87 stale after the artwork replacement); nine AC lines recorded; the artwork replacement is honestly documented except that the conversion is verifiable by hash rather than byte-reproducible.
