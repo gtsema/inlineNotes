@@ -76,12 +76,23 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
  * The behaviour did not move with the word: one press is still exactly one core
  * `deleteEntriesOfAuthor` for the whole author group (`A25`, `A108`).
  *
- * The look of this document is the closed `A125` palette in the settings card's shape
- * (`A140`, `A141`, `t14-01`): cream surface, `#1b2a33` ink, `#7b6a55` secondary,
- * `#a6cbdc` decorative, `#b3261e` refusal kept from before `A125`, and the `#b8480d`
- * action colour on the checkbox. The shape is shared with `src/options/`, the width is
- * not: the panel is `320px` (a toolbar popup), the settings card is `360px` (a dialog
- * box). No colour is invented here, and no mascot is drawn (`A142`).
+ * The look of this document is the closed `A125` palette (`A140`, `A141`, `t14-01`):
+ * cream surface, `#1b2a33` ink, `#7b6a55` secondary, `#a6cbdc` decorative, `#b3261e`
+ * refusal kept from before `A125`, and the `#b8480d` action colour on the checkbox. What
+ * is shared with `src/options/` is the palette, the `13px` type scale and the `16px` inner
+ * padding; the width is not (the panel is `320px`, a toolbar popup; the settings card is
+ * `360px`, a dialog box). No colour is invented here, and no mascot is drawn (`A142`).
+ *
+ * The **frame and the radius are not drawn** (ruling `A144`, task `t14-02`). Three shapes
+ * disagreed at the four corners of the window: the popup window's own radius, this
+ * component's rectangular `:host` fill, and the card's `12px` arc — the `#a6cbdc` border
+ * traced the arc and stopped, leaving the host's square corner visible against the
+ * window's dark edge. The window now owns the shape, exactly as it does for any page: the
+ * surface fills it edge to edge and Chrome rounds it. The settings window is the other
+ * case and keeps its card frame — that one **is** a page Chrome sizes, and a card is drawn
+ * inside it. The row separator and the checkbox keep their own `#a6cbdc` borders: they are
+ * controls inside this surface, not its frame (`border: 0` on a button is the removal of
+ * a painted edge, not the declaration of one). `A144` touches one rule.
  *
  * The notices of ruling `A83` are rendered **above** the list and the list still
  * renders below them, because stored entries that become invisible are stored entries
@@ -168,8 +179,6 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
       width: 320px;
       box-sizing: border-box;
       padding: 16px;
-      border: 1px solid #a6cbdc;
-      border-radius: 12px;
       background: #fdf7ee;
       font: 13px/1.45 system-ui, sans-serif;
       color: #1b2a33;

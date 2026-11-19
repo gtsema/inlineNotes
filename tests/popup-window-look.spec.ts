@@ -8,7 +8,8 @@ import { POPUP_STRINGS } from '../src/popup/text';
 import { codeOnly } from './support/build-script-guards';
 
 /**
- * The popup look of task `t14-01` (rulings `A140`, `A141`, `A142`, `A143`).
+ * The popup look of tasks `t14-01` and `t14-02` (rulings `A140`, `A141` **as amended by
+ * `A144`**, `A142`, `A143`).
  *
  * No test read the popup's stylesheet before this file (`S14-2`): the surface carried a
  * third palette (`#1f1f1f` / `#6b6b6b` / `#e3e3e3`) and a plain `<h1>` with no card, and
@@ -18,18 +19,22 @@ import { codeOnly } from './support/build-script-guards';
  *
  * - the palette is a set of **measured literals** (`A140`): every colour the popup declares
  *   is one of the `A125` roles, and the three retired literals are gone;
- * - the card is the settings card's **shape at the popup's own width** (`A141`): the same
- *   border, radius, type scale and inner padding, `320px` and never the settings `360px`;
+ * - the card carries the settings **palette, type scale and inner padding at the popup's
+ *   own width**, and **no frame and no radius of its own** (`A144` amending `A141`): the
+ *   window owns the rounded shape, so `border` and `border-radius` are pinned **absent**
+ *   from `.popup`, while the settings card's own frame stays pinned **present** — read from
+ *   `src/options/options.component.ts`, because that surface is a page Chrome sizes and a
+ *   card is drawn inside it. The two surfaces now differ on purpose in exactly that way;
  * - the row's delete control is **icon-only** (`A143`): one inline `<svg>` as its only
  *   child, the Russian word in `aria-label` and `title`, the glyph `aria-hidden`, and the
  *   `24px` box with the `16px` glyph the page widgets declare.
  *
  * Two reads of one stylesheet, split the way the settings file splits them (`t10-02`
  * AC8). **Absence** claims read the stylesheet **verbatim**, because the safe error of an
- * absence scan is to read more: a commented-out `#1f1f1f` is a palette role waiting to
+ * absence scan is to read more: a commented-out `border-radius: 12px` is a frame waiting to
  * come back, and a reviewer has to say which it is. **Presence** claims read the
- * comments-stripped text, because a commented-out `border-radius: 12px` must not stand in
- * for a shipped one.
+ * comments-stripped text, because a commented-out `padding: 16px` must not stand in for a
+ * shipped one.
  *
  * Which assertion goes red for which regression — named here so the file answers the
  * question the brief asks instead of making a reader derive it:
@@ -39,12 +44,17 @@ import { codeOnly } from './support/build-script-guards';
  *   value (`declares every A125 role as a literal`);
  * - **the width changed to `360px`** → `sizes the card at the popup's own 320px and never
  *   the settings 360px`;
+ * - **the card's frame or its radius comes back** (`border: 1px solid #a6cbdc` or
+ *   `border-radius: 12px` re-declared on `.popup`, `t14-02`) → `draws no frame and no
+ *   radius on the card while the settings card keeps its own`, in **both** the verbatim
+ *   and the comments-stripped read, so a commented-out frame does not pass either;
  * - **the trash button turned back into a labelled button** → `renders the delete control
  *   icon-only with the word as its accessible name` (the button holds a text node and no
  *   glyph) and `declares the 24px box and the 16px glyph as named constants`.
  *
- * The first and the third were proved by mutations applied, observed and reverted in the
- * session that wrote this file (`docs/state/t14-01-engineer.md`).
+ * The first, the third and the fourth were proved by mutations applied, observed and
+ * reverted from a `cp` copy in the sessions that wrote this file
+ * (`docs/state/t14-01-engineer.md`, `docs/state/t14-02-engineer.md`).
  */
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -90,6 +100,13 @@ const ICON_PX = '16px';
 /** `A141`: the popup's own width, and the settings card's, which it must not become. */
 const POPUP_WIDTH = '320px';
 const SETTINGS_WIDTH = '360px';
+/**
+ * The two declarations `A144` takes off this surface and leaves on the settings card. They
+ * are one constant pair because the whole ruling is that these two strings, which used to
+ * hold on both surfaces at once, now hold on exactly one of them.
+ */
+const CARD_FRAME = 'border: 1px solid #a6cbdc;';
+const CARD_RADIUS = 'border-radius: 12px;';
 
 function readSource(relativePath: string): string {
   return readFileSync(join(projectRoot, relativePath), 'utf8');
@@ -183,9 +200,10 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
       new RegExp(`color: ${PALETTE.hint};`),
     );
     expect(ruleBody(stylesCode, '.empty')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
-    // The decorative border: the card frame and the row hairline that replaced `#e3e3e3`.
-    expect(ruleBody(stylesCode, '.popup')).toContain(`border: 1px solid ${PALETTE.decorative};`);
-    expect(ruleBody(stylesCode, '.row')).toContain(`1px solid ${PALETTE.decorative}`);
+    // The decorative border, as the two controls inside the surface draw it: the row
+    // hairline that replaced `#e3e3e3`, and the checkbox's own box (answer `Q3`). Neither
+    // is the surface's frame, which is what `A144` removes from `.popup`.
+    expect(ruleBody(stylesCode, '.row')).toContain(`border-top: 1px solid ${PALETTE.decorative};`);
     // The checkbox's box border (answer `Q3`), and the action colour as its accent.
     expect(ruleBody(stylesCode, ".toggle input[type='checkbox']")).toContain(
       `border: 1px solid ${PALETTE.decorative};`,
@@ -248,32 +266,76 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     );
   });
 
-  it('takes the settings card’s frame, radius, type scale and inner padding', () => {
+  it('draws no frame and no radius on the card while the settings card keeps its own', () => {
     const card = ruleBody(stylesCode, '.popup');
-    expect(card).toMatch(
-      new RegExp(`(?:^|;)\\s*border:\\s*1px solid ${PALETTE.decorative};`),
+    // The **shipped** stylesheet, comments and all: an absence claim reads the wider text,
+    // so a commented-out frame counts as a frame waiting to come back.
+    const everything = styles;
+
+    // The popup half of the claim, pinned as an **absence** over the two texts that could
+    // carry the frame: the card's own rule body, read with comments **stripped** so a
+    // commented-out frame does not pass, and the **verbatim** stylesheet with the two
+    // rules `A144` does not touch cut out — the row separator and the checkbox's box carry
+    // the very same `#a6cbdc` declaration on purpose, so a scan over the whole text would
+    // call the shipped controls a returning frame. The mutex is the sharper half: that one
+    // declaration holds exactly twice, on the row hairline and on the checkbox, and the
+    // card's own rule holds neither it nor a radius nor any other edge.
+    expect(card).not.toContain(CARD_FRAME);
+    expect(card).not.toContain(CARD_RADIUS);
+    expect(card).not.toMatch(/border(-\w+)?:/);
+    expect(card).not.toMatch(/border-radius:/);
+    expect(card).not.toMatch(/outline:/);
+    expect(card).not.toMatch(/box-shadow:/);
+    let rest = everything;
+    for (const selector of ['.row', '.row:first-child', ".toggle input[type='checkbox']"]) {
+      rest = rest.replace(ruleBody(everything, selector), '').replace(/^\s*\r?\n/m, '');
+    }
+    expect(rest, CARD_FRAME).not.toContain(CARD_FRAME);
+    expect(rest, CARD_RADIUS).not.toContain(CARD_RADIUS);
+    expect((rest.match(/border-radius:/g) ?? [])).toHaveLength(0);
+    // And `A144` is one rule: the separator and the checkbox keep their declarations, the
+    // checkbox keeping both its `#a6cbdc` border and its own `3px` arc (answer `Q3`).
+    expect(ruleBody(stylesCode, '.row')).toContain(`border-top: 1px solid ${PALETTE.decorative};`);
+    expect(ruleBody(stylesCode, ".toggle input[type='checkbox']")).toContain(
+      `border: 1px solid ${PALETTE.decorative};`,
     );
-    expect(card).toMatch(/(?:^|;)\s*border-radius:\s*12px;/);
-    expect(card).toMatch(/(?:^|;)\s*padding:\s*16px;/);
-    expect(card).toMatch(/(?:^|;)\s*font:\s*13px\/1\.45 system-ui, sans-serif;/);
-    // The four values are the ones `src/options/options.component.ts` declares, read from
-    // that file rather than restated from memory: the shape is shared, so a change to one
-    // surface that leaves the other behind is a red test and not a taste question.
+    expect(ruleBody(stylesCode, ".toggle input[type='checkbox']")).toContain('border-radius: 3px;');
+
+    // The half that is still shared, read from `src/options/options.component.ts` rather
+    // than restated from memory: palette, type scale and inner padding are one look, so a
+    // change to one surface that leaves the other behind is a red test and not a taste
+    // question. The count is asserted on two **rule bodies** and not over the whole text,
+    // because `padding: 16px` legitimately stands twice on a page: once on the surface and
+    // once on the document's `:host` (`src/options/` does exactly the same).
     const optionsStyles = codeOnly(
       /styles:\s*`([\s\S]*?)`/.exec(
         readFileSync(join(projectRoot, 'src', 'options', 'options.component.ts'), 'utf8'),
       )?.[1] ?? '',
     );
     const settingsCard = ruleBody(optionsStyles, '.options');
-    for (const declaration of [
-      `border: 1px solid ${PALETTE.decorative};`,
-      'border-radius: 12px;',
-      'padding: 16px;',
-      'font: 13px/1.45 system-ui, sans-serif;',
-    ]) {
-      expect(card, declaration).toContain(declaration);
-      expect(settingsCard, declaration).toContain(declaration);
+    const shared: readonly (readonly [string, string])[] = [
+      ['padding: 16px;', 'padding: 16px;'],
+      ['font: 13px/1.45 system-ui, sans-serif;', 'font: 13px/1.45 system-ui, sans-serif;'],
+      [`background: ${PALETTE.page};`, `background: ${PALETTE.page};`],
+      [`color: ${PALETTE.ink};`, `color: ${PALETTE.ink};`],
+    ];
+    for (const [popupDeclaration, settingsDeclaration] of shared) {
+      expect(card, popupDeclaration).toContain(popupDeclaration);
+      expect(settingsCard, settingsDeclaration).toContain(settingsDeclaration);
     }
+    // And the popup declares each of them exactly once, so "shared" cannot turn into
+    // "declared twice on one surface".
+    for (const [popupDeclaration] of shared) {
+      expect(card.split(popupDeclaration).length - 1, popupDeclaration).toBe(1);
+    }
+
+    // The settings half of the old shared sentence stays pinned **present**, and it is the
+    // settings file that is read for it. `A144` touches one rule, so the settings look did
+    // not move with the popup, and the frame is not simply gone from the repository.
+    expect(settingsCard).toContain(CARD_FRAME);
+    expect(settingsCard).toContain(CARD_RADIUS);
+    expect(settingsCard).not.toContain('outline:');
+    expect(settingsCard).not.toContain('box-shadow:');
   });
 
   it('gives the document the body margin the options document owns, and nothing else', () => {
