@@ -329,3 +329,25 @@ One blanket statement plus one explicit answer: «все пункты ок. ст
 - Stage 8 (`A114` compact icon-only row, no cancel control) is therefore **fixed and verified** in real Chrome.
 - Still not observed and not claimed anywhere: whether Chrome shows a `title` on a **disabled** save button, and whether the two
   glyphs are unambiguous to a reader who has never seen the extension.
+
+## Run 6 — the settings surface as a Chrome window (rulings `A118`–`A127`, tasks `t9-01`, `t9-02`, `t9-02b`)
+
+Checklist: `docs/state/run-6-settings-window.md` (6 items). Executed by the user in their own Chrome against the unpacked `dist/`
+of `27eda84`; the PM could not drive it — the `chrome_devtools` MCP sees a different profile, and no `inlineNotes` entry exists in
+the profiles it can read. The user's record is one statement: «Я всё проверил - этого достаточно».
+
+| Item | Result |
+|---|---|
+| 1 the settings entry opens a **dialog window**, not a tab (`A118`) | **passed** (blanket) — the window's own size was not written down |
+| 2 the page fits that box: no horizontal scrollbar, card centered, background to the edges | **passed** (blanket) — no screenshot of the real dialog exists, so the only image in the state folder stays the page **in a tab** (`docs/state/screenshots/t9-02-options-window.png`) |
+| 3 the mascot is visible, whole, inside the circular frame (`A124`, `A127`) | **passed** (blanket) — and independently pinned at byte level: of 13 054 painted pixels, 162 sit beyond the clip circle and none is above alpha 156 (`tests/options-window-look.spec.ts`) |
+| 4 the name loop from the window: `Сохранить` enables, confirmation appears, the name survives a reload | **passed** (blanket) |
+| 5 the popup line «Укажите имя в настройках» still leads to the same window (`A122`) | **passed** (blanket) |
+| 6 the explanation line «Это имя подписывает каждую заметку» reads right | **passed** (blanket) — the user gave no wording feedback, so no rewording is owed |
+
+- Items passed: 6 (all six under one blanket statement). Failed: 0. Not verified: 0.
+- Stage 9 (settings as a Chrome window, the mascot, the pinned palette) is therefore **fixed and verified** in real Chrome.
+- **Not observed, and not claimed anywhere:** the dialog's pixel size; whether Chrome shows anything special on a **disabled**
+  `Сохранить`; whether «Это имя подписывает каждую заметку» is the right wording for a first-time reader.
+- **Ruling `A128` was never issued.** The user closed the stage without answering the disabled-state question, so the shipped
+  `.save:disabled { opacity: 0.45 }` stands unchanged, and the item stays open as `D5` in `docs/state/stage-9-review-debt.md`.

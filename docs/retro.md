@@ -290,3 +290,10 @@ illegal memory access`) with the work already committed.
 - **The reviewer cannot be given images on this runtime.** One review run died in the vision encoder (`503`) after opening the
   screenshot. Fix: visual claims reach a review as measured numbers (computed styles, ratios, painted box sizes) and the brief
   forbids opening image files. Recorded here so the next stage's brief starts that way.
+- **The stage closed on a blanket sight.** Run 6 arrived as «Я всё проверил - этого достаточно», and that is exactly how the six
+  items are recorded: `passed (blanket)`. A blanket confirmation closes an acceptance criterion; it does not manufacture a
+  measurement. So the spec now says the page fits the dialog box **and** that no artifact holds the box's pixel size or a
+  screenshot of it — the only image stays the options page in a tab.
+- **A question I asked three times and never got an answer to is not a decision.** `A128` (the disabled `Сохранить`) stayed
+  unissued, so shipped `opacity: 0.45` stands and the item is written into `docs/state/stage-9-review-debt.md` as `D5`. Silence
+  keeps the current behavior; it never changes it.

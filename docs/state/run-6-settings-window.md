@@ -38,3 +38,14 @@ found no `inlineNotes`). Run 6 needs either the user's Chrome reloaded by hand, 
 
 No child. The PM records; the user operates Chrome. If an item fails, it opens a fix task in Stage 10 — a failed browser item is
 never closed by rewording a spec.
+
+## Outcome (2026-11-19) — closed
+
+The user ran the checklist in their own Chrome against the unpacked `dist/` of `27eda84` and answered with one statement:
+«Я всё проверил - этого достаточно». All six items are recorded as **passed (blanket)** in
+`docs/state/browser-verification-run.md` → Run 6, together with what the blanket statement does **not** cover (the dialog's own
+size, the disabled-button sight, wording feedback). No screenshot of the real dialog exists; the image in
+`docs/state/screenshots/` stays what it is labeled: the options page **in a tab**.
+
+Bookkeeping done in the same commit: README stage range and counts, the window-vs-tab confirmation line, the two spec sentences
+that were waiting on this sight (`Dialog-box layout rule`, the mascot circle), and `A128` recorded as **not issued**.
