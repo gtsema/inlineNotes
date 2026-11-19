@@ -20,6 +20,20 @@
  * well as written as attributes on the element, and the button's own hit box is
  * declared because the control no longer has a label to grow it.
  *
+ * Every colour below is one of the `A125` roles the settings window and the popup
+ * already share (ruling `A150`, task `t15-01`): the cream surface `#fdf7ee`, the ink
+ * `#1b2a33`, the decorative border `#a6cbdc`, the hint ink `#7b6a55`, the primary
+ * action `#b8480d`, its `#ffffff` label, the pale band `#eef4f7`, and the refusal
+ * `#b3261e`. The disabled save button is the one state the palette needed a ruling
+ * for: ruling `A153` states it as colours — the fill `#e3c3aa`, the `#1b2a33` label
+ * and the decorative border — instead of an `opacity` that faded fill and label
+ * together and left the label at 1.42:1. Two `#ffffff` values survive on purpose,
+ * and both are roles rather than new literals: the `textarea`'s own background and
+ * the primary button's label. No colour of this file is invented, and the author
+ * highlight slots of `src/content/paint/paint-palette.ts` are a *different* set of
+ * colours that this ruling deliberately leaves alone (ruling `A151`): those encode
+ * authorship, not chrome.
+ *
  * The style element is inserted into the shadow root and never into the page
  * (`docs/specs/content-overlay-ui.md` -> AC1 of task `t3-01`), so a page has no
  * element of the extension to restyle and the extension adds no style element to
@@ -60,7 +74,9 @@ export const CARD_WARNING_CLASS = 'is-warning';
  * that is not a
  * neutral action, so it is the one button with its own colour: the reader has to see
  * that the press removes the entry and its `highlight` (ruling `A44` says there is no
- * confirmation step in v1, so the button itself carries the warning).
+ * confirmation step in v1, so the button itself carries the warning). Its colour since
+ * task `t15-01` is the `A125` refusal `#b3261e`, drawn on the decorative `#a6cbdc`
+ * border every other button of the row wears (`A150`).
  */
 export const CARD_DELETE_CLASS = 'is-delete';
 
@@ -90,9 +106,9 @@ export const CARD_CSS: string = [
   '  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;',
   '  font-size: 13px;',
   '  line-height: 1.45;',
-  '  color: #14171a;',
-  '  background: #ffffff;',
-  '  border: 1px solid #b9bec4;',
+  '  color: #1b2a33;',
+  '  background: #fdf7ee;',
+  '  border: 1px solid #a6cbdc;',
   '  border-radius: 8px;',
   '  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);',
   '  padding: 10px 12px;',
@@ -111,7 +127,7 @@ export const CARD_CSS: string = [
   '  line-height: inherit;',
   '  color: inherit;',
   '  background: #ffffff;',
-  '  border: 1px solid #b9bec4;',
+  '  border: 1px solid #a6cbdc;',
   '  border-radius: 6px;',
   '  padding: 6px 8px;',
   '  margin: 0;',
@@ -119,11 +135,11 @@ export const CARD_CSS: string = [
   `.${WIDGET_ROOT_CLASS} .${CARD_COUNTER_CLASS} {`,
   '  display: block;',
   '  margin-top: 6px;',
-  '  color: #5b6470;',
+  '  color: #7b6a55;',
   '  font-variant-numeric: tabular-nums;',
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_COUNTER_CLASS}.${CARD_WARNING_CLASS} {`,
-  '  color: #8a4b08;',
+  '  color: #b8480d;',
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} {`,
   '  display: flex;',
@@ -139,9 +155,9 @@ export const CARD_CSS: string = [
   '  font-family: inherit;',
   '  font-size: inherit;',
   '  line-height: inherit;',
-  '  color: #14171a;',
-  '  background: #f3f4f6;',
-  '  border: 1px solid #b9bec4;',
+  '  color: #1b2a33;',
+  '  background: #eef4f7;',
+  '  border: 1px solid #a6cbdc;',
   '  border-radius: 6px;',
   '  padding: 0;',
   '  margin: 0;',
@@ -170,22 +186,22 @@ export const CARD_CSS: string = [
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button.${CARD_PRIMARY_CLASS} {`,
   '  color: #ffffff;',
-  '  background: #1f6feb;',
-  '  border-color: #1f6feb;',
+  '  background: #b8480d;',
+  '  border-color: #b8480d;',
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button.${CARD_DELETE_CLASS} {`,
-  '  color: #a4262c;',
-  '  border-color: #d08085;',
+  '  color: #b3261e;',
+  '  border-color: #a6cbdc;',
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_ACTIONS_CLASS} button:disabled {`,
-  '  color: #6b7280;',
-  '  background: #e9ecef;',
-  '  border-color: #c8cdd2;',
+  '  color: #1b2a33;',
+  '  background: #e3c3aa;',
+  '  border-color: #a6cbdc;',
   '  cursor: default;',
   '}',
   `.${WIDGET_ROOT_CLASS} .${CARD_REFUSAL_CLASS} {`,
   '  margin: 8px 0 0;',
-  '  color: #a4262c;',
+  '  color: #b3261e;',
   '}',
 ].join('\n');
 

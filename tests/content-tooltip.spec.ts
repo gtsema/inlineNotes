@@ -457,6 +457,68 @@ describe('the tooltip of painted text (AC3)', () => {
   });
 });
 
+/**
+ * Ruling `A152` (task `t15-01`): the tooltip is the third page widget and takes the same
+ * `A125` mapping as the two cards, so the page does not keep one surface on the old greys.
+ * The four values this module shipped with — `#ffffff`, `#14171a`, `#b9bec4` and `#444c56`
+ * — are **updated** to their roles rather than dropped: the surface is the cream role, the
+ * ink the ink role, the frame the decorative role and the foreign header's ink the hint
+ * role. Nothing but colours moved (`A150`), and the highlight slots of
+ * `src/content/paint/paint-palette.ts` stay byte-identical (`A151`, pinned by
+ * `tests/content-paint-palette.spec.ts` without edits).
+ */
+describe('the tooltip takes the A125 palette (A152)', () => {
+  /** The body of one rule of the shipped stylesheet, by its selector text. */
+  function tooltipRuleBody(selector: string): string {
+    const marker = `${selector} {`;
+    const start = TOOLTIP_CSS.indexOf(marker);
+    if (start < 0) {
+      throw new Error(`the shipped tooltip stylesheet declares no rule for ${selector}`);
+    }
+    return TOOLTIP_CSS.slice(start + marker.length, TOOLTIP_CSS.indexOf('}', start));
+  }
+
+  it('states the surface in the three A125 roles and retires every grey of its own', () => {
+    for (const retired of ['#14171a', '#b9bec4', '#444c56', '#ffffff']) {
+      expect(TOOLTIP_CSS, retired).not.toContain(retired);
+    }
+
+    const surface = tooltipRuleBody(`.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_CLASS}`);
+    expect(surface).toContain('color: #1b2a33;');
+    expect(surface).toContain('background: #fdf7ee;');
+    expect(surface).toContain('border: 1px solid #a6cbdc;');
+    // The `ownership header` of a `foreign entry` is the tooltip's only secondary ink.
+    expect(
+      tooltipRuleBody(`.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS}`),
+    ).toContain('color: #7b6a55;');
+  });
+
+  it('declares exactly the four roles and invents no colour', () => {
+    const declared = new Set(
+      [...TOOLTIP_CSS.matchAll(/#[0-9a-fA-F]{6}/g)].map((match) => match[0].toLowerCase()),
+    );
+    expect([...declared].sort()).toEqual(['#1b2a33', '#7b6a55', '#a6cbdc', '#fdf7ee']);
+  });
+
+  it('moves no geometry with the colours: the box a reader presses is the one it was', () => {
+    // The colours are the whole change (`A150`). These are the declarations of this
+    // stylesheet that decide a size, a place or a shape, and none of them moved.
+    const surface = tooltipRuleBody(`.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_CLASS}`);
+    for (const declaration of [
+      'box-sizing: border-box;',
+      'font-size: 13px;',
+      'line-height: 1.45;',
+      'border-radius: 8px;',
+      'box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);',
+      'padding: 8px 10px;',
+      'width: 280px;',
+      'max-width: 92vw;',
+    ]) {
+      expect(surface, declaration).toContain(declaration);
+    }
+  });
+});
+
 describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
   it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
     await boot();

@@ -64,6 +64,18 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
  * reads as a wider gap than a word-space, and `font-size: 11px` against the surface's
  * inherited `13px`, keeping the italic style and the unchanged `#7b6a55` ink (`A125`).
  * Both are presentation, so `src/options/text.ts` is untouched here too (`A136`).
+ *
+ * The disabled `Сохранить` once dimmed itself with `opacity: 0.45`, and ruling `A153`
+ * (`t15-01`) replaced that with colours: an opacity fades the fill and the label
+ * **together**, so at `0.45` the label measured `1.42:1` against its own button and
+ * could never be legible. The state is now the same one the page widgets' save button
+ * wears — the fill `#e3c3aa`, the `#1b2a33` label and the `#a6cbdc` decorative border —
+ * which measures **8.88:1** for the label and **1.56:1** for the fill against the card,
+ * against **4.97:1** for the enabled `#b8480d`. `WCAG 1.4.3` exempts inactive controls,
+ * so this is a legibility choice rather than a compliance fix. The `border` is a
+ * declaration the enabled state does not carry (it has `border: 0`), so the disabled
+ * button gains a drawn edge in the palette's decorative colour and no geometry of the
+ * enabled control moves.
  */
 @Component({
   selector: 'app-root',
@@ -105,7 +117,10 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
    * pinned action pair, and the refusal color is the one that already shipped on
    * this page — the pinned palette names no role for a refusal line, and keeping
    * the shipped value (6.1:1 on the page background) is the report of that gap,
-   * not a seventh palette color.
+   * not a seventh palette color. Since ruling `A153` (`t15-01`) the `.save:disabled`
+   * rule states the disabled state as three of the same roles — `#e3c3aa` fill,
+   * `#1b2a33` label, `#a6cbdc` border — instead of an `opacity`, and the pair it
+   * adds is on the recomputed list in `tests/options-window-look.spec.ts`.
    */
   styles: `
     :host {
@@ -195,7 +210,10 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .save:disabled {
-      opacity: 0.45;
+      color: #1b2a33;
+      background: #e3c3aa;
+      border: 1px solid #a6cbdc;
+      cursor: default;
     }
 
     .message {

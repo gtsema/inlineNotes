@@ -27,6 +27,13 @@
  * recognizable to a reader. The glyph shapes are the ones ruling `A114` names, and no
  * test decides how they look (the class of invented visual claim ruling `A92` warns
  * about).
+ *
+ * Task `t15-01` added a third kind: the **colour** pins of rulings `A150`/`A153`. The
+ * page's cards stop being a fourth palette and take the `A125` roles the settings window
+ * and the popup already share, so the colour literals this file pinned before that task
+ * are **rewritten to the role that replaced them** and none is dropped; the two new
+ * cases that guard the palette add the other half — that no retired literal survives and
+ * that the disabled state is colours rather than an `opacity`.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -516,10 +523,15 @@ describe('AC9: the rules that did not move, and the surfaces this task stayed ou
       'width: 300px;',
       'max-width: 92vw;',
       'font-size: 13px;',
-      'color: #5b6470;',
-      'color: #8a4b08;',
+      // The colour literals below are the `A125` roles ruling `A150` gives these two
+      // widgets (task `t15-01`). The five that shipped before that task — `#5b6470`
+      // counter, `#8a4b08` warning, `#a4262c` refusal, `#ffffff` card fill (now
+      // `#fdf7ee`), `#b9bec4` frame (now `#a6cbdc`) — are **updated**, not dropped: each
+      // one still has a declaration in this list, answered by the role that replaced it.
+      'color: #7b6a55;',
+      'color: #b8480d;',
       `.${CARD_REFUSAL_CLASS} {`,
-      'color: #a4262c;',
+      'color: #b3261e;',
       // The `frame colors` ruling `A114` claims are unchanged (task `t7-01b` item 2, the
       // reviewer's remark 1): `src/content/overlay/card-style.ts` declares all three and
       // no test read any of them back. The frame rule's own selector stands in the same
@@ -527,12 +539,79 @@ describe('AC9: the rules that did not move, and the surfaces this task stayed ou
       // `textarea` and for a button of the row as well: without that marker the frame rule
       // could disappear and the border/background assertions would still pass.
       `.${WIDGET_ROOT_CLASS} .${CARD_CLASS} {`,
-      'background: #ffffff;',
-      'border: 1px solid #b9bec4;',
+      'background: #fdf7ee;',
+      'border: 1px solid #a6cbdc;',
       'box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);',
     ]) {
       expect(CARD_CSS).toContain(declaration);
     }
+  });
+
+  /**
+   * Rulings `A150`–`A153` (task `t15-01`): every colour of the two page widgets is one
+   * of the `A125` roles the settings window and the popup already share, and **no
+   * retired literal survives**. The absence half is what makes the presence half above
+   * mean "the palette moved" rather than "a new string is somewhere in the file".
+   *
+   * The two survivors are named, and both are roles rather than leftovers: the
+   * `textarea`'s own `#ffffff` background and the primary button's `#ffffff` label.
+   */
+  it('ships no colour outside the A125 roles and leaves no retired literal behind (A150, A153)', () => {
+    for (const retired of [
+      '#14171a',
+      '#b9bec4',
+      '#f3f4f6',
+      '#1f6feb',
+      '#a4262c',
+      '#d08085',
+      '#5b6470',
+      '#8a4b08',
+      '#6b7280',
+      '#e9ecef',
+      '#c8cdd2',
+    ]) {
+      expect(CARD_CSS, retired).not.toContain(retired);
+    }
+
+    // Every colour literal the stylesheet declares is on the `A125` role list. The one
+    // non-role entry is the shadow, which is not a surface colour and was never a role.
+    const declared = new Set(
+      [...CARD_CSS.matchAll(/#[0-9a-fA-F]{6}/g)].map((match) => match[0].toLowerCase()),
+    );
+    expect([...declared].sort()).toEqual(
+      [
+        '#ffffff', // the textarea background and the primary button's label
+        '#fdf7ee', // the card and the textarea surface
+        '#1b2a33', // the ink, the buttons' label and the disabled label
+        '#a6cbdc', // every border of this widget
+        '#7b6a55', // the counter
+        '#b8480d', // the warning counter and the primary action
+        '#eef4f7', // a neutral button's background
+        '#b3261e', // the delete label and the refusal line
+        '#e3c3aa', // the disabled fill (A153)
+      ].sort(),
+    );
+
+    // And the values a reader's eye would notice if they came back: the two `#ffffff`
+    // occurrences are exactly the two roles, read off their own rules.
+    expect(ruleBody(`.${WIDGET_ROOT_CLASS} .${CARD_INPUT_CLASS}`)).toContain('background: #ffffff;');
+    expect(ruleBody(`${ROW_SELECTOR} button.${CARD_PRIMARY_CLASS}`)).toContain('color: #ffffff;');
+    expect(ruleBody(`.${WIDGET_ROOT_CLASS} .${CARD_CLASS}`)).toContain('background: #fdf7ee;');
+  });
+
+  /**
+   * `A153` closes `D5`/`A128`: the disabled save button is stated as **colours**, not as
+   * an `opacity`, so the label stays legible at 8.88:1 while the fill measures 1.56:1
+   * against the card (the enabled fill measures 4.97:1). Both surfaces carry the same
+   * three values, and the page side is pinned here.
+   */
+  it('states the disabled save button as the three A153 colours and no opacity', () => {
+    const disabled = ruleBody(`${ROW_SELECTOR} button:disabled`);
+    expect(disabled).toContain('color: #1b2a33;');
+    expect(disabled).toContain('background: #e3c3aa;');
+    expect(disabled).toContain('border-color: #a6cbdc;');
+    // The old state's mechanism is gone: an opacity would fade the label with the fill.
+    expect(CARD_CSS).not.toMatch(/opacity:/);
   });
 });
 

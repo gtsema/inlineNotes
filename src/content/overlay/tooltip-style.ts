@@ -16,6 +16,15 @@
  * to the constant by `tests/content-tooltip.spec.ts`, exactly like the settle delay of
  * `A63`, and so is the fact that the stylesheet carries exactly one opacity rule.
  *
+ * That one opacity is the *shown* state of the tooltip and never a disabled one: the
+ * tooltip has no disabled control, so the `A153` colour-stated disabled state of the
+ * two cards does not reach this file. The colours do (ruling `A152`, task `t15-01`):
+ * the surface is the `A125` cream `#fdf7ee`, the ink `#1b2a33`, the border the
+ * decorative `#a6cbdc`, and the `ownership header` of a `foreign entry` reads in the
+ * hint ink `#7b6a55` instead of the four greys this file shipped with. No colour here
+ * is invented, and the highlight slots of `src/content/paint/paint-palette.ts` stay
+ * untouched (ruling `A151`).
+ *
  * `pointer-events: auto` is what makes the tooltip clickable at all: the host element
  * carries `pointer-events: none` (`host-style.ts`), so a widget that does not undo it
  * can be seen and never pressed. The tooltip stays non-modal: it has no backdrop, and
@@ -54,9 +63,9 @@ export const TOOLTIP_CSS: string = [
   '  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;',
   '  font-size: 13px;',
   '  line-height: 1.45;',
-  '  color: #14171a;',
-  '  background: #ffffff;',
-  '  border: 1px solid #b9bec4;',
+  '  color: #1b2a33;',
+  '  background: #fdf7ee;',
+  '  border: 1px solid #a6cbdc;',
   '  border-radius: 8px;',
   '  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);',
   '  padding: 8px 10px;',
@@ -74,7 +83,7 @@ export const TOOLTIP_CSS: string = [
   `.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS} {`,
   '  font-weight: 400;',
   '  font-style: italic;',
-  '  color: #444c56;',
+  '  color: #7b6a55;',
   '}',
   `.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_COMMENT_CLASS} {`,
   '  margin: 0;',

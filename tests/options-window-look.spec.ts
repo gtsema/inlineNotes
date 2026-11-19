@@ -82,6 +82,19 @@ const PALETTE = {
  */
 const PREEXISTING_REFUSAL = '#b3261e';
 
+/**
+ * Ruling `A153` (task `t15-01`): the disabled action control is stated as **colours**
+ * rather than as an `opacity`, on both extension surfaces, and this is the fill. It is
+ * the one literal the `A125` palette did not have — `D5`/`A128` stayed unruled from
+ * Stage 9 until `A153` gave the state a value — so it joins the palette table rather
+ * than the "preexisting" list: the ruling, not the artwork, is where it comes from.
+ *
+ * The `#1b2a33` label it is read on measures **8.88:1**, and the fill against the card
+ * **1.56:1** while the enabled `#b8480d` measures **4.97:1** — visibly washed out, and
+ * legible, which the withdrawn `opacity: 0.45` never was (its label measured `1.42:1`).
+ */
+const DISABLED_FILL = '#e3c3aa';
+
 /** Every text pair the palette ships, with the background it is read on. */
 const TEXT_PAIRS: [string, string, string][] = [
   ['ink on the page background', PALETTE.ink, PALETTE.page],
@@ -93,6 +106,8 @@ const TEXT_PAIRS: [string, string, string][] = [
   ['the author-name field ink on its own field background', PALETTE.ink, PALETTE.onAction],
   ['confirmation on the pale band', PALETTE.accent, PALETTE.accentBand],
   ['refusal on the pale band', PREEXISTING_REFUSAL, PALETTE.accentBand],
+  // `A153`'s pair: the disabled action's label on its own fill.
+  ['disabled action label on the disabled fill', PALETTE.ink, DISABLED_FILL],
 ];
 
 /**
@@ -108,6 +123,11 @@ const TEXT_PAIRS: [string, string, string][] = [
  * label line's text — joins it. Both are read on the card, so both name `.options`. No row is
  * dropped: `.options`, `.counter`, `.input`, `.save` and the two message rules keep the rows
  * they had.
+ *
+ * `t15-01` added the `A153` row. `.save:disabled` declares a `color:` of its own, so the
+ * pair recomputation reads it the day the ruling ships; before `A153` the rule carried an
+ * `opacity` and no ink at all. The carrier is the rule itself, because the disabled state
+ * paints its own background — the one declaration that makes the disabled pair a pair.
  */
 const TEXT_ROLE_BACKGROUND: Record<string, string> = {
   '.options': ':host',
@@ -116,6 +136,7 @@ const TEXT_ROLE_BACKGROUND: Record<string, string> = {
   '.counter': '.options',
   '.input': '.input',
   '.save': '.save',
+  '.save:disabled': '.save:disabled',
   '.message--saved': '.message',
   '.message--refusal': '.message',
 };
@@ -1215,7 +1236,10 @@ describe('the palette is literal and derived (t9-02 AC5, ruling A125)', () => {
     const literals = [...styles.matchAll(/#[0-9a-fA-F]{3,8}\b/g)]
       .map((match) => match[0].toLowerCase())
       .sort();
-    const pinned = [...Object.values(PALETTE), PREEXISTING_REFUSAL].sort();
+    // `DISABLED_FILL` joins the pinned set by ruling `A153` (`t15-01`), not by an
+    // invention of this test: it is the one value the `A125` palette did not have, and the
+    // disabled row of the palette table files it beside the artwork-sampled roles.
+    const pinned = [...Object.values(PALETTE), PREEXISTING_REFUSAL, DISABLED_FILL].sort();
     expect([...new Set(literals)].sort()).toEqual(pinned);
   });
 
@@ -1530,6 +1554,84 @@ describe('the message line wears the palette role the code chose (t9-02 AC6; t9-
       }
       expect(messageClassFor(code), code).toBe(`message ${refusalRule.slice(1)}`);
     }
+  });
+});
+
+/**
+ * Ruling `A153` (task `t15-01`) closes `D5`/`A128`, open since Stage 9: the disabled action
+ * control stops being an `opacity` and becomes **colours**, and the same three values are the
+ * ones the page widgets' disabled save button wears (`A150`).
+ *
+ * Why the `opacity` goes rather than gets retuned is a measurement, not a preference: an
+ * opacity fades the fill and the label **together**, so at `0.45` the label measured `1.42:1`
+ * against its own button and could never be legible at any value that also looked disabled.
+ * Stated as colours, the pair is `#1b2a33` on `#e3c3aa` — **8.88:1** — while the fill measures
+ * **1.56:1** against the card, against **4.97:1** for the enabled `#b8480d`.
+ */
+describe('the disabled Сохранить is colours, not an opacity (A153, t15-01)', () => {
+  const styles = componentStyles(join('src', 'options', 'options.component.ts'));
+  const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
+
+  it('drops the opacity and states the three roles the page widgets use', () => {
+    const disabled = ruleBody(stylesCode, '.save:disabled');
+    expect(disabled).toMatch(new RegExp(`(?:^|;)\\s*color:\\s*${PALETTE.ink};`));
+    expect(disabled).toMatch(new RegExp(`(?:^|;)\\s*background:\\s*${DISABLED_FILL};`));
+    expect(disabled).toMatch(new RegExp(`(?:^|;)\\s*border:\\s*1px solid ${PALETTE.decorative};`));
+
+    // The retired mechanism is gone from the shipped stylesheet entirely: an `opacity` here
+    // would fade the label with the fill, which is the state `A153` rules out. The absence
+    // reads the verbatim text, so a commented-out `opacity` is flagged as well.
+    expect(styles).not.toMatch(/opacity/);
+  });
+
+  it('declares no colour outside the palette the ruling names', () => {
+    const declared = new Set(
+      [...stylesCode.matchAll(/#[0-9a-fA-F]{6}/g)].map((match) => match[0].toLowerCase()),
+    );
+    expect([...declared].sort()).toEqual(
+      [
+        PALETTE.page,
+        PALETTE.ink,
+        PALETTE.hint,
+        PALETTE.action,
+        PALETTE.onAction,
+        PALETTE.accent,
+        PALETTE.accentBand,
+        PALETTE.decorative,
+        PREEXISTING_REFUSAL,
+        DISABLED_FILL,
+      ].sort(),
+    );
+  });
+
+  it('measures the pair it claims, and stays visibly washed out without becoming unreadable', () => {
+    // The numbers the ruling quotes, recomputed here rather than quoted: the label is
+    // legible, and the disabled fill is visibly quieter than the enabled one.
+    expect(contrastRatio(PALETTE.ink, DISABLED_FILL)).toBeCloseTo(8.88, 2);
+    expect(contrastRatio(DISABLED_FILL, PALETTE.page)).toBeCloseTo(1.56, 2);
+    expect(contrastRatio(PALETTE.action, PALETTE.page)).toBeCloseTo(4.97, 2);
+    expect(contrastRatio(DISABLED_FILL, PALETTE.page)).toBeLessThan(
+      contrastRatio(PALETTE.action, PALETTE.page),
+    );
+  });
+
+  it('moves no geometry of the enabled control', () => {
+    // `A150` is colours only: the enabled rule keeps the declarations it shipped with, and
+    // the disabled rule adds nothing but the three colours and the cursor it always had.
+    const enabled = ruleBody(stylesCode, '.save');
+    for (const declaration of [
+      'padding: 6px 14px;',
+      'color: #ffffff;',
+      'background: #b8480d;',
+      'border: 0;',
+      'border-radius: 6px;',
+      'font: inherit;',
+    ]) {
+      expect(enabled, declaration).toContain(declaration);
+    }
+    const disabled = ruleBody(stylesCode, '.save:disabled');
+    expect(disabled).toMatch(/(?:^|;)\s*cursor:\s*default;/);
+    expect(disabled).not.toMatch(/padding|width|height|font|border-radius|margin/);
   });
 });
 
