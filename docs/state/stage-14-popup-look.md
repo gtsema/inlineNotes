@@ -131,3 +131,33 @@ All five defaults stand, so the slice carries no judgement of its own:
 | Q3 — the row's controls | the checkbox's box and the delete button are styled to the `A125` palette |
 | Q4 — the empty state and the notices | empty line in `#7b6a55`, refusal in `#b3261e` (already shipped), the `name_required` button keeps its underline |
 | Q5 — the trash hit box | `24px` with a `16px` glyph, the same numbers as the page widgets' `ACTION_HIT_BOX_PX` / `ACTION_ICON_PX`, so the icon-only shape matches across surfaces (`S14-5`) |
+
+## Review verdict and attempt 2 (2026-11-19)
+
+Review `426e2c29-d416-495f-a8e4-035b7d31ee7b` → **changes requested**, one blocking finding, and it is the same defect
+class as the whole week: **two spec sentences outlived the artifact they described.** Both say the popup's buttons «keep
+their words» and that the surface «gained no inline glyph»:
+
+- `docs/specs/content-overlay-ui.md:154` — inside the `A114`/`t7-01` card bullet's «nothing else moved» paragraph.
+- `docs/specs/content-overlay-ui.md:298` — **AC 27**, the same claim written as an acceptance criterion.
+
+`A143` made both false on purpose, so the fix is the sentence, not the code. Attempt 2 is bounded to that plus the
+reviewer's row 4 (a self-contradicting doc comment: `deleteIconPx` says «the number is 24 and the box is 16» while the
+constants are `16` and `24`).
+
+The reviewer **accepted** the `content-create-card-boundaries` narrowing and judged it in scope as an AC consequence:
+«`offenders === []` for `<svg` under `src/popup/`» became «exactly `src/popup/popup.component.ts`», the `CARD_ICON_CLASS`
+half stays empty for the popup, and both halves stay empty for `src/options/` — a widening of what counts as legal
+where a ruling made the old blanket absence false, not a weakened present claim.
+
+### Ledger additions
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-6` | `docs/specs/content-overlay-ui.md:162` says the look suite includes «a path-for-path comparison with the editor's glyph»; the suite makes a comparison, but the popup's own comment says the two drawings are **not** claimed identical. The bullet overstates what the suite proves. | spec |
+| `S14-7` | `tests/popup-window-look.spec.ts` never asserts that `class="popup"` reaches the template or that `rowClassOf` yields `row--own` — every `.popup` rule assertion resolves against stylesheet text only. | test |
+| `S14-8` | `docs/specs/content-overlay-ui.md:157` says «every colour the popup declares is one of the `A125` roles» and then lists five, while `A125` names seven plus the refusal. True about the shipped set, loose as a sentence. | spec |
+| `S14-9` | `src/popup/popup.component.ts:260` — the delete colour is a bare literal `#b8480d` rather than a named constant, while the two sizes are constants. `A125`-clean, but a glyph that must stay recognisable is not the only thing worth naming. | source style |
+| `S14-10` | `src/popup/index.html` ends without a trailing newline; `src/options/index.html` has one. Harmless, and the one byte-level asymmetry between two documents that now own the same rule. | source style |
+| `S14-11` | `tests/content-create-card-boundaries.spec.ts:25-32` — the file header still opens with «the popup carries no inline glyph» and qualifies it two lines later. The exception is stated, but the opening clause is what a reader greps for. | test prose |
+| `S14-12` | Report accuracy: `docs/state/t14-01-engineer.md`'s AC 7 row describes the refusal pin as «one `#b3261e` declaration in the stylesheet» while the suite reads it through its own `PREEXISTING_REFUSAL` literal. | docs |
