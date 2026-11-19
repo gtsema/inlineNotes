@@ -161,3 +161,31 @@ where a ruling made the old blanket absence false, not a weakened present claim.
 | `S14-10` | `src/popup/index.html` ends without a trailing newline; `src/options/index.html` has one. Harmless, and the one byte-level asymmetry between two documents that now own the same rule. | source style |
 | `S14-11` | `tests/content-create-card-boundaries.spec.ts:25-32` — the file header still opens with «the popup carries no inline glyph» and qualifies it two lines later. The exception is stated, but the opening clause is what a reader greps for. | test prose |
 | `S14-12` | Report accuracy: `docs/state/t14-01-engineer.md`'s AC 7 row describes the refusal pin as «one `#b3261e` declaration in the stylesheet» while the suite reads it through its own `PREEXISTING_REFUSAL` literal. | docs |
+
+## Verdict: accepted on attempt 2
+
+Attempt 2 (`c0eae45`, two files, four lines) closed the only blocking finding; the confirming review `f4cda879-f76d-4fb9-85c3-16d44e8bb59b`
+returned **accepted** with zero blocking findings and no fourth contradicting sentence in the spec. Its verdict line: the spec and
+the popup code now agree about the popup's controls.
+
+All seven non-blocking rows it re-listed are the same `S14-6`…`S14-12` already ledgered; it added none.
+
+Final gates on `c0eae45` (re-run by the PM): `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1048 tests / 47 files**;
+checker 0 — **176 info**; `npm run typecheck` 0. `README.md` synced by the PM: 1048 tests, 47 files, «Стадии 1–14», and a
+Stage 14 note on the popup's new look.
+
+### Retro, Stage 14
+
+- **The same defect class, fourth time this week.** `A143` deliberately falsified two spec sentences — «the popup's buttons keep
+  their words» and «neither surface gained an inline glyph» — and both survived the commit that made them false. The reviewer
+  caught them by reading the spec, not the tests, because **no test reads the spec for a claim about a control's shape**.
+- **An absence pin that a ruling makes false is narrowed, not deleted.** `tests/content-create-card-boundaries.spec.ts` asserted
+  «no `<svg>` under `src/popup/`»; the popup now legitimately carries one. The pin became «exactly `src/popup/popup.component.ts`»,
+  the `CARD_ICON_CLASS` half stayed empty, and `src/options/` kept both halves empty. The reviewer judged the narrowing acceptable
+  and in scope as an AC consequence — but the engineer flagged it in its own report as the one pin it loosened, which is what let
+  the PM ask the question instead of discovering it later.
+- **A self-contradicting comment is a defect the tests cannot see.** `deleteIconPx` said «the number is 24 and the box is 16» while
+  the constants were `16` and `24`. Nothing fails, and a later reader trusts it.
+- **The PM's mutation checks are what make a look suite credible.** Four mutations on the shipped popup file — a palette role
+  changed (3 red), the width changed to `360px` (1 red), the accessible name removed (1 red), the glyph swapped for visible text
+  (2 red) — each proved a specific assertion is load-bearing rather than decorative.
