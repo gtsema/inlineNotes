@@ -65,3 +65,27 @@ Both keep the label as the same ink the rest of the surface uses, and both leave
 enabled `#b8480d` (fill-vs-card 1.56 / 2.03 against 4.97). WCAG 1.4.3 exempts inactive controls, so this is a legibility choice, not a
 compliance defect — which is why it needs a ruling rather than a fix. `A128` will carry whichever the user picks; nothing ships until it
 does.
+
+## Rows added by the `t10-02` review (run `c7301323-e084-4b0a-b92c-308a1a415437`, 2026-11-19)
+
+The review of `e1f2124` verdicted **changes requested**: AC 1-7 pass, the six rows above are genuinely closed, replay integrity is
+clean, and one sentence the slice added as its own justification is false. That sentence is the blocking finding and is **not** a row —
+it is fixed in attempt 2 as AC 8 of `docs/state/t10-02-extraction-honesty.md`: `componentStyles`' doc comment says "everything this text
+feeds is an absence claim" and "every presence claim … is wrapped in `codeOnly`", while `:703-709`, `:938-949`, `:1012-1015` and
+`:1035-1039` read the same verbatim text through `ruleBody` (`:148-156`, a `{`→`}` slice that keeps comment text). A `/* width: 80px */`
+comment inside `.mascot { … }` satisfies the geometry pin while the stylesheet declares nothing — the `t9-02b` R2b pattern, cited two
+lines below the claim that it is absent here.
+
+| Row | Defect | Class | Remedy / status |
+|---|---|---|---|
+| S10-11 | `styleBlocks` (`tests/options-window-look.spec.ts:229`) matches `<style>` literally, so `<style type="text/css">img { box-sizing: border-box }</style>` is **neither read nor counted** (`:770` still answers 1), and no other pin over that document reads `box-sizing`. The spec at `docs/specs/content-overlay-ui.md:92` says the scan reads "every `<style>` block" without stating the limit. | test + spec | taken by **AC 9a** (attribute-tolerant pattern + decoy fixture) |
+| S10-12 | The inline-style absence pin is `/[\s]style\s*=/i` (`:795`): `[style.box-sizing]="'border-box'"` or `[attr.style]="…"` on `src/options/options.component.ts:58` moves the 84 px footprint with the pin green, and an inline binding outranks every stylesheet rule. | test | taken by **AC 9b** |
+| S10-13 | `SHIPPED_ENTRY_DELEGATES` (`tests/toolchain-contract.spec.ts:689-716`) is hand-maintained: add a sixth exported wrapper in `tests/support/build-script-guards.ts` that re-implements the extraction, point a shipped pin at it, and nothing reads it. The build script already has the symmetric answer (the whole-name-set pin at `:607`); the support module does not. | test | taken by **AC 9c** (pin the exported-function-name set, or derive the table from it) |
+| S10-14 | The verbatim-vs-stripped choice is still prose: the AC 6 case calls `boxSizingSelectorsReachingMascot` on a literal string and never touches `componentStyles`, so adding `codeOnly(...)` **inside** `componentStyles` keeps all 1019 green while inverting the documented direction. | test | taken by **AC 10** |
+| S10-15 | The delegation pin reads the support module without the `\r\n` → `\n` normalization `buildScriptSource()` performs (`tests/toolchain-contract.spec.ts:730` vs `tests/support/build-script-guards.ts:58`). Cosmetic today, one line-ending shape per scan once fixed. | test | taken by **AC 9d** |
+| S10-16 | `BUILD_SCRIPT_EXTRACTED_NAMES` (`:572-578`) lists `verifyContentBundleHasNoAngular` as extracted, but no test lifts it through `loadBuildGuard*` (it appears only inside fixture `main()` bodies at `:243` and `tests/options-window-look.spec.ts:652`). Harmless, covered by the set pin, but labelled wrongly. | test | taken by **AC 9e** (lift it once, or restate the list as "could lift") |
+| S10-17 | Replay fingerprint in the **worktree**, not the repo: after the PM's edit-replay, `git ls-files --eol` reported `w/mixed` for `tests/support/build-script-guards.ts` (one LF-only line) while the committed blob is pure LF. | tooling | **closed by the PM**: the worktree copy was normalized to the uniform CRLF that `core.autocrlf=true` produces; `git diff HEAD` is empty, the blob never changed, and both suites are green (95 / 95). Rule kept: normalize line endings by comparing against the blob, not by editing blind. |
+
+The review also flagged that the brief closed six findings without a `Carried-fix checklist` section (rule 8 of
+`docs/specs/code-review-flow.md`). **Closed by the PM** — the section is now in `docs/state/t10-02-extraction-honesty.md` and maps each
+finding to the AC that answers it.

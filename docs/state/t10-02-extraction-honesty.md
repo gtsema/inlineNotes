@@ -36,6 +36,51 @@ around them. Close exactly those six rows.
 7. The spec sentences that already name the `#id` / document-ancestor / inline-style / second-block limits stay true; if an item above
    removes a limit, the sentence is updated in the same commit.
 
+## Carried-fix checklist (review `c7301323-e084-4b0a-b92c-308a1a415437`, rule 8 of `code-review-flow`)
+
+| # | Finding | Where answered |
+|---|---|---|
+| 1 | **blocking** — the `componentStyles` doc comment (`tests/options-window-look.spec.ts:111-113`, `:120-123`) claims "everything this text feeds is an absence claim" and "every presence claim … is wrapped in `codeOnly`", and the same file refutes both (`:703-709` mascot geometry, `:938-949` the ten palette pins, `:1012-1015`, `:1035-1039` read the verbatim text through `ruleBody`, `:148-156`) | **AC 8** |
+| 2 | a `<style>` **with an attribute** is invisible to both halves of the AC 2 pin (`styleBlocks`, `:229`) while the spec says "every `<style>` block" | **AC 9a** |
+| 3 | the inline-style pin matches a literal `style=` only (`:795`); `[style.box-sizing]` / `[attr.style]` move the frame with the pin green | **AC 9b** |
+| 4 | a wrapper the hand-maintained `SHIPPED_ENTRY_DELEGATES` table (`:689-716`) never names escapes the delegation pin | **AC 9c** |
+| 5 | the verbatim-vs-stripped direction is still a comment, not a pin: `codeOnly(...)` inside `componentStyles` keeps 1019 green and inverts the documented behavior | **AC 10** |
+| 6 | the delegation pin reads the module without the `\r\n` → `\n` normalization `buildScriptSource()` applies (`tests/toolchain-contract.spec.ts:730` vs `tests/support/build-script-guards.ts:58`) | **AC 9d** |
+| 7 | this brief had no `Carried-fix checklist` section | closed here, by the PM |
+| 8 | `BUILD_SCRIPT_EXTRACTED_NAMES` (`:572-578`) calls `verifyContentBundleHasNoAngular` "extracted" although no test lifts it | **AC 9e** |
+
+## Attempt 2 — AC 8-10 (after the review; the same six debt rows, nothing new)
+
+8. **The justification sentence becomes true, or it goes.** The split is real and worth keeping — an **absence** scan wants the
+   verbatim text (a commented-out `box-sizing: border-box` must go red), a **presence** pin wants stripped text (a commented-out
+   `width: 80px` must not satisfy it). So: add a stripped accessor for the presence pins (`codeOnly` over the same component
+   stylesheet), point the mascot-geometry, palette and dialog-box **presence** assertions at it, leave every absence scan on the
+   verbatim text, and rewrite the doc comment so it names exactly which reads are stripped and which are not. Two decoys become
+   required: `/* width: 80px */` inside a reachable `.mascot` rule must make the geometry pin **red** (it currently satisfies it),
+   and a commented-out `box-sizing: border-box` must still be **flagged** by the absence scan. If any of those two decoys cannot be
+   made to behave that way, stop and report it instead of relaxing the assertion.
+9. The four mechanical escapes the review named, each with its own decoy so the widening is not decorative:
+   - **a** `styleBlocks` (`tests/options-window-look.spec.ts:229`) matches `<style>` only; widen to an attribute-tolerant form
+     (`<style\b[^>]*>`) and pin a `<style type="text/css">img { box-sizing: border-box }</style>` fixture as **read and counted**.
+     The spec's "every `<style>` block" then stays literally true.
+   - **b** the inline-style absence pin (`:795`) reads a literal `style=`; it must also flag `[style.` and `[attr.style]` on the
+     mascot element, with a counterfactual for each, and must still not fire on an element that carries neither.
+   - **c** `SHIPPED_ENTRY_DELEGATES` is hand-maintained, so a sixth exported wrapper in `tests/support/build-script-guards.ts` that
+     re-implements the extraction is invisible. Pin the module's **exported function-name set** (the sibling of `liveFunctionNames`
+     at `tests/toolchain-contract.spec.ts:607`), or derive the table from that set; an unnamed wrapper must be red.
+   - **d** read the support module through the same `\r\n` → `\n` normalization `buildScriptSource()` performs, so both scans see
+     one line-ending shape.
+   - **e** `verifyContentBundleHasNoAngular` sits in `BUILD_SCRIPT_EXTRACTED_NAMES` labelled as extracted while no test lifts it:
+     either lift it once through `loadBuildGuard*` or restate the list as "every name the harness **could** lift". Say which you
+     chose.
+10. **Pin the direction, not the prose.** AC 6 settled verbatim-vs-stripped by writing a reason down; the review showed `codeOnly(...)`
+    could be added inside `componentStyles` with all 1019 green. Add a case that asserts the component-stylesheet scan really sees
+    comment text (and that the new stripped accessor really does not), so the two directions cannot silently swap.
+
+Constraints for attempt 2 are the constraints of this brief, unchanged: tests and `docs/` only, no file under `src/` or `scripts/`,
+baseline **1019 / 46** with the count only growing, `dist/` 11 files, checker **169 info**, `typecheck` green, one commit, commit
+before the report.
+
 ## Out of scope
 
 - Any file under `src/` or `scripts/`. If an AC can only be closed by touching shipped code, **stop and report it**.
@@ -61,7 +106,9 @@ around them. Close exactly those six rows.
 |---|---|---|
 | 1 | `extension-engineer` `4816c481-af5d-4e9c-b69d-9881b99ab01a` | crashed on infrastructure (`prefill: … illegal instruction`) while running its mutation checks. The slice was written but **uncommitted**.
 | 1b | resumed as `32aa76ba-28df-4958-ae14-6dda91f69ac9` | died after ~2.5 min with `the engine stopped unexpectedly (exit code -11)`; no edits, the slice stayed in the tree
-| 1c | `extension-engineer` `08843a4f-d253-4c0e-a230-8f8aa7f459c3` (finish-only) | told **not** to rewrite the slice: fix the one red gate (`TS2322` on `liveDeclarationsOf`), run the four gates, one commit, report in one `write` call |
+| 1c | `extension-engineer` `08843a4f-d253-4c0e-a230-8f8aa7f459c3` (finish-only) | told **not** to rewrite the slice: fixed the one red gate (`TS2322` on `liveDeclarationsOf`), ran the four gates, committed `e1f2124`, wrote the report |
+| 2 | `code-reviewer` `c7301323-e084-4b0a-b92c-308a1a415437` | **changes requested**: AC 1-7 all pass, replay integrity clean, no pin weakened, 1013→1019 and `dist/` 11 verified — and **one blocking finding**: the AC 6 justification sentence is false about the file it justifies. Seven non-blocking rows for the ledger |
+| 2b | attempt 2 to be launched (`t10-02`, AC 8-10) | closes the blocking finding plus five of the seven non-blocking rows |
 
 ### The accident and the recovery (PM, 2026-11-19) — read before trusting any t10-02 number
 
@@ -105,4 +152,7 @@ Expected 2 (engineer, reviewer). Used: 3 engineers (two crashed runs of the same
 
 ## Verdicts
 
-Pending the finish-only run and the review.
+**Attempt 1: not accepted** (review `c7301323`): every acceptance criterion met, the six debt rows genuinely closed, no replay damage —
+and one untrue sentence added, which is what AC 6 was supposed to eliminate. Attempt 2 is bounded to AC 8-10 of this brief.
+
+Review artifact: `docs/state/t10-02-review.md` (copied by the PM; the role has no write tool).
