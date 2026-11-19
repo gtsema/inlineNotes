@@ -59,12 +59,60 @@ Two engineer sessions died after committing, while writing their reports. So wor
 
 | # | Child | Result |
 |---|---|---|
-| — | not launched yet | — |
+| 1 | `extension-engineer` `cc5c38a7-5bbf-447d-93dc-3a9fc178e80c` | delivered `196ec0c` (5 files, no `src/`, no `scripts/`): D1 executes the shipped `fail` and the shipped entry handler, D2 absence pin + narrowed palette sentence, D3 one shared helper, D4 widened negative scans, D6 README order line. Gates green: **1002 / 46**, `dist/` 11, checker 166 info. Report copied to `docs/state/t10-01-engineer.md`. |
+| 2 | `code-reviewer` `af0c05b3-772d-4f02-aa54-fcfaa67c3fc4` | **blocked** — 2 blocking findings; verdict copied to `docs/state/t10-01-review.md` |
 
 ## Delegation count
 
-Expected 2 (engineer, reviewer). Used: 0.
+Expected 2 (engineer, reviewer). Used: 2, plus 1 more engineer run for AC 8 (attempt 2 with a changed brief).
+
+## PM verification of the commit itself
+
+Gates re-run: `npm run build` 0 (`dist/` 11), `npm test` 0 (**1002 tests / 46 files**), `node scripts/check-agent-config.mjs` 0
+(0 / 0 / **166 info**), `npm run typecheck` 0. Two PM mutations of the shipped script, each restored with `git diff --quiet scripts/`
+verified clean:
+
+- `fail` → `console.error(...)` (log-and-continue): **8 tests fail**.
+- `process.exitCode = 1;` removed from the shipped `main().catch(...)` handler: **5 tests fail**.
+- after restore: 78/78 green in the two touched suites.
+
+So the D1 requirement became real behavior, not wording.
+
+## The Chrome measurement that settles blocking finding 1 — ruling `A129`
+
+Measured in real Chrome 157 on the built page (`http://127.0.0.1:8124/options/index.html`, `dist/` of `196ec0c`), read-only:
+
+```
+img.mascot                 box-sizing = content-box   width/height = 80px   border = 2px solid rgb(166,203,220)   painted = 84×84
+app-root (":host")         box-sizing = border-box
+.header (the img's parent)  box-sizing = content-box
+```
+
+`box-sizing` is **not an inherited CSS property**: Chrome reports `content-box` on the `img` although `:host` declares `border-box`.
+The shipped footprint is therefore **84 px** — an 80 px image box plus a 2 px frame painted outside it — and the `A127` reading
+stands. The reviewer's finding 1 is right about one thing: the new pin `expect(mascot).not.toMatch(/\bbox-sizing\b/)` reads **only
+the `.mascot` rule body**, so a `box-sizing` declared on another selector that matches the same element (`img`, `*`, `.header img`)
+would move the frame inside the 80 px and the pin would stay green. **Premise rejected, pin-scope half accepted** → AC 8.
+
+## AC 8 — what attempt 2 owes
+
+1. **Widen the mascot pin** across the whole shipped stylesheet: no rule whose selector can match the mascot (`.mascot`, `img`,
+   `*`, `.header img`) may declare `box-sizing`. No `src/` edit.
+2. **Close the extraction's silent mode** (finding 2): `buildScriptFunctionSource` and `buildScriptEntryStatement` must run against
+   **comment-stripped** source (`codeOnly(buildScriptSource())`) and anchor the function pattern to a **line start**, and the decoy
+   case becomes a test: a block-commented throwing `fail` placed above a live log-and-continue `fail` must make the guard pins
+   **fail**, not pass.
+3. **Remove or fix the tautological assertion** at `tests/toolchain-contract.spec.ts:330` — `buildScriptEntryStatement()` either
+   returns text starting with `main().catch(` or throws, so that `expect` cannot fail.
+4. **Correct the spec sentence** to state the ruled mechanism (`A129`, with the measurement above), not an unattributed CSS claim.
+5. Pins only grow; no `src/`, no `scripts/`; `dist/` stays 11; gates quoted in **`docs/state/t10-01b-engineer.md`**, written after
+   the commit in a single `write` call, and pasted into the final message as well.
 
 ## Verdicts
 
-Pending.
+**Reviewer (attempt 1): blocked.** Finding 1 — the 84 px sentence plus the new pin; finding 2 — the extraction reads unstripped
+source and takes the leftmost match, so a comment decoy is what the pins execute. Its answers also name one tautological pin,
+eight surviving local comment-stripper variants inside `tests/`, and two sentences implying more scan coverage than the code gives.
+
+**PM: attempt 1 partially accepted; the slice is not closed.** Finding 2 accepted in full (silent failure mode, in-lane fix).
+Finding 1 rejected on its CSS premise by the measurement above, accepted on pin scope. Attempt 2 runs AC 8 only.
