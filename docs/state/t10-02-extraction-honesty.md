@@ -108,7 +108,27 @@ before the report.
 | 1b | resumed as `32aa76ba-28df-4958-ae14-6dda91f69ac9` | died after ~2.5 min with `the engine stopped unexpectedly (exit code -11)`; no edits, the slice stayed in the tree
 | 1c | `extension-engineer` `08843a4f-d253-4c0e-a230-8f8aa7f459c3` (finish-only) | told **not** to rewrite the slice: fixed the one red gate (`TS2322` on `liveDeclarationsOf`), ran the four gates, committed `e1f2124`, wrote the report |
 | 2 | `code-reviewer` `c7301323-e084-4b0a-b92c-308a1a415437` | **changes requested**: AC 1-7 all pass, replay integrity clean, no pin weakened, 1013→1019 and `dist/` 11 verified — and **one blocking finding**: the AC 6 justification sentence is false about the file it justifies. Seven non-blocking rows for the ledger |
-| 2b | attempt 2 to be launched (`t10-02`, AC 8-10) | closes the blocking finding plus five of the seven non-blocking rows |
+| 2b | `extension-engineer` `b80c9186-d533-423a-8992-b3c294b0e3a2` (attempt 2, AC 8-10) | delivered `01354da`: 5 files (`docs/specs/content-overlay-ui.md`, `tests/options-window-look.spec.ts`, `tests/toolchain-contract.spec.ts`, `tests/support/build-script-guards.ts`, new `tests/support/style-direction-fixture.txt`), no `src/` or `scripts/`; **1019 → 1025 tests / 46 files**, `dist/` 11, checker 169 info, `typecheck` 0 (all re-run by the PM) |
+
+### PM mutation checks on attempt 2 (six, each restored per file, tree clean after every one)
+
+```
+N1  src/options/options.component.ts — `width: 80px` exists **only inside a comment**
+                                        -> 1 failed   (the presence pin refuses comment text; this was the blocking finding)
+N2  src/options/options.component.ts — a commented-out `box-sizing: border-box` in a reachable rule
+                                        -> 2 failed   (the absence scan still sees it — the direction did not collapse)
+N3  src/options/index.html — a second `<style type="text/css">img { box-sizing: border-box }</style>`
+                                        -> 4 failed   (AC 9a: attributed blocks are now read and counted)
+N4  src/options/options.component.ts — `[style.box-sizing]="'border-box'"` on the mascot element
+                                        -> 1 failed   (AC 9b: the Angular binding shape is caught)
+N5  tests/support/build-script-guards.ts — an extra exported wrapper `buildScriptSneaky()` the table never names
+                                        -> 1 failed   (AC 9c: the exported-name set pin)
+N6  tests/options-window-look.spec.ts — `codeOnly(...)` added **inside** `componentStyles`
+                                        -> 3 failed   (AC 10: the direction is a pin, not a paragraph)
+```
+
+`N1` and `N6` are the two that the review said could not be made red; both now are, and `N6`'s failure messages name the fixture
+(`expected '\n .mascot { …' to contain '/* width: 80px; */'`), which is the evidence that the fixture file is what carries the claim.
 
 ### The accident and the recovery (PM, 2026-11-19) — read before trusting any t10-02 number
 
