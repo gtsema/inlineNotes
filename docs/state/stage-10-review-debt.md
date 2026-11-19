@@ -39,3 +39,29 @@ Nothing here is a behavior defect; every row is a pin or a sentence that does no
 `D5` from `docs/state/stage-9-review-debt.md`: the disabled `Сохранить` rule (`opacity: 0.45`) has no ruling. `A128` was reserved and
 never issued, so nothing was changed. If the user wants it taken up, the recorded proposal is `0.55` (label `#b8480d` on the cream card
 at 5.29:1), and it needs a ruling first.
+
+## `D5` / `A128` — the measurement that invalidated the PM's own proposal (2026-11-19)
+
+The ledger used to record the proposal as «`opacity: 0.55`, label `#b8480d` on the cream card at `5.29:1`». **That number was wrong
+and the premise with it.** The `Сохранить` button is a **filled** button: fill `#b8480d`, label **white** (5.29:1 while enabled).
+`opacity` fades the fill and the label together, so no opacity value makes the label legible. Composited over the cream card
+`#fdf7ee`:
+
+| disabled style | blended fill | blended label | label vs blended fill | label vs card | fill vs card (how different the button looks) |
+|---|---|---|---|---|---|
+| `opacity: 0.45` (shipped) | `#dea889` | `#edcfbe` | **1.42** | 1.38 | 1.96 |
+| `opacity: 0.55` (the withdrawn proposal) | `#d79772` | `#edd0c0` | **1.68** | 1.37 | 2.31 |
+| enabled (for reference) | `#b8480d` | `#ffffff` | 5.29 | 1.07 | 4.97 |
+
+So raising the opacity buys almost nothing for the label. The fix, if the user wants one, is to stop expressing the disabled state as
+`opacity` and state it as colors, keeping the label at AA. Two candidates measured against the same palette:
+
+| variant | disabled fill | disabled label | label vs fill | fill vs card |
+|---|---|---|---|---|
+| **A (proposed default)** | `#e3c3aa` | `#1b2a33` | **8.88** | 1.56 |
+| **B** | `#d8a684` | `#1b2a33` | **6.81** | 2.03 |
+
+Both keep the label as the same ink the rest of the surface uses, and both leave the disabled button visibly washed out against the
+enabled `#b8480d` (fill-vs-card 1.56 / 2.03 against 4.97). WCAG 1.4.3 exempts inactive controls, so this is a legibility choice, not a
+compliance defect — which is why it needs a ruling rather than a fix. `A128` will carry whichever the user picks; nothing ships until it
+does.
