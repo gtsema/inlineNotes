@@ -107,23 +107,32 @@ function readSource(relativePath: string): string {
 }
 
 /**
- * The inline `styles` string of a single-inline-template component, **verbatim**.
+ * The inline `styles` string of a single-inline-template component, **verbatim**: every
+ * comment the stylesheet carries is kept, and this is the text the **absence** scans read
+ * (`t10-02` AC8 rewriting the sentence AC6 left untrue, closing debt rows `S10-7` and
+ * `S10-14`; the direction itself is pinned by the fixture cases in the last describe of this
+ * file, not by this comment).
  *
- * Deliberately not `codeOnly`, and the reason is the direction each scan reads in
- * (`t10-02` AC6, closing debt row `S10-7`). Everything this text feeds is an **absence**
- * claim: no rule that reaches the mascot declares `box-sizing`, no rule exceeds the dialog
- * box, the palette owns every literal. For an absence claim the safe error direction is to
- * read **more** text, so a commented-out `box-sizing: border-box` inside a reachable rule
- * makes the pin red and a human decides whether the comment is a leftover or a rule being
- * revived; stripping here would hide that declaration and turn the same edit green. The
- * repository rule that shipped-code claims read stripped text (`t9-02b` review remark R2b)
- * protects **presence** claims — a comment satisfying `toMatch(/process\.exitCode = 1/)` —
- * and every presence claim about this surface is wrapped in `codeOnly` where it is made:
- * the build-guard case reads `codeOnly(buildScriptSource())`, and the dialog-box case reads
- * the whole of `src/options/index.html` through `codeOnly`. `documentStyles` below strips
- * for the same reason as those two: it is read next to whole-file presence pins, and its
- * `<!-- -->` prose is dead in the document's own parse anyway. Same file, two helpers, two
- * directions, stated.
+ * Two reads of one stylesheet exist here, and which claim uses which is now stated exactly.
+ * Absence claims read **this** text, because the safe error of an absence scan is to read
+ * **more**: a commented-out `box-sizing: border-box` inside a rule that reaches the mascot
+ * turns the selector walk red and a human decides whether the comment is a leftover or a rule
+ * being revived, where a stripped read would answer “nothing to see”. The absence reads are:
+ * the `boxSizingSelectorsReachingMascot` walk over the component and document stylesheets,
+ * the `box-sizing` absence inside the `.mascot` body itself, the “no shipped width beyond the
+ * cap” scan over the whole stylesheet, the `min-width` and `:host` `width` absences, the
+ * color-literal set that must be exactly the pinned palette, the declared-text-pair walk, and
+ * the one-owner lookup the message-line case asks before it names a palette role. One further
+ * read sits on this text without being an absence: `shippedRules(componentCss).length` in the
+ * frame describe, a sanity check that the rule model has something to walk.
+ *
+ * Presence claims read `componentCodeStyles` below, because the safe error of a presence pin
+ * is to read **less**: the reverse defect is a commented-out declaration satisfying `toMatch`
+ * while the stylesheet declares nothing — the `t9-02b` review remark R2b pattern, and the exact
+ * thing the sentence this replaces claimed was absent here while `width: 80px` proved it was
+ * not. The presence reads are the mascot geometry literals, the ten palette role literals, and
+ * the dialog-box rules. `documentStyles` strips for the same reason those do: it is read next
+ * to whole-file presence pins, and its `<!-- -->` prose is dead in the document's own parse.
  */
 function componentStyles(componentPath: string): string {
   const raw = readSource(componentPath);
@@ -132,6 +141,18 @@ function componentStyles(componentPath: string): string {
     throw new Error(`${componentPath} has no inline styles to scan`);
   }
   return styles;
+}
+
+/**
+ * The same shipped stylesheet **with its comments removed**: the text every **presence** claim
+ * about this surface is read from (`t10-02` AC8, closing debt row `S10-14`). It is one
+ * `codeOnly` away from the helper above, and the split between them is a pinned behavior, not
+ * a narration: the fixture cases in the last describe hand both of them the same stylesheet
+ * whose every declaration sits inside a comment, so stripping inside `componentStyles` or
+ * un-stripping inside this one turns a test red instead of changing a paragraph.
+ */
+function componentCodeStyles(componentPath: string): string {
+  return codeOnly(componentStyles(componentPath));
 }
 
 /** The inline `template` string of a single-inline-template component, verbatim. */
@@ -224,9 +245,17 @@ function shippedRules(css: string): ShippedRule[] {
  * read. Every block is read now, and the case that scans the document also pins how many
  * blocks the shipped file owns, so a second block is a named decision rather than a shape
  * the scan has to guess about.
+ *
+ * The opening tag is matched **attribute-tolerantly** (`t10-02` AC9a, closing debt row
+ * `S10-11`): the pattern used to be the literal `<style>`, so a block written
+ * `<style type="text/css">` was invisible to both halves of the pin above — neither read nor
+ * counted — while the spec sentence said “every `<style>` block”. `<style\b[^>]*>` reads the
+ * same block either way, and the case that scans the document pins an attributed fixture block
+ * as read **and** counted, because a scan widened only in prose is a scan still waiting to
+ * narrow.
  */
 function styleBlocks(html: string): string[] {
-  return [...html.matchAll(/<style>([\s\S]*?)<\/style>/gi)].map((match) =>
+  return [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((match) =>
     codeOnly(match[1] as string),
   );
 }
@@ -255,6 +284,26 @@ function mascotElement(template: string): string {
     throw new Error('the shipped template places no `img.mascot` element');
   }
   return tag[0];
+}
+
+/**
+ * Whether one element carries an **inline style** in any shape Angular ships one in
+ * (`t10-02` AC9b, closing debt row `S10-12`).
+ *
+ * The absence pin that closed debt row `S10-4` read the literal `style=`, which is one spelling
+ * of three. `[style.box-sizing]="'border-box'"` and `[attr.style]="…"` put the same
+ * declaration on the same element, and an inline declaration outranks every stylesheet rule: any
+ * of the three moves the 2 px frame inside the 80 px image box with the whole stylesheet scan
+ * green. All three are pinned absent now, each with its own counterfactual, and the scan still
+ * answers for an element that carries none of them, so widening it cannot turn it into a
+ * matcher that fires on everything.
+ */
+function carriesInlineStyle(elementText: string): boolean {
+  return (
+    /[\s]style\s*=/i.test(elementText) ||
+    /[\s]\[style(?:\.[^\]]*)?\]\s*=/i.test(elementText) ||
+    /[\s]\[attr\.style\]\s*=/i.test(elementText)
+  );
 }
 
 /**
@@ -683,6 +732,8 @@ describe('the build copies the asset and fails without it (t9-02 AC2)', () => {
 
 describe('the header (t9-02 AC3, ruling A124)', () => {
   const styles = componentStyles(join('src', 'options', 'options.component.ts'));
+  // The stripped read of the same stylesheet, for the presence claims below (`t10-02` AC8).
+  const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
   const template = componentTemplate(join('src', 'options', 'options.component.ts'));
 
   it('renders the mascot in the header, next to the existing title', () => {
@@ -700,7 +751,13 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
   });
 
   it('frames the mascot with CSS at 80 CSS px, never by editing the PNG', () => {
-    const mascot = ruleBody(styles, '.mascot');
+    // Every literal in this case is a **presence** claim, so its rule body is read through the
+    // stripped helper (`t10-02` AC8, closing debt row `S10-14`). On the verbatim text a comment
+    // spelling `width: 80px` inside this same reachable `.mascot` rule satisfied the pin while
+    // the stylesheet declared nothing — that decoy is pinned red by the fixture cases at the end
+    // of this file. The `box-sizing` absence at the end of the case keeps the verbatim text on
+    // purpose: an absence scan reads more, never less.
+    const mascot = ruleBody(stylesCode, '.mascot');
     expect(mascot).toMatch(/width: 80px/);
     expect(mascot).toMatch(/height: 80px/);
     expect(mascot).toMatch(/border-radius: 50%/);
@@ -714,7 +771,7 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
     // does not make. Adding `box-sizing: border-box` here would move the frame inside the
     // 80 px and falsify the spec sentence, which is why the absence is pinned (`t10-01` D2,
     // closing `t9-02b` review remark R2a). The scope of that absence is the next case.
-    expect(mascot).not.toMatch(/\bbox-sizing\b/);
+    expect(ruleBody(styles, '.mascot')).not.toMatch(/\bbox-sizing\b/);
   });
 });
 
@@ -783,6 +840,18 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
       '</style>',
     ].join('\n');
     expect(boxSizingSelectorsReachingMascot(styleBlocks(twoBlocks).join('\n'))).toEqual(['img']);
+
+    // The shape that still escaped both halves of this case (`t10-02` AC9a, closing debt row
+    // `S10-11`): the opening-tag pattern was the literal `<style>`, so a block that carries an
+    // attribute was neither read nor counted, while the spec sentence said “every `<style>`
+    // block”. One block with an attribute is now read, reported and counted on its own, and
+    // counted beside the shipped block — the count answers two, not one.
+    const attributed = '<style type="text/css">\n  img {\n    box-sizing: border-box;\n  }\n</style>';
+    expect(styleBlocks(attributed)).toHaveLength(1);
+    expect(boxSizingSelectorsReachingMascot(styleBlocks(attributed).join('\n'))).toEqual(['img']);
+    expect(
+      styleBlocks(`${readSource(join('src', 'options', 'index.html'))}\n${attributed}`),
+    ).toHaveLength(2);
   });
 
   it('ships no inline style attribute on the element the stylesheet scan cannot read', () => {
@@ -799,6 +868,28 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
     const counterfactual =
       '<img style="box-sizing: border-box" class="mascot" src="assets/cat-mascot.png" alt="" />';
     expect(mascotElement(counterfactual)).toMatch(/[\s]style\s*=/i);
+
+    // The same outranking declaration in the two Angular shapes the literal `style=` could not
+    // see (`t10-02` AC9b, closing debt row `S10-12`): a property binding on the style property
+    // or on one of its longhands, and an attribute binding. Each is its own red.
+    for (const bound of [
+      '<img class="mascot" [style.box-sizing]="\'border-box\'" src="assets/cat-mascot.png" alt="" />',
+      '<img class="mascot" [style]="frameStyle()" src="assets/cat-mascot.png" alt="" />',
+      '<img class="mascot" [attr.style]="frameStyle()" src="assets/cat-mascot.png" alt="" />',
+    ]) {
+      expect(carriesInlineStyle(mascotElement(bound)), bound).toBe(true);
+    }
+
+    // And the widened scan is not a matcher that fires on everything: the shipped element with
+    // its attributes reordered, and an attribute whose *value* merely contains the word, are
+    // both answers of `false`. So the four shapes above are the red, and this case cannot be
+    // satisfied by a pattern that simply never stops matching.
+    for (const innocent of [
+      '<img class="mascot" alt="" src="assets/cat-mascot.png" />',
+      '<img alt="style guide" class="mascot" src="assets/cat-mascot.png" />',
+    ]) {
+      expect(carriesInlineStyle(mascotElement(innocent)), innocent).toBe(false);
+    }
   });
 
   it('reads a commented-out declaration of the component stylesheet instead of stripping it', () => {
@@ -934,18 +1025,22 @@ describe('exactly one new Russian string (t9-02 AC4)', () => {
 
 describe('the palette is literal and derived (t9-02 AC5, ruling A125)', () => {
   const styles = componentStyles(join('src', 'options', 'options.component.ts'));
+  // Presence reads only: each role must really declare its literal in a live rule
+  // (`t10-02` AC8). The set scan and the pair walk further down stay on the verbatim text,
+  // because both assert that nothing outside the pinned set is declared.
+  const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
 
   it('declares every pinned role as a literal', () => {
-    expect(ruleBody(styles, ':host')).toMatch(new RegExp(`background: ${PALETTE.page};`));
-    expect(ruleBody(styles, '.options')).toMatch(new RegExp(`color: ${PALETTE.ink};`));
-    expect(ruleBody(styles, '.hint')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
-    expect(ruleBody(styles, '.counter')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
-    expect(ruleBody(styles, '.save')).toMatch(new RegExp(`background: ${PALETTE.action};`));
-    expect(ruleBody(styles, '.save')).toMatch(new RegExp(`color: ${PALETTE.onAction};`));
-    expect(ruleBody(styles, '.message')).toMatch(new RegExp(`background: ${PALETTE.accentBand};`));
-    expect(ruleBody(styles, '.message--saved')).toMatch(new RegExp(`color: ${PALETTE.accent};`));
-    expect(ruleBody(styles, '.mascot')).toContain(PALETTE.decorative);
-    expect(ruleBody(styles, '.options')).toContain(PALETTE.decorative);
+    expect(ruleBody(stylesCode, ':host')).toMatch(new RegExp(`background: ${PALETTE.page};`));
+    expect(ruleBody(stylesCode, '.options')).toMatch(new RegExp(`color: ${PALETTE.ink};`));
+    expect(ruleBody(stylesCode, '.hint')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
+    expect(ruleBody(stylesCode, '.counter')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
+    expect(ruleBody(stylesCode, '.save')).toMatch(new RegExp(`background: ${PALETTE.action};`));
+    expect(ruleBody(stylesCode, '.save')).toMatch(new RegExp(`color: ${PALETTE.onAction};`));
+    expect(ruleBody(stylesCode, '.message')).toMatch(new RegExp(`background: ${PALETTE.accentBand};`));
+    expect(ruleBody(stylesCode, '.message--saved')).toMatch(new RegExp(`color: ${PALETTE.accent};`));
+    expect(ruleBody(stylesCode, '.mascot')).toContain(PALETTE.decorative);
+    expect(ruleBody(stylesCode, '.options')).toContain(PALETTE.decorative);
   });
 
   it('declares no color outside the pinned palette and the kept refusal color', () => {
@@ -1002,18 +1097,23 @@ describe('the palette is literal and derived (t9-02 AC5, ruling A125)', () => {
 
 describe('the page fills the Chrome dialog box (t9-02 AC7, ruling A124)', () => {
   const styles = componentStyles(join('src', 'options', 'options.component.ts'));
+  // The stripped read, for the presence claims of this case set only (`t10-02` AC8).
+  const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
 
   it('drops the fixed 360 px column and keeps the number only as a cap', () => {
+    // The whole-stylesheet scan is an **absence** and keeps the verbatim text; the two rule
+    // reads after it are presence claims and read the stripped text.
     expect(styles).not.toMatch(/(^|[^-])width:\s*360px/m);
-    expect(ruleBody(styles, '.options')).toMatch(/width: 100%/);
-    expect(ruleBody(styles, '.options')).toMatch(/max-width: 360px/);
+    expect(ruleBody(stylesCode, '.options')).toMatch(/width: 100%/);
+    expect(ruleBody(stylesCode, '.options')).toMatch(/max-width: 360px/);
   });
 
   it('gives the page the whole box and centers the card inside it', () => {
-    expect(ruleBody(styles, ':host')).toMatch(/min-height: 100vh/);
-    expect(ruleBody(styles, ':host')).toMatch(/box-sizing: border-box/);
-    expect(ruleBody(styles, '.options')).toMatch(/box-sizing: border-box/);
-    expect(ruleBody(styles, '.options')).toMatch(/margin: 0 auto/);
+    // Four presence claims, one per shipped declaration the ruling names.
+    expect(ruleBody(stylesCode, ':host')).toMatch(/min-height: 100vh/);
+    expect(ruleBody(stylesCode, ':host')).toMatch(/box-sizing: border-box/);
+    expect(ruleBody(stylesCode, '.options')).toMatch(/box-sizing: border-box/);
+    expect(ruleBody(stylesCode, '.options')).toMatch(/margin: 0 auto/);
     // The body margin is the only rule the document itself owns; without it the
     // page background cannot reach the edge of the dialog box.
     expect(codeOnly(readSource(join('src', 'options', 'index.html')))).toMatch(/body\s*\{\s*margin: 0;/);
@@ -1032,11 +1132,16 @@ describe('the page fills the Chrome dialog box (t9-02 AC7, ruling A124)', () => 
    * nothing on this surface reintroduces a fixed column.
    */
   it('sizes the card by the box and ships no fixed width beyond the cap and the mascot', () => {
+    // The two absences stay on the verbatim text, so a commented-out `width:` on `:host` or a
+    // commented-out `min-width:` on the card is flagged rather than hidden; the two presence
+    // claims move to the stripped text, so no comment can stand in for a shipped
+    // `width: 100%` or `max-width: 360px` (`t10-02` AC8).
     expect(ruleBody(styles, ':host')).not.toMatch(/(?:^|;)\s*width:/);
     const card = ruleBody(styles, '.options');
-    expect(card).toMatch(/(?:^|;)\s*width:\s*100%;/);
     expect(card).not.toMatch(/min-width:/);
-    expect(card).toMatch(/max-width:\s*360px;/);
+    const cardCode = ruleBody(stylesCode, '.options');
+    expect(cardCode).toMatch(/(?:^|;)\s*width:\s*100%;/);
+    expect(cardCode).toMatch(/max-width:\s*360px;/);
     // The document owns exactly one rule and it is not a width.
     expect(codeOnly(readSource(join('src', 'options', 'index.html')))).not.toMatch(/width/);
   });
@@ -1118,5 +1223,66 @@ describe('the message line wears the palette role the code chose (t9-02 AC6; t9-
       }
       expect(messageClassFor(code), code).toBe(`message ${refusalRule.slice(1)}`);
     }
+  });
+});
+
+/**
+ * The two reads of one component stylesheet, pinned **in their directions** (`t10-02` AC8 and
+ * AC10, closing debt row `S10-14` of `docs/state/stage-10-review-debt.md`).
+ *
+ * `docs/state/t10-02-review.md` finding 1 is why this describe exists at all: the sentence that
+ * justified reading the component stylesheet verbatim claimed every presence claim about the
+ * surface was wrapped in `codeOnly`, and the same file refuted it — the mascot geometry, the
+ * palette roles and the dialog-box rules each read the unstripped text. A comment spelling
+ * `width: 80px` inside the reachable `.mascot` rule therefore satisfied the geometry pin while
+ * the stylesheet declared nothing. The fix is a split between two accessors, and a split that
+ * lives only in a doc comment is the same defect waiting to return, so these cases hand both
+ * accessors the same comment-only stylesheet and pin what each one has to answer. The shipped
+ * stylesheet cannot carry that proof itself: it has no comment in it today, and adding one to
+ * shipped UI code to satisfy a test would be the wrong kind of honest.
+ */
+describe('the stylesheet is read verbatim for absences and stripped for presence (t10-02 AC8, AC10; row S10-14)', () => {
+  const fixture = join('tests', 'support', 'style-direction-fixture.txt');
+
+  it('flags the commented-out box-sizing declaration, because the absence scan reads verbatim', () => {
+    // Decoy 2 of the brief, on the accessor rather than on a hand-typed string: a commented-out
+    // `box-sizing: border-box` in a rule that reaches the mascot is **flagged** by the text the
+    // absence scans read. Move a `codeOnly` into `componentStyles` and this is the case that
+    // speaks first.
+    expect(boxSizingSelectorsReachingMascot(componentStyles(fixture))).toEqual(['.mascot']);
+    // The stripped accessor is the one that must not see it, or the presence half of the split
+    // would fail on a declaration no stylesheet makes.
+    expect(boxSizingSelectorsReachingMascot(componentCodeStyles(fixture))).toEqual([]);
+  });
+
+  it('refuses the commented-out geometry literals, because the presence reads are stripped', () => {
+    const verbatim = ruleBody(componentStyles(fixture), '.mascot');
+    const stripped = ruleBody(componentCodeStyles(fixture), '.mascot');
+
+    // Decoy 1 of the brief, written down as an assertion so the escape stays visible in the
+    // diff: the verbatim read **is** satisfied by the comments. That is exactly the behavior the
+    // geometry pin used to have, and the reason it no longer reads this text.
+    expect(verbatim).toMatch(/width: 80px/);
+
+    // The three literals the geometry case asserts against the shipped stylesheet, answered over
+    // the same comment-only stylesheet by the read that case now uses. Comment the live
+    // declarations out of `src/options/options.component.ts` and leave the comments behind, and
+    // that case is red: `.mascot` stops matching its own literals.
+    expect(stripped).not.toMatch(/width: 80px/);
+    expect(stripped).not.toMatch(/height: 80px/);
+    expect(stripped).not.toMatch(/border-radius: 50%/);
+  });
+
+  it('keeps the two accessors one stripping apart on the same path', () => {
+    // The pair is pinned on the accessors, not on a literal typed at the scan: stripping inside
+    // `componentStyles`, or failing to strip inside `componentCodeStyles`, is red here whatever
+    // the shipped file happens to contain.
+    const verbatim = componentStyles(fixture);
+    const stripped = componentCodeStyles(fixture);
+    expect(verbatim).toContain('/* width: 80px; */');
+    expect(stripped).not.toContain('width: 80px');
+    // The rule still exists after stripping; only its declarations are gone. Without this, a
+    // helper that deleted whole rules would satisfy the two assertions above.
+    expect(stripped).toContain('.mascot {');
   });
 });

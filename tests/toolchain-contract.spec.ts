@@ -15,6 +15,7 @@ import {
   loadBuildFailFromScript,
   loadBuildGuard,
   loadBuildGuardFromScript,
+  normalizeLineEndings,
   runBuildScriptEntry,
   runBuildScriptEntryFromScript,
 } from './support/build-script-guards';
@@ -569,7 +570,26 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
    * pinned the entry half of that (exactly one live `main().catch(...)`); nothing pinned the
    * declaration half until here.
    */
-  const BUILD_SCRIPT_EXTRACTED_NAMES = [
+  /**
+   * Every guard name the harness **could** lift out of the shipped script by name
+   * (`t10-02` AC4, closing debt row `S10-5`; relabelled by `t10-02` AC9e, closing row
+   * `S10-16`). Line anchoring and comment stripping make the leftmost match the first *live*
+   * declaration, but the extraction still takes the leftmost one: two live
+   * `function fail (…)` declarations make the real build call the **later** one, because
+   * function declarations are hoisted, while the pins run the **first**. `t10-01b` AC8 item 3
+   * pinned the entry half of that (exactly one live `main().catch(...)`); nothing pinned the
+   * declaration half until here.
+   *
+   * The label used to be “extracted”, and one name did not earn it:
+   * `verifyContentBundleHasNoAngular` is declared by the shipped script and counted below, but
+   * no case lifts it through `loadBuildGuard*`, because its body calls `readFileSync` and the
+   * guard factory injects no filesystem reader — widening that stub surface is a decision this
+   * task does not take. So the list says **could**, and the case below runs that claim instead
+   * of leaving it as a comment: every name here is reached by one of the two extractors over
+   * the shipped script, and a name the script does not declare is refused. A list that can be
+   * run cannot rot into prose.
+   */
+  const BUILD_SCRIPT_LIFTABLE_NAMES = [
     'fail',
     'main',
     'verifyManifestReferences',
@@ -592,10 +612,10 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
     );
   }
 
-  it('declares one live fail, one live main and one live copy of every extracted guard', () => {
+  it('declares one live fail, one live main and one live copy of every liftable guard', () => {
     const code = codeOnly(buildScriptSource());
 
-    for (const name of BUILD_SCRIPT_EXTRACTED_NAMES) {
+    for (const name of BUILD_SCRIPT_LIFTABLE_NAMES) {
       expect(liveDeclarationsOf(code, name), `${name} has more than one live declaration`).toHaveLength(
         1,
       );
@@ -620,6 +640,29 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
         'verifyManifestReferences',
         'verifyOptionsAssetShips',
       ].sort(),
+    );
+  });
+
+  /** Which harness extractor reaches one name in the shipped script. `main` needs the body
+   *  extractor, because its declaration is `async function main()`; every guard is reached by
+   *  the plain function extractor. */
+  function liftByName(source: string, name: string): string {
+    return name === 'main'
+      ? buildScriptMainBodyFrom(source)
+      : buildScriptFunctionSourceFrom(source, name);
+  }
+
+  it('lifts every name on the could-lift list by name, and refuses a name the script lacks', () => {
+    // The list above is labelled **could lift**, so the label is run rather than asserted
+    // (`t10-02` AC9e, closing debt row `S10-16`): every name it carries is reachable in the
+    // shipped script by one of the two extractors, and a name the script does not declare is
+    // refused. That is what keeps a relabelled list honest: it cannot drift into naming a
+    // renamed guard, a fixture-only helper, or prose.
+    for (const name of BUILD_SCRIPT_LIFTABLE_NAMES) {
+      expect(liftByName(shippedScript, name), name).toContain(`function ${name}(`);
+    }
+    expect(() => buildScriptFunctionSourceFrom(shippedScript, 'verifyNoSuchCheck')).toThrow(
+      /declares no top-level function verifyNoSuchCheck outside a comment/,
     );
   });
 
@@ -682,6 +725,28 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
   const SUPPORT_MODULE = 'tests/support/build-script-guards.ts';
 
   /**
+   * The support module as text, in the one line-ending shape every line-anchored scan here
+   * assumes (`t10-02` AC9d, closing debt row `S10-15`). The read used to hand `codeOnly` a file
+   * with whatever endings the checkout happened to produce, while the module's own
+   * `buildScriptSource()` normalizes the script it scans: one harness scanned in two shapes,
+   * and a pattern written against `\n}` resolves differently against `\r\n}`. Both reads answer
+   * through the module's exported `normalizeLineEndings`, so the shape pin below points at one
+   * function rather than at two private `replaceAll`s — the same reason the repository keeps
+   * exactly one `codeOnly` (`t10-01` D3, debt row `S10-10`).
+   */
+  function supportModuleSource(): string {
+    return normalizeLineEndings(readFileSync(join(projectRoot, SUPPORT_MODULE), 'utf8'));
+  }
+
+  /**
+   * A wrapper body that reads, strips, anchors or evaluates the script **itself** instead of
+   * delegating. Named once, so the wrapper pin and the smuggled-wrapper decoy below cannot
+   * disagree about what the red is (`t10-02` AC1, widened by AC9c; rows `S10-1`, `S10-13`).
+   */
+  const PRIVATE_EXTRACTION_SHAPES =
+    /readFileSync|require|codeOnly|new RegExp|new Function|\.exec\(|\.indexOf\(|\.search\(/;
+
+  /**
    * `[shipped-source wrapper, script-text extractor, the whole body the wrapper is allowed
    * to be]` — whitespace collapsed, so re-indenting a delegate is not a red, while giving it
    * a second statement, a second source or a private copy of the pattern is.
@@ -726,8 +791,88 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
     return (match[1] as string).trim().replaceAll(/\s+/g, ' ');
   }
 
+  /** Every `export function` name the support module declares, in shipped order: the sibling
+   *  of `liveFunctionNames` above, applied to the module the harness itself ships
+   *  (`t10-02` AC9c, closing debt row `S10-13`). */
+  function liveExportedFunctionNames(moduleText: string): string[] {
+    return [
+      ...moduleText.matchAll(/^[ \t]*export (?:async[ \t]+)?function[ \t]+([A-Za-z_$][\w$]*)/gm),
+    ].map((match) => match[1] as string);
+  }
+
+  /** The complete exported-function set of the support module, sorted: every one is named. */
+  const SUPPORT_MODULE_EXPORTED_NAMES = [
+    'buildScriptEntryStatement',
+    'buildScriptEntryStatementFrom',
+    'buildScriptFunctionSourceFrom',
+    'buildScriptMainBody',
+    'buildScriptMainBodyFrom',
+    'buildScriptSource',
+    'codeOnly',
+    'loadBuildFail',
+    'loadBuildFailFromScript',
+    'loadBuildGuard',
+    'loadBuildGuardFromScript',
+    'normalizeLineEndings',
+    'runBuildScriptEntry',
+    'runBuildScriptEntryFromScript',
+  ].sort();
+
+  it('names every exported function of the support module, so an unread wrapper is red', () => {
+    // `SHIPPED_ENTRY_DELEGATES` is hand-maintained, and that was the hole (`t10-02` AC9c,
+    // closing debt row `S10-13`): a sixth exported wrapper in this module that re-implemented the
+    // extraction, pointed at by a shipped pin, was text no case read. What is pinned here is the
+    // module's **exported-function set**: no name can leave the module without appearing on the
+    // list beside this case, so an exported helper cannot sit in the harness unread — the first
+    // red it produces is the set assertion below, and naming it there is a reviewable line in
+    // this file rather than a new unread one. The shipped build script already carried the
+    // symmetric answer (the whole-name-set case above); the module did not.
+    const exported = liveExportedFunctionNames(codeOnly(supportModuleSource()));
+    expect(exported.sort()).toEqual(SUPPORT_MODULE_EXPORTED_NAMES);
+    for (const [wrapper] of SHIPPED_ENTRY_DELEGATES) {
+      expect(exported, wrapper).toContain(wrapper);
+    }
+
+    // The decoy is the wrapper the review named, appended to the module's own text: the set pin
+    // names it the day it ships, the set it produces is no longer the pinned one, and its body
+    // is exactly what the wrapper case below fails on — a body that matches
+    // `PRIVATE_EXTRACTION_SHAPES` is a wrapper that stopped delegating.
+    const smuggled = [
+      codeOnly(supportModuleSource()),
+      'export function buildScriptEntryStatementCopy(source: string): string {',
+      '  const pattern = /^main\\(\\)\\.catch\\([\\s\\S]*?\\n\\}\\);$/m;',
+      '  return pattern.exec(source)![0];',
+      '}',
+    ].join('\n');
+    expect(liveExportedFunctionNames(smuggled)).toContain('buildScriptEntryStatementCopy');
+    expect(liveExportedFunctionNames(smuggled).sort()).not.toEqual(SUPPORT_MODULE_EXPORTED_NAMES);
+    expect(moduleFunctionBody(smuggled, 'buildScriptEntryStatementCopy')).toMatch(
+      PRIVATE_EXTRACTION_SHAPES,
+    );
+  });
+
+  it('scans the support module and the build script in one line-ending shape', () => {
+    // The claim is that no scan in this harness reads a mixed file (`t10-02` AC9d, closing debt
+    // row `S10-15`), and it is pinned on the text the pins consume rather than on the reader:
+    // the script read, the module read and an extracted wrapper body — the text the delegation
+    // pin compares statement by statement — each carry no carriage return. Take the
+    // the normalization away from either reader on a CRLF checkout and this case is red: the
+    // script read, the module read and every body sliced out of them answer with a carriage
+    // return, because a body keeps each interior line ending it took.
+    expect(normalizeLineEndings('a\r\nb\r\nc')).toBe('a\nb\nc');
+    expect(buildScriptSource()).not.toContain('\r');
+    const moduleText = codeOnly(supportModuleSource());
+    expect(moduleText).not.toContain('\r');
+    for (const [wrapper] of SHIPPED_ENTRY_DELEGATES) {
+      expect(moduleFunctionBody(moduleText, wrapper), wrapper).not.toContain('\r');
+    }
+    // One normalizer rather than two private `replaceAll`s: the script read delegates to the
+    // exported function the module read uses, so the two cannot drift apart.
+    expect(moduleFunctionBody(moduleText, 'buildScriptSource')).toContain('normalizeLineEndings(');
+  });
+
   it('keeps every shipped-source entry point one delegate call to the script-text extractor', () => {
-    const moduleText = codeOnly(readFileSync(join(projectRoot, SUPPORT_MODULE), 'utf8'));
+    const moduleText = codeOnly(supportModuleSource());
 
     for (const [wrapper, delegate, body] of SHIPPED_ENTRY_DELEGATES) {
       const actual = moduleFunctionBody(moduleText, wrapper);
@@ -742,7 +887,7 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
       expect(
         actual,
         `${wrapper} re-implements the extraction instead of delegating`,
-      ).not.toMatch(/readFileSync|require|codeOnly|new RegExp|new Function|\.exec\(|\.indexOf\(|\.search\(/);
+      ).not.toMatch(PRIVATE_EXTRACTION_SHAPES);
     }
   });
 });

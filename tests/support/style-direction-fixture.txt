@@ -1,0 +1,27 @@
+A scan fixture, not shipped code and not a test file. `tests/options-window-look.spec.ts` reads
+it as text through its two component-stylesheet helpers (`t10-02` AC8 and AC10, closing debt
+row `S10-14` of `docs/state/stage-10-review-debt.md`). It exists because the shipped options
+stylesheet carries no comment at all, so the verbatim read and the stripped read answer
+identically over it: the two directions can only be shown apart on a stylesheet whose
+declarations sit **only inside comments**, which is what this one is.
+
+The file is shaped like the `styles` property of a single-inline-template component, because
+that is the shape the reader extracts. Everything between the backticks is the stylesheet.
+
+Both decoys the brief names are here, on the one selector that reaches the mascot:
+
+- `box-sizing: border-box` commented out — an **absence** scan must still flag it, because the
+  safe error of an absence scan is to read more text and let a human decide whether the comment
+  is a leftover or a rule being revived;
+- `width: 80px`, `height: 80px`, `border-radius: 50%` commented out — a **presence** pin must
+  refuse them, because a comment that satisfies `toMatch(/width: 80px/)` while the stylesheet
+  declares nothing is the `t9-02b` review remark R2b pattern in a stylesheet instead of a script.
+
+styles: `
+    .mascot {
+      /* box-sizing: border-box; */
+      /* width: 80px; */
+      /* height: 80px; */
+      /* border-radius: 50%; */
+    }
+  `,

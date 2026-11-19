@@ -33,7 +33,12 @@
  * cases drive. That delegation is now pinned in **this module's own text** (`t10-02` AC1,
  * closing debt row `S10-1`): the case compares each shipped wrapper's body with the one
  * delegate call it is allowed to be, so a wrapper that re-reads or re-extracts the script
- * instead of delegating is a failing test rather than a comment.
+ * instead of delegating is a failing test rather than a comment. The same case names
+ * **every exported function of this module** (`t10-02` AC9c, closing debt row `S10-13`), so a
+ * sixth wrapper the pin's table never names is a failing test the day it ships — the escape
+ * the hand-maintained table left open. And this module is read back through
+ * `normalizeLineEndings` below (`t10-02` AC9d, row `S10-15`), so the scan of it sees the one
+ * line-ending shape the scan of the build script sees.
  */
 
 import { readFileSync } from 'node:fs';
@@ -52,10 +57,24 @@ export interface GuardStubs {
   logStep?: (message: string) => void;
 }
 
+/**
+ * One line-ending shape for every line-anchored scan (`t10-02` AC9d, closing debt row
+ * `S10-15`). The build-script read below had this `replaceAll` to itself while
+ * `tests/toolchain-contract.spec.ts` read the module that defines it with whatever endings
+ * the checkout happened to produce: two scans of one harness, two shapes, and a pattern
+ * written against `\n}` silently resolving against `\r\n}`. The scan of a file is now asked
+ * to name the shape it sees, and both reads answer through this one exported function —
+ * the same reason the repository keeps exactly one `codeOnly` (`t10-01` D3, debt row
+ * `S10-10`).
+ */
+export function normalizeLineEndings(text: string): string {
+  return text.replaceAll('\r\n', '\n');
+}
+
 /** The shipped build script, with its line endings normalized for line-anchored scans. */
 export function buildScriptSource(): string {
   const raw = readFileSync(join(projectRoot, 'scripts', 'build-extension.mjs'), 'utf8');
-  return raw.replaceAll('\r\n', '\n');
+  return normalizeLineEndings(raw);
 }
 
 /**
