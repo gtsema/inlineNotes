@@ -47,12 +47,25 @@ parenthesis is not, and the space keeps them from touching.
 above the field, pushing it down), or does the parenthetical go **after** the label in a way that keeps the field where it
 is? *Default: the input stays immediately under the label line*, which is the normal reading of "after the label".
 
+## Verdict
+
+**Accepted** on attempt 1 — `846b798` + report `149d753`; review `316fc3f5-27f8-4da5-bd21-0d19abcbac58` found **no blocking finding**
+and confirmed that **no old-arrangement claim survives** anywhere in prose or test names (the only two remaining mentions are
+intentional comments explaining the rule map's history).
+
+Gates re-run by the PM on `846b798`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1032 tests / 46 files** (baseline
+1031, +1 case); checker 0 — **176 info**; `npm run typecheck` 0. `src/options/text.ts` is absent from the commit's file list and
+`OPTIONS_STRINGS.nameHint` is unchanged.
+
 ## Ledger
 
 | Row | What is unresolved | Class |
 |---|---|---|
 | `S12-1` | `A125`'s palette is still sampled from the artwork `t11-01` replaced (`S11-1`); this stage adds no colour, so it stays untouched. | ruling + spec |
-| `S12-2` | The `name explanation line` was introduced by `t9-02` AC 4 as «the only Russian sentence this surface gained», and its spec bullet says it is «rendered under the header». That sentence becomes false here and is corrected in the same commit. | spec |
+| `S12-2` | The `name explanation line` was introduced by `t9-02` AC 4 as «the only Russian sentence this surface gained», and its spec bullet said it is «rendered under the header». Corrected in `846b798`. **Closed.** | spec |
+| `S12-3` | The `Q3` «one space before the parenthesis» is pinned only through a whitespace-collapsing read (`replaceAll(/\s+/g,' ')` then `toBe('ИМЯ (ЭТО_ИМЯ)')`), so a two-space or newline gap between `</label>` and `<span class="hint">` still passes. The claim is about one space; the pin cannot see two. | test |
+| `S12-4` | The new `'.label-line': '.options'` row in the rule-to-component map is never exercised: `.label-line` declares no `color:`, so the pair walk never reaches it. Harmless and permissive, recorded so the row is not mistaken for a live assertion. | test |
+| `S12-5` | `:host { padding: 16px }` means the centred column is centred on the `.options` **content box**, not on the dialog box's axis. The engineer stated this openly and did not change it. Whether the mascot should sit on the dialog-box axis is a `:host`/`.options` decision, and the owner has not seen it yet. | ruling + look |
 
 ## Answers (owner, 2026-11-19): `дефолты`
 

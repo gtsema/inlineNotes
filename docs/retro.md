@@ -342,3 +342,19 @@ illegal memory access`) with the work already committed.
 - **The build's own guard caught the icon before any test did.** `verifyManifestReferences()` already resolved `icons`
   and `action.default_icon`; moving `src/icons/icon-128.png` away failed the build with the reference named. The
   presence pin then only had to say *what* the manifest declares, because the build already says *whether it exists*.
+
+## Stage 12 — the settings header centres, the hint becomes a parenthetical
+
+- **A layout pin is not a look pin.** Three assertions described the old arrangement as markup (the header as a row, the
+  hint as a paragraph of its own) and each was rewritten for the new one without losing strength; the reviewer's job was
+  to check they got *stronger*, not merely greener. Two of the three did; the third (`Q3`'s «one space before the
+  parenthesis») turned out to be pinned only through a whitespace-collapsing read, so it cannot see two spaces — ledgered
+  as `S12-3` rather than left as a claim the test appears to make.
+- **A claim about a single space needs a pin that can count spaces.** The same class as `t10-02`'s tautology: a pin that
+  normalises its input before comparing cannot testify about the thing the sentence names.
+- **The rule-to-component map can gain a row that never runs.** `'.label-line': '.options'` was added for a rule with no
+  `color:` declaration, so the pair walk never reaches it. A map row is not an assertion; `S12-4` records it so the row is
+  not mistaken for one.
+- **Centring is relative to something, and the something has to be named.** The column centres on the card's content box,
+  which is inset by the host's `16px` padding — so it is not centred on the dialog box. Nobody noticed until the reviewer
+  asked; it is `S12-5` and the owner's eyes decide whether it matters.
