@@ -647,3 +647,23 @@ page cards, so the page stops having one widget on the old greys.
 | Row | What is left | Class |
 |---|---|---|
 | `S14-47` | `A153` fixes one disabled appearance for two surfaces that are drawn by **different layers** (`src/content/overlay/card-style.ts` is Preact CSS-in-string, `src/options/options.component.ts` is an Angular `styles` block). Nothing pins that the two stay in step: a change to one leaves the other behind. A cross-layer check is possible — both files are read as text by existing suites — but it is not this task's. | test + architecture |
+
+## t15-01 accepted (2026-11-19)
+
+Review `7959e790-010e-45fc-86ee-dc054dd743c5` → **accepted**, no blocking finding, and it answered the question I set as the
+hardest one: **no ninth stale sentence.** It checked the three places I named and confirmed the «every extension surface» claim
+holds for `src/popup/`, `src/options/`, both overlay files, and explicitly exempts the highlight palette.
+
+It also recomputed the contrast from the literals: label-on-fill **8.875**, fill-vs-card **1.558**, enabled-vs-card **4.965** —
+so the report's `8.88 / 1.56 / 4.97` are arithmetically right, and the `opacity` is genuinely gone rather than shadowed by a
+second rule (the only `opacity` left in `src/options/` is inside comments).
+
+Final gates on `6bdd9ed`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1060 tests / 47 files**; checker 0 —
+**176 info**; `npm run typecheck` 0.
+
+**`D5` / `A128` is closed** — open since Stage 9, re-ledgered in Stages 10 and 14, and ruled by `A153` in this task.
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-48` | `docs/specs/content-overlay-ui.md:96` — the `A125` bullet says the popup's retired `#1f1f1f` / `#6b6b6b` / `#e3e3e3` «appear nowhere in the shipped source», but **no suite scans `src/popup/` for them**; today's grep finds zero, so the sentence rests on a reader's grep rather than a pin. | test + spec |
+| `S14-49` | `docs/specs/content-overlay-ui.md:159,176` — «the highlight palette … its module keeps its six slots byte-identical» reads as if one module owned those colours; `paint-palette.ts` holds them as `rgba(...)` declarations and `paint-style.ts` writes the block. True today, and `A151` scopes it correctly. | spec |
