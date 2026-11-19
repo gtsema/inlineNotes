@@ -239,3 +239,21 @@ a dialog box Chrome sizes and our page draws a card inside, while the popup **is
 |---|---|---|
 | `S14-13` | The reader's Run 10 items other than the corners are **not** answered yet: the card's colours, the trash icon against the page editor's glyph (`S14-4`), the checkbox, and «nothing else moved». `A144` changes one of them (the frame) before the rest were confirmed, which is a deliberate choice: the frame was the blocking impression. | look |
 | `S14-14` | With the frame gone, the popup and the settings window no longer share a *drawn* shape — only a palette and a type scale. If the owner later wants the two to look identical again, the shared thing has to be re-declared as a rule rather than inferred from a border. | ruling |
+
+## t14-02 accepted (2026-11-19)
+
+Review `65b13507-8803-4ba3-90c9-e02666c60071` → **accepted**, all seven ACs pass, no blocking finding, and the honesty question
+answered in the negative: no fourth disagreement between prose and code. The settings half of the old shared-shape claim survived
+the rewrite and is load-bearing — the PM's second mutation (removing the settings card's frame) is 1 red, which is what proves it.
+
+Final gates on `1cc38ae`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1048 tests / 47 files**; checker 0 —
+**176 info**; `npm run typecheck` 0.
+
+### Ledger additions
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-15` | `tests/popup-window-look.spec.ts:289-295` — the absence scan builds its `rest` by cutting three selector strings (`.row`, `.row:first-child`, `.toggle input[type='checkbox']`) out of the verbatim text, so renaming any of them makes `ruleBody` throw inside that case. The engineer states this in the report; it is a pin coupled to three names. | test |
+| `S14-16` | `tests/popup-window-look.spec.ts:271-273` — `everything` is the same string as `styles`; the alias reads as a second read but is the text already in scope. Cosmetic. | test style |
+| `S14-17` | `docs/specs/content-overlay-ui.md:156` — the `Popup look` lead bullet still opens «the popup is the settings window's **card**», which a skimming reader can take as a drawn frame even though the sub-bullet two lines down states the absence. | spec |
+| `S14-18` | **`A144` rests on Chrome drawing the window's own radius, and no test verifies it.** Every pin reads stylesheet text; whether the corners actually look rounded is a manual `dist/` load. This is the exact claim Run 11 exists to settle, and the reason it must be recorded rather than assumed. | browser-verification |
