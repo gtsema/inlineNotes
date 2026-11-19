@@ -73,3 +73,49 @@ otherwise the card looks designed and its controls do not.
 | `S14-1` | The `A125` palette was sampled from the **old** mascot artwork (`S11-1`/`S12-1`); extending it to the popup spreads a palette whose own provenance is already stale. It is not this stage's job to re-sample it, but the two are now coupled: re-sampling later moves the popup too. | ruling + spec |
 | `S14-2` | No test reads the popup's stylesheet, so this stage's look rules will be the first popup-look pins. If they are written the way the settings look is pinned (`tests/options-window-look.spec.ts`), the popup gets a look suite of its own; if not, the ruling is unpinned prose. The stage decides which, and says so. | test |
 | `S14-3` | The popup's `320px` width and the settings card's `360px` are two numbers with no shared rule. `A141` deliberately keeps them apart; if the owner wants one width, that is a third value and a new ruling. | ruling |
+
+## The owner's second word (2026-11-19): «кнопку удалить тоже удали как в окне добавления заметки», then «точнее не удали, а замени на значёк»
+
+The correction matters and it is the difference between a visual change and a behaviour change. Read literally, «удали»
+would have removed the row's delete control entirely — and that is **not** what the page widgets do. Measured against the
+shipped code:
+
+- `src/content/overlay/create-card.tsx` renders an `action row` whose **only** control is a save button, icon-only
+  (`A114`). There is no delete control there because a card that has not been written yet has nothing to delete.
+- `src/content/overlay/editor.tsx` renders **two** icon-only buttons: save (`CARD_PRIMARY_CLASS`) and delete
+  (`CARD_DELETE_CLASS`, the trash glyph from `DeleteActionIcon`), both with `aria-label` and `title` carrying the Russian
+  word instead of visible text.
+- The glyph is an inline `<svg>` sized by `ACTION_ICON_PX` (`16`) inside an `ACTION_HIT_BOX_PX` (`24`) box, painted with
+  `currentColor` so the delete colour `#a4262c` / `#d08085` colours the drawing without a second declaration.
+
+So «как в окне добавления заметки» names the **icon-only shape of the action row**, and the editor is the widget that
+actually carries a delete action. The popup's `Удалить` therefore becomes an **icon-only trash button** in that shape, not
+a missing control.
+
+### Ruling
+
+| Ruling | Decision |
+|---|---|
+| `A143` | The popup's row `Удалить` becomes an **icon-only button**: an inline `<svg>` trash glyph as its only child, the Russian word `Удалить` moved from visible text to `aria-label` **and** `title`, the same shape `A114` gives the page widgets' `action row`. The button keeps its behaviour exactly (`A25`/`A108`: one core `deleteEntriesOfAuthor` for the whole author group, own or foreign). No cancel control and no second action appears in the row. |
+
+### What this breaks, and the two things it must not
+
+- `tests/popup-entry-list.spec.ts` has **two describe titles** that name the labelled button — `AC3 a foreign row is
+  marked foreign and keeps Удалить` and `AC5 the group Удалить removes the row immediately`. Their **assertions** are
+  behaviour (one core call, other authors untouched, the row disappears) and stay; the **titles** name a control that no
+  longer prints a word, so they are restated. A title that outlives the artifact it names is the defect class this repo
+  keeps hitting.
+- The popup's accessible name must not disappear with the visible text: `aria-label` and `title` both carry `Удалить`, and
+  the glyph is `aria-hidden`, exactly as `src/content/overlay/action-icons.tsx` documents for the page widgets. The popup
+  cannot import that module — it is a **Preact** file under `src/content/`, and the popup is Angular with no cross-layer
+  import (`tests/toolchain-contract.spec.ts` pins the boundaries) — so the glyph is re-declared inside
+  `src/popup/popup.component.ts` in the popup's own idiom. That duplication is deliberate and must be stated where it
+  happens.
+- The row's checkbox stays a checkbox. `A143` touches one control.
+
+### Ledger additions
+
+| Row | What is unresolved | Class |
+|---|---|---|
+| `S14-4` | The trash glyph will exist **twice** in the repository — once in `src/content/overlay/action-icons.tsx` (Preact) and once in the popup (Angular) — because the layer boundary forbids the import. Nothing pins that the two drawings stay the same shape. | test + boundary |
+| `S14-5` | The row's hit box. The page widgets use `24px` (`ACTION_HIT_BOX_PX`) with a `16px` glyph; the popup has no such constant yet, and a popup row is denser than a page card. The stage picks one and says why. | ruling |
