@@ -189,3 +189,53 @@ Stage 14 note on the popup's new look.
 - **The PM's mutation checks are what make a look suite credible.** Four mutations on the shipped popup file — a palette role
   changed (3 red), the width changed to `360px` (1 red), the accessible name removed (1 red), the glyph swapped for visible text
   (2 red) — each proved a specific assertion is load-bearing rather than decorative.
+
+## Follow-up after Run 10: the corners (2026-11-19)
+
+The reader's Run 10 report: «у неё чёрная рамка и из-за этого видны углы, хотя у нас скруглённая внутренняя рамка. Как-то
+можно сделать так, чтобы окно выглядело с закруглёнными углами?»
+
+### What the PM measured, and the mechanism
+
+The rule chain shipped by `t14-01` is:
+
+```css
+:host   { display: block; background: #fdf7ee; }                       /* a rectangle */
+.popup  { border: 1px solid #a6cbdc; border-radius: 12px; }            /* a rounded card inside it */
+```
+
+The rounded card sits **on top of** a rectangular cream host, and Chrome's popup window has its own rounded corners and its
+own edge. Three shapes therefore disagree at the four corners: the window's radius, the host's square corner, and the
+card's `12px` arc. The `#a6cbdc` border traces the arc and then stops, and the host's square corner shows outside it —
+which is what the reader sees. The card's border is not «black»; it is `#a6cbdc` against the window's own dark edge, which
+reads as an outline that does not follow the window.
+
+**Ruling.**
+
+| Ruling | Decision |
+|---|---|
+| `A144` | **The popup's card loses its frame and its radius; the window owns the shape.** `.popup` keeps `width: 320px`, `box-sizing`, `padding: 16px`, the `A125` cream background, the `13px/1.45 system-ui` scale and the ink; `border: 1px solid #a6cbdc` and `border-radius: 12px` come off it. `:host` keeps the cream fill and loses nothing else. Chrome draws the window's rounded corners itself, so the surface reads as a rounded panel without any element claiming a shape the window disagrees with. |
+
+`A141` is **amended, not overturned**: the popup still shares the settings surface's palette, type scale and inner padding,
+and the two surfaces still differ in width on purpose. What stops being shared is the drawn frame — the settings window is
+a dialog box Chrome sizes and our page draws a card inside, while the popup **is** the window.
+
+### Consequences the task must carry
+
+- `tests/popup-window-look.spec.ts` has a case that pins the card's `border: 1px solid #a6cbdc` **and** asserts the same
+  declaration exists on the settings card, reading `src/options/options.component.ts` for it. That case is what made the two
+  shapes «shared by construction»; it is rewritten for the new rule (the popup's frame is pinned **absent**, the settings
+  card's frame stays pinned **present**, and the still-shared half — padding, radius-free scale, palette, width — is pinned
+  as before). Deleting it would drop the settings half with it.
+- The row separator `border-top: 1px solid #a6cbdc` and the checkbox's own `border: 1px solid #a6cbdc` are **not** affected:
+  they are controls inside the surface, not the surface's frame. `A144` touches one rule.
+- The `Popup look` spec bullet (`docs/specs/content-overlay-ui.md:157` area) states the card shape; it follows in the same
+  commit.
+- The popup document's single `body { margin: 0 }` rule stays. `A144` is about the card's frame, not about the document.
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-13` | The reader's Run 10 items other than the corners are **not** answered yet: the card's colours, the trash icon against the page editor's glyph (`S14-4`), the checkbox, and «nothing else moved». `A144` changes one of them (the frame) before the rest were confirmed, which is a deliberate choice: the frame was the blocking impression. | look |
+| `S14-14` | With the frame gone, the popup and the settings window no longer share a *drawn* shape — only a palette and a type scale. If the owner later wants the two to look identical again, the shared thing has to be re-declared as a rule rather than inferred from a border. | ruling |
