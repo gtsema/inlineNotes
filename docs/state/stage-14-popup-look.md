@@ -499,3 +499,28 @@ are unchanged — the panel simply becomes `4 + 320 + 4` wide. If the reader's e
 | `S14-4` | **Closed** by Run 13: the reader compared the popup's trash glyph with the page editor's and reports them the same. | look |
 | `S14-13` | **Closed** by Run 13: «палитра ок». | look |
 | `S14-38` | Whether the `4px` gap lives inside the `320px` or outside it. `A149` puts it outside, so the panel widens by 8 px; a reader who wants the total unchanged needs a new value for the card. | ruling |
+
+## t14-05 reviewed — the seventh stale sentence, and it is in the test file (2026-11-19)
+
+Review `6962de32-62da-4cb3-866b-3edf2ba93902` → **changes requested**, one blocking finding, and it is the recurring defect
+inside the **test file** this time:
+
+`tests/popup-window-look.spec.ts:514` still reads «`:host` is content inside the box and declares **no geometry of its own at
+all**: no width, no radius, no clip and no margin» — and the shipped `:host` now declares `padding: 4px`. The commit touched that
+file (header, constants, the mutation list, the new describe) and left the sentence standing.
+
+The reviewer's own measurement is worth keeping: the new pins are real (two cases, nine `expect`s; the PM's three restorations
+plus the report's own `4px → 5px` each turn exactly those two cases red), and **no pre-existing assertion was deleted or
+reworded** — 16 cases → 18, assertions 143 → 152, all nine additions inside the new describe. So the code and the pins are
+right, and the prose is wrong again.
+
+### Ledger additions
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-39` | `tests/popup-window-look.spec.ts:649-655` — the new describe's doc comment says «One case, one presence claim» while the describe ships **two** cases; the report repeats «one presence pin added (two cases, one claim)». | test prose |
+| `S14-40` | The «which assertion goes red» list (`tests/popup-window-look.spec.ts:86-95`) gained the `A149` row but not the `:host` «no geometry» claim — after the blocking finding is fixed, that claim belongs in the list too. | test prose |
+| `S14-41` | `docs/state/t14-05-engineer.md` quotes the mutation `4px → 5px` as its proof; the PM's stronger three (delete, move to `body`, `8px`) also go red and are not in the report. Both agree the pin can fail, but the report's proof is the weaker one. | docs |
+
+The seventh instance of the class, and the **first one the reviewer found in a test file rather than a spec**. The pattern has
+not changed: a sentence describing the code survives the commit that changes the code, and no test reads a sentence.
