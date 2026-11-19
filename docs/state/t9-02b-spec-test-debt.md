@@ -25,8 +25,26 @@ is about to be rewritten would be wasted work.
    `window.close()` / `resizeTo()` and that no `src/content/` module names `openOptionsPage` / `options_ui`, or the AC and spec
    wording drops those claims. One of the two, not neither. The vacuous half of the same pin (the manifest names no `icons`,
    no `action.default_icon`, no `content_scripts[0].css`) is narrowed in the same edit.
-5. **Gates.** `npm run build` → `npm test` → `node scripts/check-agent-config.mjs` (plus `npm run typecheck`) exit 0, quoted in
+5. **The mascot circle gets a byte-level pin (the `t9-02` review's blocking finding 1).** `border-radius: 50%` clips the
+   mascot to the circle inscribed in its box, so «the whole artwork, the lifebuoy included, survives the frame» is a property
+   of the artwork, and nothing in the repo establishes it. Add an assertion that reads the shipped PNG's pixels (the file is
+   8-bit RGBA, 128×128 — decode it in the test the way `IHDR` is already read) and proves every non-transparent pixel lies
+   inside the inscribed circle. If the artwork does **not** fit, do not edit the PNG and do not weaken the assertion: report
+   it, and the PM rules on the frame instead.
+6. **R3 of the `t9-02` review: the spec overstates the contrast mechanism.** `docs/specs/content-overlay-ui.md` says the test
+   recomputes the ratio of *every* pair that carries text *from those literals*; the recomputation reads the test's own
+   constants and its pair list omits one shipped pair — the field's `#1b2a33` on `#ffffff`. Either add that pair to the list
+   or narrow the sentence. Do not do both by silently leaving the sentence wrong.
+7. **R9 of the `t9-02` review: replace a count with a rule.** `tests/options-window-look.spec.ts:354` pins
+   `template.split('{{').length - 1 === 6`. A count is not a rule: any later correct interpolation trips it. Pin what the
+   count was protecting (the template renders the pinned strings through bindings) in a shape that survives an honest edit.
+8. **R5 of the `t9-02` review: the message color role is unpinned.** `messageClass()` decides between the confirmation
+   `#0f5f7a` and the refusal `#b3261e`; a swapped mapping passes all 976 tests. Pin the mapping.
+9. **Gates.** `npm run build` → `npm test` → `node scripts/check-agent-config.mjs` (plus `npm run typecheck`) exit 0, quoted in
    `docs/state/t9-02b-engineer.md` — a repo file written by the engineer's own write tool, not the harness run artifact.
+
+If the slice does not fit the ceiling, **finish AC 1–5, commit them green, and report which of AC 6–8 stayed open** — a
+half-closed debt slice is worth more than an unfinished one. The `dist/` file count must not change.
 
 ## Brief — t9-02b (to `extension-engineer`)
 
@@ -37,8 +55,10 @@ is about to be rewritten would be wasted work.
   `scripts/build-extension.mjs`, `tests/toolchain-contract.spec.ts`, `src/options/options.component.ts`.
 - **Output artifact.** One commit plus the repo report `docs/state/t9-02b-engineer.md`.
 - **Acceptance criterion.** AC 1–5 above.
-- **Carried-fix checklist:** 1 = finding 2 (AC 1–2 here), 2 = remark R2 (AC 3), 3 = remark R3 (AC 4). The report answers each
-  number with `done` + file:line or `skipped` + reason.
+- **Carried-fix checklist:** 1 = finding 2 of the `t9-01` review (AC 1–2 here), 2 = remark R2 of `t9-01` **and** remark R2 of
+  `t9-02` (AC 3 — apply the same treatment to both guards: the `options_ui` reference check and the new asset guard at
+  `tests/options-window-look.spec.ts:203-213`), 3 = remark R3 of `t9-01` (AC 4), 4 = blocking finding 1 of `t9-02` (AC 5),
+  5 = remarks R3, R9, R5 of `t9-02` (AC 6–8). The report answers each number with `done` + file:line or `skipped` + reason.
 - **Constraints.** Docs and tests only: **no** change to any file under `src/` except none — this task ships no behavior. Do not
   restate or re-litigate `A118`–`A124`; do not touch `README.md` numbers owned by `t9-03`. Do not weaken any existing pin: the
   reviewer counted 958 tests over 45 files green, and the count may only grow. The task state file
@@ -48,7 +68,13 @@ is about to be rewritten would be wasted work.
 
 | # | Child | Result |
 |---|---|---|
-| — | not launched yet (after `t9-02`) | — |
+| — | not launched yet (after `t9-02` acceptance) | — |
+
+## Explicitly **not** in this slice
+
+The disabled `Сохранить` state (`.save:disabled { opacity: 0.45 }`) puts the label near 1.4:1 against its own button. WCAG
+1.4.3 exempts inactive controls, so no rule breaks and no AC fails, but `A125` names no disabled role. Changing it is an
+observable-behavior change and needs a ruling (`A127` is pending the user's word), so it stays out of a docs-and-pins slice.
 
 ## Delegation count
 
