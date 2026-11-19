@@ -120,6 +120,22 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
  * `#a6cbdc` borders: they are controls inside the surface, not its frame (`border: 0` on a
  * button is the removal of a painted edge, not the declaration of one).
  *
+ * **The card is inset `4px` from the window edge** (ruling `A149`, task `t14-05`). Run 13
+ * confirmed the frame, its thickness, its radius, the width and the edges, and asked for air
+ * between the frame and the panel edge: «Можно сделать отступ от края она до линии. где-то
+ * 4px» — so `4px` is the reader's number, a value and not a judgement. **The gap is declared
+ * on `:host`**, the box that contains the card, and **not on `body`**: `body` carries the
+ * paint and `margin: 0` and nothing else (`A147`), so a `padding` there would be the document
+ * claiming a shape the withdrawn-shape pin forbids, and the cream would paint the gap's own
+ * band — the frame would read as sitting inside a coloured border. On `:host` the gap shows
+ * the **`body` cream**, so the frame floats on the same surface rather than on a white band.
+ *
+ * **The gap is outside the card, so the card does not move** (`S14-38`). `.popup` keeps its
+ * `width: 320px`, `box-sizing: border-box`, `border: 2px solid #a6cbdc`,
+ * `border-radius: 12px` and `padding: 16px`, the type scale and the ink. The panel is simply
+ * `4 + 320 + 4` wide, and that arithmetic is the accepted one, not an accident: putting the
+ * gap **inside** the `320px` would need a different ruling and a different card width.
+ *
  * The notices of ruling `A83` are rendered **above** the list and the list still
  * renders below them, because stored entries that become invisible are stored entries
  * the reader can no longer delete. The name-required notice is a real `<button>`: it is
@@ -198,6 +214,7 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
   styles: `
     :host {
       display: block;
+      padding: 4px;
     }
 
     .popup {

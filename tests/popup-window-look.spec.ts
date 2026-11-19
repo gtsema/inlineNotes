@@ -8,8 +8,9 @@ import { POPUP_STRINGS } from '../src/popup/text';
 import { codeOnly } from './support/build-script-guards';
 
 /**
- * The popup look of tasks `t14-01` … `t14-04` (rulings `A140`, `A141`, `A142`, `A143`,
- * and **`A146`/`A147`, which supersede `A145`** the way `A145` superseded `A144`).
+ * The popup look of tasks `t14-01` … `t14-05` (rulings `A140`, `A141`, `A142`, `A143`,
+ * and **`A146`/`A147`, which supersede `A145`** the way `A145` superseded `A144`; `t14-05`
+ * adds only the `4px` inset of `A149`).
  *
  * No test read the popup's stylesheet before this file (`S14-2`): the surface carried a
  * third palette (`#1f1f1f` / `#6b6b6b` / `#e3e3e3`) and a plain `<h1>` with no card, and
@@ -40,7 +41,12 @@ import { codeOnly } from './support/build-script-guards';
  *   card is drawn inside it. The two surface frames differ in width on purpose;
  * - the row's delete control is **icon-only** (`A143`): one inline `<svg>` as its only
  *   child, the Russian word in `aria-label` and `title`, the glyph `aria-hidden`, and the
- *   `24px` box with the `16px` glyph the page widgets declare.
+ *   `24px` box with the `16px` glyph the page widgets declare;
+ * - the **card is inset `4px` from the window edge** (`A149`), and the gap belongs to
+ *   `:host` — the box that contains the card — never to `body`, which carries the paint and
+ *   `margin: 0` and nothing else (`A147`), and never to `.popup`, whose `320px` and `16px`
+ *   padding are unchanged because the gap is **outside** the card (`S14-38`: the panel is
+ *   `4 + 320 + 4` wide).
  *
  * What this file **cannot** say: whether a rounded corner is visible in a real Chrome
  * popup. That question is **closed by a measurement** (`A146`, Run 12), not by a pin: Chrome
@@ -84,7 +90,11 @@ import { codeOnly } from './support/build-script-guards';
  *   read, so a commented-out frame does not pass either;
  * - **the trash button turned back into a labelled button** → `renders the delete control
  *   icon-only with the word as its accessible name` (the button holds a text node and no
- *   glyph) and `declares the 24px box and the 16px glyph as named constants`.
+ *   glyph) and `declares the 24px box and the 16px glyph as named constants`;
+ * - **the `4px` inset left `:host`** — deleted, changed to another value, or moved onto
+ *   `body` or onto `.popup` — → `declares the 4px inset on :host and keeps display: block
+ *   there` and `leaves the gap off the document box and off the card` (`A149`, `t14-05`).
+ *   It is the pin `t14-05` adds; nothing else in this file moved with it (`S14-38`).
  *
  * The first, the third and the fourth were proved by mutations applied, observed and
  * reverted from a `cp` copy in the sessions that wrote this file
@@ -95,6 +105,9 @@ import { codeOnly } from './support/build-script-guards';
  * `width: 320px` to `width: 300px` (the `gives the component its own 320px width…` case
  * went red), and the new `A148` frame pin by mutating the shipped `border: 2px solid
  * #a6cbdc` to `border: 1px solid #a6cbdc` (the `draws the 2px A148 frame…` case went red).
+ * `t14-05` proved the `A149` inset pin the same way from a `cp` copy: the shipped
+ * `padding: 4px` on `:host` was mutated to `padding: 5px`, both new cases went red while the
+ * other sixteen stayed green, and the mutated file was restored from that copy.
  */
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -176,6 +189,13 @@ const POPUP_FRAME = `border: 2px solid ${PALETTE.decorative};`;
  */
 const SURFACE_PAINT = `background: ${PALETTE.page};`;
 const SURFACE_MARGIN = 'margin: 0;';
+/**
+ * The gap between the window edge and the card's frame (ruling `A149`): the reader's own
+ * number, «где-то 4px». It is a literal here because the whole pin is that this exact value
+ * sits on the box that contains the card — a different number is a different ruling, and a
+ * different box is the defect `A149` names (`body` carries the paint and nothing else).
+ */
+const POPUP_INSET = '4px';
 /**
  * The declarations `A145` put on the **document box** and `A147` withdrew, each with the
  * measurement that withdrew it (`A146`). They are **not deleted** from this file with the
@@ -608,6 +628,71 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
   });
 });
 
+/**
+ * The `4px` inset of ruling `A149` (task `t14-05`). One case, one presence claim, and the
+ * counter-claims that make it a pin rather than a restatement:
+ *
+ * - **the inset is on `:host`** — the box that contains the card, so the gap sits between
+ *   the window edge and the frame;
+ * - **it is `4px`**, the reader's own number («где-то 4px»), read from the **shipped**
+ *   stylesheet and from the constant above, so a change to either turns one of the two
+ *   assertions red;
+ * - **`body` did not take it** — the document's own rule stays one of two declarations,
+ *   which is `A147`'s «the document paints and nothing else». This half is not a new pin on
+ *   the document: `the document box paints the window…` already forbids a `padding` there,
+ *   and it stays as it is; the line below only makes the **owner** of the gap explicit at the
+ *   place a reader looks for `A149`;
+ * - **the card did not take it** — `.popup`'s `padding` is still the settings `16px` and no
+ *   `4px` inset appears on the card, because the gap is **outside** the card (`S14-38`: the
+ *   panel widens to `4 + 320 + 4`, which is the accepted arithmetic, not an accident).
+ *
+ * The mutation that turns this red: `padding: 4px` moved off `:host` — the `ruleBody(:host)`
+ * lookup then throws "declares no rule for …"-adjacent failures on the containment line, and
+ * with the declaration merely changed to `padding: 5px` (or moved onto `body`) the `toContain`
+ * and the `ruleBody` assertions of this case fail while every other pin in the file stays
+ * green. Applied, observed and reverted from a `cp` copy in `t14-05` (see
+ * `docs/state/t14-05-engineer.md`); the `:host` was not `padding`-free when proved, so the
+ * further mutations that turn it red are the two `not.toContain`/absence halves below.
+ */
+describe('the card is inset 4px from the window edge on :host (t14-05 AC1–AC3; ruling A149)', () => {
+  const stylesCode = componentCodeStyles();
+
+  it('declares the 4px inset on :host and keeps display: block there', () => {
+    // Presence, read from the comments-stripped text: a commented-out `padding: 4px` cannot
+    // stand in for a shipped one, exactly as the card's `16px` is read two cases above.
+    const host = ruleBody(stylesCode, ':host');
+    expect(host).toMatch(new RegExp(`(?:^|;)\\s*padding:\\s*${POPUP_INSET};`));
+    // And the same declaration as a whole-déclaration substring against the constant, so a
+    // drifted literal in either place is red.
+    expect(host).toContain(`padding: ${POPUP_INSET};`);
+    // `:host` stays a block box: the inset is the only thing it gained (`A149`).
+    expect(host).toMatch(/(?:^|;)\s*display:\s*block;/);
+    // One inset on this box: the gap is not declared twice in any spelling.
+    expect((host.match(/padding/g) ?? [])).toHaveLength(1);
+  });
+
+  it('leaves the gap off the document box and off the card', () => {
+    // **Not the document.** `body` carries the paint and `margin: 0` (`A147`); a `padding`
+    // there would be the document claiming a shape, and the cream would paint the gap's own
+    // band so the frame sat inside a coloured border. The document's rule set is pinned as a
+    // whole in `the document box paints the window…`; this is the same claim at the place a
+    // reader looks for `A149`, so the owner of the gap is stated where it is applied.
+    expect(documentStyles(DOCUMENT)).not.toMatch(/(?:^|;)\s*padding:/);
+    // **Not the card either.** `S14-38`: the gap is outside the `320px`, so the card's
+    // padding is still the settings `16px` and the panel becomes `4 + 320 + 4`.
+    const card = ruleBody(stylesCode, '.popup');
+    expect(card).toContain('padding: 16px;');
+    expect(card).not.toMatch(new RegExp(`padding:\\s*${POPUP_INSET}`));
+    // The card's width is untouched by this task: the gap did not move inside it.
+    expect(card).toContain(`width: ${POPUP_WIDTH};`);
+    // And the shipped stylesheet declares the inset as a standalone `4px` padding exactly
+    // once, so the gap has one owner and no second box quietly insets itself. The row's own
+    // `padding: 4px 0` (a control inside the surface, not the window gap) is deliberately not
+    // counted: the pattern ends the declaration at the semicolon, so only the four-sides
+    // inset matches.
+    expect(stylesCode.match(new RegExp(`padding:\\s*${POPUP_INSET};`, 'g')) ?? []).toHaveLength(1);
+  });
+});
 
 describe('the row delete control is icon-only (t14-01 AC4; ruling A143)', () => {
   const stylesCode = componentCodeStyles();
