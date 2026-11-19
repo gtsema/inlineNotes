@@ -19,10 +19,15 @@ declares an icon — one 128×128 PNG — for Chrome's toolbar and the extension
   pixels = 75.8 %; painted bounding box x `6…1245`, y `0…1221`; all four 40×40 corners empty; **816** painted pixels
   outside the inscribed circle and **all 816 are at alpha 255** (no anti-aliasing); that band is the top rows `0…333`,
   columns `73…987`, colour `#010b19`/`#041a33`.
-- Farthest painted pixel from the painted bounding-box centre `(625.5, 610.5)`: **621.46 px** of a 1254 source, i.e.
-  the painted content spans **1243 px**. To fit that inside the circle inscribed in the 80 px image box (radius 40), the
-  source must be drawn at **≈ 129.1 px** of box — scale `0.1030` — which leaves the cream page colour as the frame
-  margin. That is `Q1a`, and it is the framing to implement.
+- Farthest painted pixel from the **image centre** `(626.5, 626.5)`: **628.00 px**, at `(410, 37)`, alpha **255**,
+  colour `#010c17` — the solid navy hat band. *(Corrected in `t11-01`: the PM first measured `621.46` from the painted
+  bounding-box centre `(625.5, 610.5)`, which is not the centre `object-fit` and `border-radius` work from. The
+  engineer's `628.00` is the right number, and the brief's `129.1 px` consequence below was wrong.)*
+- **The conversion is what satisfies the frame, not a CSS scale.** A `1254 → 128` downscale multiplies the farthest
+  painted radius by `128/1254 = 0.1021`, so `628.00` becomes **64.10** against a circle radius of `64`: the full
+  128×128 art lands within half a pixel of the inscribed circle. A literal CSS fit would need `40/628 = 0.0637`, i.e.
+  the art drawn at `80 px` of an `80 px` box — no frame margin at all, which is not what the owner wants. So `Q1a` is
+  delivered by the downscale, and the rule change is `object-fit: cover` → `contain`.
 
 ## Acceptance criteria
 
@@ -31,11 +36,12 @@ declares an icon — one 128×128 PNG — for Chrome's toolbar and the extension
    AC 2 needs, no re-colouring, no re-drawing) and the report states the exact command and both hashes: the source
    (SHA-256 of the `cat-mascot_new.png` you copied out of `dist/`) and the committed file. The 1.3 MB source is **not**
    committed.
-2. **The whole cat is visible inside the circular frame (`Q1a`).** The shipped CSS makes the painted content fit inside
-   the inscribed circle: an explicit framing that scales the art to about the measured `129 px` of box (an
-   `object-fit`/`object-position`/`transform`/`scale` combination of your choice, or a pre-scaled asset — whichever keeps
-   the rule readable), leaving no opaque artwork outside the circle. The mascot's **image box stays 80 px** and the
-   **frame stays `2px solid`** the `A125` decorative colour (`A127`, `A129` are unchanged rulings).
+2. **The whole cat is visible inside the circular frame (`Q1a`).** The `128×128` downscale itself puts the painted
+   content inside the inscribed circle (see the measurement above: farthest painted radius `64.10` against a circle
+   radius of `64`), so **no CSS scale, no `transform`, and no second shrink is added**. The one rule change is
+   `object-fit: cover` → `object-fit: contain` (keeping `object-position: center`), which is the honest statement for a
+   square source that is exactly the image box. The mascot's **image box stays 80 px** and the **frame stays
+   `2px solid`** the `A125` decorative colour (`A127`, `A129` are unchanged rulings).
 3. **The `t9-02b` circular-frame pin is recalculated, not deleted.** `tests/options-window-look.spec.ts` decodes the
    shipped PNG and asserts `outsideOpaque === 0`. With the art pre-scaled to fit, that becomes **true again** for the
    new file — assert it against the new bytes, and keep the non-vacuity half (the art does have fully opaque content,
@@ -94,3 +100,33 @@ Expected 2 (engineer, reviewer). Used: 0.
 ## Verdicts
 
 Pending.
+
+## Correction 1 (PM, 2026-11-19, after the engineer's block)
+
+The engineer stopped on AC 3 instead of choosing between two readings of AC 2, and he was right to. Both halves of the
+defect were mine:
+
+- **The measurement.** I reported the farthest painted pixel as `621.46` — measured from the painted bounding-box centre
+  `(625.5, 610.5)`. `object-fit` and `border-radius` both work from the **image** centre `(626.5, 626.5)`, and from
+  there the farthest painted pixel is **628.00** at `(410, 37)`, alpha `255`, colour `#010c17`. His number is correct;
+  mine used the wrong centre. A literal CSS fit would need `40/628 = 0.0637` — the art drawn at `80 px` of an `80 px`
+  box, leaving no frame margin at all.
+- **The framing.** The `≈129 px of box` sentence was therefore wrong, and AC 2 asked for a shrink the artwork does not
+  need: a `1254 → 128` downscale already multiplies the farthest painted radius by `0.1021`, turning `628.00` into
+  `64.10` against a circle radius of `64`. The conversion **is** the fit; the only rule that changes is
+  `object-fit: cover` → `contain`.
+
+Ruling for the record: **the mascot is the `128×128` full-art downscale, drawn at 80 px in the circular frame with
+`object-fit: contain`; no `transform`, no second conversion, no per-use-site difference.** `src/icons/icon-128.png` is
+byte-identical to the mascot file by design — one artwork, one conversion, two use sites (`A130`, `A131`).
+
+Lesson, and it is the same class as the `t10-02` one: **a distance is only meaningful with its origin named.** «The
+farthest painted pixel» cost a stalled child because the centre was implicit, and the two plausible centres differ by
+6.5 px — enough to change the required scale by 1.6×. Every geometric number in a brief now names the origin it was
+measured from.
+
+Measured facts from the engineer's own decode of the converted file (to be pinned in AC 3, quoted here so the brief and
+the test cannot drift): painted **12 619**, bounds x `0…127`, y `0…124`, `outsidePainted` **58**, `outsideOpaque` **0**,
+`maxAlphaOutside` **108**, `maxAlphaInside` **255**, `farthestPaintedRadius` **64.55**; file SHA-256
+`c26769caa24310bb4c9f54d34436b1a2d091fb3f5ca2e408a23627e2e3af475e`, **20 009** bytes; source SHA-256
+`0c2f1fc86c8a3e95fe25b799ba1d813279034908136806c7be259425601593e0`, `1 306 640` bytes.
