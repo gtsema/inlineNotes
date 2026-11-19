@@ -53,3 +53,12 @@ is? *Default: the input stays immediately under the label line*, which is the no
 |---|---|---|
 | `S12-1` | `A125`'s palette is still sampled from the artwork `t11-01` replaced (`S11-1`); this stage adds no colour, so it stays untouched. | ruling + spec |
 | `S12-2` | The `name explanation line` was introduced by `t9-02` AC 4 as «the only Russian sentence this surface gained», and its spec bullet says it is «rendered under the header». That sentence becomes false here and is corrected in the same commit. | spec |
+
+## Answers (owner, 2026-11-19): `дефолты`
+
+All four defaults stand: the title keeps `font-size: 15px` / `font-weight: 600`, the header gap stays `12px` (vertical),
+there is one space before the opening parenthesis, and the input stays immediately under the label line with the
+parenthetical above it. The brief is `docs/state/t12-01-settings-header-layout.md`.
+
+`Q4`'s other reading was named in the question pool and rejected by the default: the field does **not** stay put with the
+parenthetical moved elsewhere — the label line now carries both the label and the parenthetical, and the input follows it.
