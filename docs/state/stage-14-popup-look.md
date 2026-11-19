@@ -561,3 +561,60 @@ Recorded so the question is not re-opened:
 
 If a future task ever needs to re-derive `A146`, the honest route is to take a fresh screenshot and measure it the same way —
 not to look for a file in `test_img/`, which is a working directory the owner may clean at any time.
+
+## The owner's next request: the page widgets take the palette too (2026-11-19)
+
+«Теперь осталось адаптировать цвет карточки редактирования и создания комментария. Там только изменить цвета» — the
+`selection card` and the `editor` on the page should read like the same product as the popup and the settings window, and
+the change is **colours only**.
+
+### What the PM measured before writing anything
+
+`src/content/overlay/card-style.ts` carries a **fourth** palette, and it shares exactly two values with `A125` (`#ffffff`,
+and nothing else):
+
+| Role in `card-style.ts` | Today | Nearest `A125` role |
+|---|---|---|
+| card background | `#ffffff` | `#fdf7ee` (page/card) |
+| ink | `#14171a` | `#1b2a33` |
+| card border | `#b9bec4` | `#a6cbdc` (decorative) |
+| input background | `#ffffff` | `#ffffff` |
+| input border | `#b9bec4` | `#a6cbdc` |
+| counter | `#5b6470` | `#7b6a55` (hint) |
+| counter at the warning | `#8a4b08` | `#b8480d` (primary action) |
+| button background | `#f3f4f6` | `#eef4f7` (pale band) |
+| button border | `#b9bec4` | `#a6cbdc` |
+| primary label / background | `#ffffff` / `#1f6feb` | `#ffffff` / `#b8480d` |
+| delete label / border | `#a4262c` / `#d08085` | `#b3261e` / `#a6cbdc` |
+| disabled label / background / border | `#6b7280` / `#e9ecef` / `#c8cdd2` | — (the disabled state has no `A125` role; `D5`/`A128` is still unruled) |
+| refusal line | `#a4262c` | `#b3261e` |
+
+**Three surfaces, three palettes, one product.** The popup and the settings window now share `A125`; the page widgets are the
+last surface speaking a different language. The page **highlights** (`paint-palette.ts`, six author slots, `A94`/`A102`) are a
+**different thing**: they encode authorship, not chrome, and the request does not touch them — a highlight colour is not a
+surface colour, and changing one would break the "the same author, the same colour, forever" property that a hash pins.
+
+### Ruling
+
+| Ruling | Decision |
+|---|---|
+| `A150` | **The page widgets adopt the `A125` palette for their chrome.** `src/content/overlay/card-style.ts` maps every surface colour to an `A125` role: card and input background `#fdf7ee`, ink `#1b2a33`, card and input border `#a6cbdc`, counter `#7b6a55`, warning `#b8480d`, button background `#eef4f7`, primary label `#ffffff` on `#b8480d`, delete label `#b3261e`, refusal `#b3261e`. **No new colour literal is invented.** |
+| `A151` | **The highlight palette is out of scope.** `src/content/paint/paint-palette.ts` keeps its six author slots verbatim: those colours are authorship, not chrome, and `A94`/`A102` pin them. |
+| `A152` | **The tooltip follows the same palette.** `src/content/overlay/tooltip-style.ts` (`#ffffff`, `#14171a`, `#b9bec4`, `#444c56`) is the third page widget and would otherwise become the only surface left on the old greys; it takes the same mapping. If the owner wants the tooltip left alone, say so and this ruling is withdrawn for that file only. |
+
+### What the change must not do
+
+- **Nothing but colours.** No size, spacing, radius, position, hit box, shadow or font change — the reader asked for colours,
+  and the overlay's geometry is pinned by `t7-01`/`A114` and by the placement rules.
+- **The disabled state has no `A125` role.** `D5`/`A128` is still unruled: the disabled save button's dimming was never
+  decided. This task must **not** invent one; it either leaves the disabled colours as they are or asks the PM. Say which in
+  the report.
+- **The highlight slots stay byte-identical**, and the tests that pin them (`tests/content-paint-palette.spec.ts`) must stay
+  green without edits.
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-45` | The disabled state of the page widgets' save button has no `A125` role, exactly like the settings window's (`D5`/`A128`, unruled since Stage 9). Two surfaces now share the gap. | ruling |
+| `S14-46` | The tooltip is included by `A152`; if the owner meant only the two cards, one file reverts. | ruling |
