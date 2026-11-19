@@ -268,3 +268,23 @@ These three name the shape, so the engineer's only job is to implement and test 
 - `A114`/`A115`/`A117` (**the compact row**): verified in Run 5 (2026-11-18) — 7 of 7 items passed, the reader's own verdict
   «стало легче, да». Two questions stay open by choice and are written as may-claims rather than facts: the `title` on a disabled
   save button, and glyph recognizability for a first-time reader.
+
+## Backlog items raised in Stages 11–13 (2026-11-19)
+
+Three stages of visual work left residue that the owner has now triaged. The triage is recorded here so the decisions are not
+re-derived: **one item is deferred by the owner's word «в бэклог»**, and two were **closed by his answer to a Run**.
+
+| # | Item | Origin | Owner's decision | Class |
+|---|---|---|---|---|
+| B9 | **The `S13-3` over-claiming pin.** The AC 1 pin of `t13-01` carries a comment saying it forbids «a second space beside the indentation». Measured: inserting one extra space before `<span class="hint">` leaves **all 46 tests green**, because the assertion is `filter(spaces).length === separator.length - 2` — it compares a count against the separator's own length, so adding a space raises both sides and it can never fail. A `tab` and a second newline **are** caught (1 red each). The pin this replaced (`S12-3`'s collapsed-text read) *would* have caught the second space. | `t13-01` review `36ac3920` (truncated without a verdict) + the PM's own measurement | **«в бэклог»** — deferred, not scheduled | test only; no shipped code |
+| B10 | **`S12-5` — what the centred column is centred on.** `.options` carries `:host { padding: 16px }`, so the centred mascot and title sit on the card's **content box** axis, not the dialog box's axis. Whether that reads as off-centre is a look judgement. | Stage 12 (`t12-01`), reported by the engineer | **closed by the owner**: Run 8 answered «1 и 2 — всё хорошо» | ruling + look |
+| B11 | **The 4 px gap and the 11 px parenthetical.** Stage 13's two values. | Stage 13 (`t13-01`) | **closed by the owner**: Run 9 answered «всё хорошо» | ruling + look |
+
+`B9` is deliberately **not** a behaviour defect: the shipped settings window is correct, the declaration is right, and the gap is
+visible. What is wrong is a *comment about the pin's own power* plus one assertion that cannot fail. The fix is one assertion
+that reads the separator's indentation against the shipped count rather than against itself, and it needs no `src/` change — which
+is why it can sit in the backlog without blocking anything.
+
+`B9` also carries a lesson worth more than the fix: **replacing a pin is not automatically an upgrade.** `S12-3`'s pin was blind
+to the *declaration* and sharp on the *text*; its replacement is sharp on the declaration and blind to the text. A spacing rule
+needs both readings, and the stage shipped one.
