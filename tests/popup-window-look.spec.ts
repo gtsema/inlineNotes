@@ -8,26 +8,33 @@ import { POPUP_STRINGS } from '../src/popup/text';
 import { codeOnly } from './support/build-script-guards';
 
 /**
- * The popup look of tasks `t14-01` and `t14-02` (rulings `A140`, `A141` **as amended by
- * `A144`**, `A142`, `A143`).
+ * The popup look of tasks `t14-01`, `t14-02` and `t14-03` (rulings `A140`, `A141`,
+ * `A142`, `A143`, and `A145` **superseding `A144`**).
  *
  * No test read the popup's stylesheet before this file (`S14-2`): the surface carried a
  * third palette (`#1f1f1f` / `#6b6b6b` / `#e3e3e3`) and a plain `<h1>` with no card, and
  * nothing but a reviewer's eye stood between it and the settings window it now has to
- * match. The three claims below are the ones a later edit loses silently, written the way
+ * match. The claims below are the ones a later edit loses silently, written the way
  * `tests/options-window-look.spec.ts` writes the settings surface:
  *
- * - the palette is a set of **measured literals** (`A140`): every colour the popup declares
- *   is one of the `A125` roles, and the three retired literals are gone;
- * - the card carries the settings **palette, type scale and inner padding at the popup's
- *   own width**, and **no frame and no radius of its own** (`A144` amending `A141`): the
- *   window owns the rounded shape, so `border` and `border-radius` are pinned **absent**
- *   from `.popup`, while the settings card's own frame stays pinned **present** — read from
+ * - the palette is a set of **measured literals** (`A140`): every colour the popup
+ *   declares is one of the `A125` roles, and the three retired literals are gone;
+ * - the **document box is the surface** (`A145`, superseding `A144`): `body` carries the
+ *   cream fill, the panel-filling geometry, the `12px` radius and the `overflow: hidden`
+ *   that makes paint and clip the same box, and it keeps `margin: 0` — while the
+ *   component is content inside it, with **no fill, no width and no frame** of its own;
+ * - the component still carries the settings **palette, type scale and inner padding**,
+ *   and the settings card's own frame stays pinned **present** — read from
  *   `src/options/options.component.ts`, because that surface is a page Chrome sizes and a
- *   card is drawn inside it. The two surfaces now differ on purpose in exactly that way;
+ *   card is drawn inside it. The two surfaces differ on purpose in exactly that way;
  * - the row's delete control is **icon-only** (`A143`): one inline `<svg>` as its only
  *   child, the Russian word in `aria-label` and `title`, the glyph `aria-hidden`, and the
  *   `24px` box with the `16px` glyph the page widgets declare.
+ *
+ * What this file **cannot** say: whether the rounded corners are visible in a real Chrome
+ * popup. `A145`'s premise is a sight, not a measurement, and the previous premise in the
+ * same family (`A144`) was wrong (`S14-18`, `S14-19`). Every pin here is a fact about the
+ * **source**; the look itself is owed by Run 12.
  *
  * Two reads of one stylesheet, split the way the settings file splits them (`t10-02`
  * AC8). **Absence** claims read the stylesheet **verbatim**, because the safe error of an
@@ -42,19 +49,26 @@ import { codeOnly } from './support/build-script-guards';
  * - **a palette role changed** → `declares no colour outside the five A125 roles` (the
  *   literal set stops being the pinned five) and the role case that names the changed
  *   value (`declares every A125 role as a literal`);
- * - **the width changed to `360px`** → `sizes the card at the popup's own 320px and never
- *   the settings 360px`;
+ * - **the settings width `360px` reaches either box** → `sizes the document box by the
+ *   panel and never at the settings 360px`;
+ * - **the document box loses its paint, its radius, its clip or its zero margin**, or
+ *   **gains a frame** → `the document box is the surface: one block, the cream paint, the
+ *   radius, the clip, the zero margin and no frame`;
+ * - **the component starts painting or sizing itself again** (`background` or `width` back
+ *   on `.popup` or `:host`) → `leaves the paint and the width to the document box`;
  * - **the card's frame or its radius comes back** (`border: 1px solid #a6cbdc` or
- *   `border-radius: 12px` re-declared on `.popup`, `t14-02`) → `draws no frame and no
- *   radius on the card while the settings card keeps its own`, in **both** the verbatim
- *   and the comments-stripped read, so a commented-out frame does not pass either;
+ *   `border-radius: 12px` re-declared on `.popup`) → `draws no frame and no radius on the
+ *   card while the settings card keeps its own`, in **both** the verbatim and the
+ *   comments-stripped read, so a commented-out frame does not pass either;
  * - **the trash button turned back into a labelled button** → `renders the delete control
  *   icon-only with the word as its accessible name` (the button holds a text node and no
  *   glyph) and `declares the 24px box and the 16px glyph as named constants`.
  *
  * The first, the third and the fourth were proved by mutations applied, observed and
  * reverted from a `cp` copy in the sessions that wrote this file
- * (`docs/state/t14-01-engineer.md`, `docs/state/t14-02-engineer.md`).
+ * (`docs/state/t14-01-engineer.md`, `docs/state/t14-02-engineer.md`); the document pin and
+ * the two new component cases were proved the same way in `t14-03`
+ * (`docs/state/t14-03-engineer.md`).
  */
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -97,16 +111,40 @@ const RETIRED = ['#1f1f1f', '#6b6b6b', '#e3e3e3'] as const;
 /** Answer `Q5` of the stage record, and the numbers the page widgets declare (`A114`). */
 const HIT_BOX_PX = '24px';
 const ICON_PX = '16px';
-/** `A141`: the popup's own width, and the settings card's, which it must not become. */
-const POPUP_WIDTH = '320px';
+/**
+ * `A145`: the settings card's width, which neither box of the popup may become. The popup
+ * has no width literal of its own any more — the document box spans the panel (`100%`),
+ * and the component declares none — so the old `320px` constant went with the declaration
+ * that carried it. The absence half is what is left to pin, and it is the half that
+ * matters: a `360px` here would turn a toolbar panel into a dialog box.
+ */
 const SETTINGS_WIDTH = '360px';
 /**
- * The two declarations `A144` takes off this surface and leaves on the settings card. They
- * are one constant pair because the whole ruling is that these two strings, which used to
- * hold on both surfaces at once, now hold on exactly one of them.
+ * The two declarations `A144` took off the card and left on the settings card. They are one
+ * constant pair because the whole ruling is that these two strings, which used to hold on
+ * both surfaces at once, now hold on exactly one of them. Since `A145` the radius is back
+ * on the popup — but on the **document box**, not on the card, which is why this pair is
+ * still asserted **absent** from `.popup` and **present** on the settings card.
  */
 const CARD_FRAME = 'border: 1px solid #a6cbdc;';
 const CARD_RADIUS = 'border-radius: 12px;';
+/**
+ * The declarations `A145` puts on the document box, and the one it keeps there. They are
+ * spelled out as literals rather than derived, because the whole point of the pin is that
+ * the document's rule set is **deliberate**: a reader comparing the file with this list
+ * sees one rule, not a style sheet that grew.
+ */
+const SURFACE_PAINT = `background: ${PALETTE.page};`;
+const SURFACE_RADIUS = 'border-radius: 12px;';
+const SURFACE_CLIP = 'overflow: hidden;';
+const SURFACE_MARGIN = 'margin: 0;';
+/**
+ * The declarations that would make the document box a **frame** — the defect the reader
+ * reported twice. `border-radius` is deliberately not in this list: it is the shape, and
+ * `A145` puts it on this box on purpose. `border` is, in every spelling, because a drawn
+ * edge is what «прямой угол с чёрной рамкой» was.
+ */
+const FRAME_DECLARATIONS = ['border:', 'border-top:', 'border-left:', 'border-right:', 'border-bottom:', 'outline:', 'box-shadow:'] as const;
 
 function readSource(relativePath: string): string {
   return readFileSync(join(projectRoot, relativePath), 'utf8');
@@ -191,9 +229,9 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
   const stylesCode = componentCodeStyles();
 
   it('declares every A125 role the surface uses as a literal', () => {
-    // The card: the settings window's cream surface and ink (`A140`).
-    expect(ruleBody(stylesCode, ':host')).toMatch(new RegExp(`background: ${PALETTE.page};`));
-    expect(ruleBody(stylesCode, '.popup')).toMatch(new RegExp(`background: ${PALETTE.page};`));
+    // The cream surface is the **document box's** since `A145`, so it is read there; the
+    // component keeps the ink and every role below it.
+    expect(documentStyles(DOCUMENT)).toContain(SURFACE_PAINT);
     expect(ruleBody(stylesCode, '.popup')).toMatch(new RegExp(`color: ${PALETTE.ink};`));
     // The secondary ink: the foreign-row label and the empty state (answer `Q4`).
     expect(ruleBody(stylesCode, '.row--foreign .author')).toMatch(
@@ -239,9 +277,19 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
         retired,
       );
     }
-    // And the same scan over the document, so the margin rule cannot become a second
-    // owner of a colour the card does not declare.
-    expect(documentStyles(DOCUMENT).toLowerCase()).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    // And the same scan over the document, which since `A145` **does** paint: the surface
+    // moved there, so the document's literal set is no longer empty — it is a subset of the
+    // same roles, and a colour outside them is red here exactly as it is on the component.
+    // The scan reads the **verbatim** text, so a commented-out retired literal in the
+    // document is flagged the way it is in the component.
+    const documentLiterals = [...documentStyles(DOCUMENT).matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map(
+      (match) => match[0].toLowerCase(),
+    );
+    expect(documentLiterals).toContain(PALETTE.page);
+    const allowed = [...new Set([...Object.values(PALETTE), PREEXISTING_REFUSAL])].sort();
+    for (const literal of new Set(documentLiterals)) {
+      expect(allowed, `${literal} is not an A125 role`).toContain(literal);
+    }
   });
 });
 
@@ -249,21 +297,23 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
   const styles = componentStyles();
   const stylesCode = componentCodeStyles();
 
-  it('sizes the card at the popup’s own 320px and never the settings 360px', () => {
-    // The presence half reads the stripped text: a commented-out `width: 320px` must not
+  it('sizes the document box by the panel and never at the settings 360px', () => {
+    // `A145`: the `320px` that used to be `.popup`'s width belonged to the box that is now
+    // the surface, and that box is the document's. The surface spans the panel (`100%`), so
+    // the cream reaches both edges and the rounded corners are the window's corners.
+    // The presence half reads the stripped text: a commented-out `width: 100%` must not
     // satisfy it. The absence half reads the verbatim text: a commented-out `360px` is
     // still a width someone meant to ship.
-    expect(ruleBody(stylesCode, '.popup')).toMatch(
-      new RegExp(`(?:^|;)\\s*width:\\s*${POPUP_WIDTH};`),
-    );
+    expect(documentStyles(DOCUMENT)).toMatch(/(?:^|;)\s*width:\s*100%;/);
     expect(styles).not.toContain(SETTINGS_WIDTH);
     expect(stylesCode).not.toContain(SETTINGS_WIDTH);
-    // The width is the popup's own rule and not a card cap: the settings surface sizes
-    // itself by the dialog box, this one is a fixed toolbar panel.
+    expect(documentStyles(DOCUMENT)).not.toContain(SETTINGS_WIDTH);
+    expect(readSource(DOCUMENT)).not.toContain(SETTINGS_WIDTH);
+    // The component is content inside the box and declares no width of its own, neither a
+    // fixed one nor a cap: the panel decides, and nothing on this surface caps it.
+    expect(ruleBody(stylesCode, '.popup')).not.toMatch(/(?:^|;)\s*width:/);
     expect(ruleBody(stylesCode, '.popup')).not.toMatch(/max-width:/);
-    expect(ruleBody(stylesCode, '.popup')).not.toMatch(
-      new RegExp(`min-width:\\s*${POPUP_WIDTH}`),
-    );
+    expect(ruleBody(stylesCode, ':host')).not.toMatch(/(?:^|;)\s*width:/);
   });
 
   it('draws no frame and no radius on the card while the settings card keeps its own', () => {
@@ -302,11 +352,16 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     expect(ruleBody(stylesCode, ".toggle input[type='checkbox']")).toContain('border-radius: 3px;');
 
     // The half that is still shared, read from `src/options/options.component.ts` rather
-    // than restated from memory: palette, type scale and inner padding are one look, so a
-    // change to one surface that leaves the other behind is a red test and not a taste
-    // question. The count is asserted on two **rule bodies** and not over the whole text,
-    // because `padding: 16px` legitimately stands twice on a page: once on the surface and
-    // once on the document's `:host` (`src/options/` does exactly the same).
+    // than restated from memory: type scale and inner padding are one look, so a change to
+    // one surface that leaves the other behind is a red test and not a taste question. The
+    // count is asserted on two **rule bodies** and not over the whole text, because
+    // `padding: 16px` legitimately stands twice on a page: once on the surface and once on
+    // the document's `:host` (`src/options/` does exactly the same).
+    //
+    // The **cream fill left this pair with `A145`**: the paint is the document box's now,
+    // and the shared half is asserted where the paint actually is — the component's ink
+    // here, the fill in `the document box is the surface…` below. Keeping the fill in this
+    // list would pin a declaration `A145` deliberately removed.
     const optionsStyles = codeOnly(
       /styles:\s*`([\s\S]*?)`/.exec(
         readFileSync(join(projectRoot, 'src', 'options', 'options.component.ts'), 'utf8'),
@@ -316,7 +371,6 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     const shared: readonly (readonly [string, string])[] = [
       ['padding: 16px;', 'padding: 16px;'],
       ['font: 13px/1.45 system-ui, sans-serif;', 'font: 13px/1.45 system-ui, sans-serif;'],
-      [`background: ${PALETTE.page};`, `background: ${PALETTE.page};`],
       [`color: ${PALETTE.ink};`, `color: ${PALETTE.ink};`],
     ];
     for (const [popupDeclaration, settingsDeclaration] of shared) {
@@ -330,35 +384,97 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     }
 
     // The settings half of the old shared sentence stays pinned **present**, and it is the
-    // settings file that is read for it. `A144` touches one rule, so the settings look did
-    // not move with the popup, and the frame is not simply gone from the repository.
+    // settings file that is read for it. Neither `A144` nor `A145` touches the settings
+    // surface, so its look did not move with the popup, and the frame is not simply gone
+    // from the repository.
     expect(settingsCard).toContain(CARD_FRAME);
     expect(settingsCard).toContain(CARD_RADIUS);
     expect(settingsCard).not.toContain('outline:');
     expect(settingsCard).not.toContain('box-shadow:');
   });
 
-  it('gives the document the body margin the options document owns, and nothing else', () => {
-    // Answer `Q1`: a bordered card with a browser-default margin around it looks like a
-    // floating tile rather than a panel, so the one rule the options document owns is
-    // repeated here — one block, one rule, no colour and no width.
+  it('leaves the paint and the width to the document box', () => {
+    // `A145`: the paint lives in **exactly one place**, and that place is the document. A
+    // second `background` on `:host` or `.popup` would be a second surface, which is the
+    // shape of the defect `A144` produced (a cream rectangle inside a white one). The
+    // absence reads the **verbatim** stylesheet, so a commented-out fill is flagged too.
+    const paint = new RegExp(`background:\\s*${PALETTE.page};`);
+    expect(styles).not.toMatch(paint);
+    expect(ruleBody(stylesCode, ':host')).not.toMatch(/background/);
+    expect(ruleBody(stylesCode, '.popup')).not.toMatch(/background/);
+    // The component is content inside the box: it declares no width, no radius, no clip
+    // and no margin of its own, so the box's geometry is the only geometry on this surface.
+    for (const selector of [':host', '.popup']) {
+      const body = ruleBody(stylesCode, selector);
+      expect(body, selector).not.toMatch(/(?:^|;)\s*width:/);
+      expect(body, selector).not.toMatch(/border-radius:/);
+      expect(body, selector).not.toMatch(/overflow:/);
+      expect(body, selector).not.toMatch(/margin:/);
+    }
+    // The old 12px inset is gone with the plain `<h1>` page it belonged to; the card's
+    // padding is the settings 16px and no other inset is declared on the card.
+    expect(card(stylesCode)).toMatch(/(?:^|;)\s*padding:\s*16px;/);
+    expect(card(stylesCode)).not.toMatch(/padding:\s*12px/);
+    expect(styles).not.toMatch(/padding:\s*12px/);
+  });
+
+  it('the document box is the surface: one block, the cream paint, the radius, the clip, the zero margin and no frame', () => {
+    // Ruling `A145` (task `t14-03`), rewriting the pin that used to assert the document's
+    // single style block was exactly `body { margin: 0; }`. That sentence is false now on
+    // purpose — the document **is** the surface — so the case pins the new rule set instead
+    // of being dropped: it is the only pin that says the popup document's rule set is
+    // deliberate.
     const blocks = [...readSource(DOCUMENT).matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(
       (match) => codeOnly(match[1] as string),
     );
+    // One block, so the surface has one owner and no second style sheet can appear beside
+    // it (the settings document is pinned the same way, `t10-02` AC8).
     expect(blocks).toHaveLength(1);
-    // One rule, one declaration, whitespace normalised: this is a claim about the rule and
-    // not about the checkout's line endings.
-    expect((blocks[0] as string).replaceAll(/\s+/g, ' ').trim()).toBe('body { margin: 0; }');
-    // The card fills the panel: the panel is the fixed width, and nothing on the host
-    // adds a second margin or a second border around it.
+    const documentCss = blocks[0] as string;
+
+    // One rule, and it is the `body` rule: whitespace normalised, so this is a claim about
+    // the rule and not about the checkout's line endings.
+    const rules = [...documentCss.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
+      selector: (match[1] as string).replaceAll(/\s+/g, ' ').trim(),
+      body: (match[2] as string).replaceAll(/\s+/g, ' ').trim(),
+    }));
+    expect(rules).toHaveLength(1);
+    expect(rules[0]?.selector).toBe('body');
+    const body = rules[0]?.body ?? '';
+
+    // The four declarations `A145` names, each read as a whole declaration so a partial
+    // match cannot stand in for it.
+    expect(body).toContain(SURFACE_PAINT);
+    expect(body).toContain(SURFACE_RADIUS);
+    expect(body).toContain(SURFACE_CLIP);
+    expect(body).toContain(SURFACE_MARGIN);
+    // The geometry that makes the paint reach the panel's edges: the box spans the panel
+    // and its padding cannot push it past the width.
+    expect(body).toContain('width: 100%;');
+    expect(body).toContain('box-sizing: border-box;');
+
+    // **No frame.** The shape is the box's rounded corners, not a drawn outline: a `border`,
+    // an `outline` or a `box-shadow` here is the exact defect the reader reported twice
+    // («прямой угол с чёрной рамкой»). Read on the comments-stripped block, so a
+    // commented-out frame does not pass either.
+    for (const declaration of FRAME_DECLARATIONS) {
+      expect(documentCss, declaration).not.toContain(declaration);
+    }
+    // And the whole document, comments included: a commented-out `border` is a frame
+    // waiting to come back.
+    expect(readSource(DOCUMENT)).not.toMatch(/\bborder\s*:/);
+    expect(readSource(DOCUMENT)).not.toMatch(/\boutline\s*:/);
+    expect(readSource(DOCUMENT)).not.toMatch(/\bbox-shadow\s*:/);
+
+    // The radius and the clip belong to the **same** box, which is what makes the paint and
+    // the rounded corner one shape rather than a rounded clip over a square fill.
+    expect(body.indexOf(SURFACE_RADIUS)).toBeLessThan(body.indexOf(SURFACE_CLIP));
+
+    // The component keeps the fill and the geometry off itself, so the paint has one owner.
     const host = ruleBody(stylesCode, ':host');
     expect(host).not.toMatch(/margin:/);
-    expect(host).not.toMatch(/border:/);
-    expect(host).toMatch(new RegExp(`background: ${PALETTE.page};`));
-    // The old 12px inset is gone with the plain `<h1>` page it belonged to; the card's
-    // padding is the settings 16px and no other inset is declared on the card.
-    expect(card(stylesCode)).not.toMatch(/padding:\s*12px/);
-    expect(styles).not.toMatch(/padding:\s*12px/);
+    expect(host).not.toMatch(/border/);
+    expect(host).not.toMatch(/background/);
   });
 
   it('draws no mascot and adds no second string or palette role (t14-01 AC3; ruling A142)', () => {

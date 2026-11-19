@@ -4,15 +4,36 @@
     <meta charset="utf-8" />
     <title>inlineNotes</title>
     <!--
-      The only rule this document owns, the same one `src/options/index.html` owns: the
-      card fills the toolbar panel from edge to edge, and the body's default margin is the
-      one thing between the card and that panel (task `t14-01`, answer `Q1`, ruling
-      `A141`). The palette and every other visual rule live in the component stylesheet,
-      not here.
+      The popup's **surface**. This document is not the two-line shell the options
+      document is: the box the reader sees when the toolbar panel opens is `body`, and
+      `body` is what has to carry the shape (ruling `A145`, task `t14-03`).
+
+      Why here and not in the component. Chrome clips a popup window to a rectangle and
+      paints the document box with the user agent's white; `app-root` and `.popup` were
+      cream and 320px wide *inside* that box, so the cream never reached the window edge
+      and the white showed as a band around it. Removing the card's frame (`A144`) then
+      removed the only rounded element and left a square white box. So the fill, the
+      panel-filling geometry and the rounded corners belong to the box that is the
+      window, and the component is content inside it.
+
+      `overflow: hidden` is not decoration: it makes the paint and the rounded clip the
+      same box, so no descendant can paint a square corner over the arc. The width is
+      `100%` of the panel rather than the old `320px`, because the surface spans the
+      panel and the cream has to reach both edges.
+
+      No frame: no `border`, no `outline`, no `box-shadow`. That is the exact defect the
+      reader reported twice. The palette is `A125` only, and every other visual rule
+      still lives in the component stylesheet.
     -->
     <style>
       body {
         margin: 0;
+        width: 100%;
+        min-height: 100vh;
+        box-sizing: border-box;
+        background: #fdf7ee;
+        border-radius: 12px;
+        overflow: hidden;
       }
     </style>
   </head>

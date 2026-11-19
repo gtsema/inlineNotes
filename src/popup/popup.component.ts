@@ -76,23 +76,29 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
  * The behaviour did not move with the word: one press is still exactly one core
  * `deleteEntriesOfAuthor` for the whole author group (`A25`, `A108`).
  *
- * The look of this document is the closed `A125` palette (`A140`, `A141`, `t14-01`):
- * cream surface, `#1b2a33` ink, `#7b6a55` secondary, `#a6cbdc` decorative, `#b3261e`
- * refusal kept from before `A125`, and the `#b8480d` action colour on the checkbox. What
- * is shared with `src/options/` is the palette, the `13px` type scale and the `16px` inner
- * padding; the width is not (the panel is `320px`, a toolbar popup; the settings card is
- * `360px`, a dialog box). No colour is invented here, and no mascot is drawn (`A142`).
+ * The look of this surface is the closed `A125` palette (`A140`, `A141`, `t14-01`):
+ * `#1b2a33` ink, `#7b6a55` secondary, `#a6cbdc` decorative, `#b3261e` refusal kept from
+ * before `A125`, and the `#b8480d` action colour on the checkbox. What is shared with
+ * `src/options/` is the palette, the `13px` type scale and the `16px` inner padding; the
+ * width is not (a toolbar popup against the settings `360px` dialog box). No colour is
+ * invented here, and no mascot is drawn (`A142`).
  *
- * The **frame and the radius are not drawn** (ruling `A144`, task `t14-02`). Three shapes
- * disagreed at the four corners of the window: the popup window's own radius, this
- * component's rectangular `:host` fill, and the card's `12px` arc — the `#a6cbdc` border
- * traced the arc and stopped, leaving the host's square corner visible against the
- * window's dark edge. The window now owns the shape, exactly as it does for any page: the
- * surface fills it edge to edge and Chrome rounds it. The settings window is the other
- * case and keeps its card frame — that one **is** a page Chrome sizes, and a card is drawn
- * inside it. The row separator and the checkbox keep their own `#a6cbdc` borders: they are
- * controls inside this surface, not its frame (`border: 0` on a button is the removal of
- * a painted edge, not the declaration of one). `A144` touches one rule.
+ * **This component is not the surface** (ruling `A145`, task `t14-03`, superseding
+ * `A144`). The surface is the **document box**: `src/popup/index.html`'s one style block
+ * gives `body` the `#fdf7ee` fill, the panel-filling geometry and the `12px` rounded
+ * corners with `overflow: hidden`, because `body` is the box Chrome clips the popup
+ * window to. So there is no `background` here and none on `:host` — the paint lives in
+ * exactly one place, the document — and no `width`: the box owns the panel's width and
+ * this component is content inside it. `A144` was right that a card drawn inside a square
+ * box cannot round the window; it was wrong to remove the round shape instead of moving
+ * it to the box that owns the shape.
+ *
+ * **No frame is drawn anywhere on this surface**: no `border`, no `outline`, no
+ * `box-shadow`. That is the exact defect the reader reported twice. The settings window is
+ * the deliberate other case and keeps its drawn card frame — that one **is** a page Chrome
+ * sizes, and a card is drawn inside it. The row separator and the checkbox keep their own
+ * `#a6cbdc` borders: they are controls inside the surface, not its frame (`border: 0` on a
+ * button is the removal of a painted edge, not the declaration of one).
  *
  * The notices of ruling `A83` are rendered **above** the list and the list still
  * renders below them, because stored entries that become invisible are stored entries
@@ -172,14 +178,11 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
   styles: `
     :host {
       display: block;
-      background: #fdf7ee;
     }
 
     .popup {
-      width: 320px;
       box-sizing: border-box;
       padding: 16px;
-      background: #fdf7ee;
       font: 13px/1.45 system-ui, sans-serif;
       color: #1b2a33;
     }
