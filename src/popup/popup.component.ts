@@ -80,23 +80,43 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
  * `#1b2a33` ink, `#7b6a55` secondary, `#a6cbdc` decorative, `#b3261e` refusal kept from
  * before `A125`, and the `#b8480d` action colour on the checkbox. What is shared with
  * `src/options/` is the palette, the `13px` type scale and the `16px` inner padding; the
- * width is not (a toolbar popup against the settings `360px` dialog box). No colour is
- * invented here, and no mascot is drawn (`A142`).
+ * width is not, and this component **owns its own** `320px` (rulings `A141`, `A147`) — a
+ * toolbar popup against the settings `360px` dialog box. No colour is invented here, and
+ * no mascot is drawn (`A142`).
  *
- * **This component is not the surface** (ruling `A145`, task `t14-03`, superseding
- * `A144`). The surface is the **document box**: `src/popup/index.html`'s one style block
- * gives `body` the `#fdf7ee` fill, the panel-filling geometry and the `12px` rounded
- * corners with `overflow: hidden`, because `body` is the box Chrome clips the popup
- * window to. So there is no `background` here and none on `:host` — the paint lives in
- * exactly one place, the document — and no `width`: the box owns the panel's width and
- * this component is content inside it. `A144` was right that a card drawn inside a square
- * box cannot round the window; it was wrong to remove the round shape instead of moving
- * it to the box that owns the shape.
+ * **The width is this component's** (ruling `A147`, task `t14-04`, reverting the geometry
+ * half of `A145`). `A145` moved the `320px` with the surface and put `width: 100%` on the
+ * document box; in a popup that percentage resolves against a narrow initial containing
+ * block, so the surface collapsed to `100px` and the title, the notice and the empty state
+ * each wrapped to three lines (measured on the reader's screenshot
+ * `test_img/…224902.png`). The old `320px` was doing real work, so it comes back here, and
+ * `body` declares no width at all: a block box with `width: auto` and `margin: 0` already
+ * fills the panel, which is why the cream reaches both edges without a geometry
+ * declaration on the document.
  *
- * **No frame is drawn anywhere on this surface**: no `border`, no `outline`, no
- * `box-shadow`. That is the exact defect the reader reported twice. The settings window is
- * the deliberate other case and keeps its drawn card frame — that one **is** a page Chrome
- * sizes, and a card is drawn inside it. The row separator and the checkbox keep their own
+ * **The document box paints; it does not shape** (rulings `A146`, `A147`, superseding
+ * `A145`). `src/popup/index.html`'s one style block gives `body` the `#fdf7ee` fill and
+ * `margin: 0` and nothing else — no `border-radius`, no `overflow: hidden`, no width, no
+ * `min-height`. `A145`'s rounded document box is **withdrawn with a measurement**: the
+ * reader's screenshot shows square corners at `(96,72)`, `(195,72)`, `(96,335)`, `(195,335)`
+ * and no anti-aliased step at `(97,73)`, `(98,74)`, `(99,75)`, with the window box (`108px`)
+ * wider than the surface (`100px`) — Chrome draws a popup window as a rectangle and does
+ * not clip the document to a `border-radius`, so **no rounding is possible** in an MV3
+ * popup (`A146`). The popup ships as a **cream rectangle that fills the window**. The paint
+ * still lives in exactly one place — the document — so there is no `background` here and
+ * none on `:host`; the component is content inside a painted box.
+ *
+ * **The card carries the frame, the document does not** (ruling `A148`, task `t14-04`,
+ * reversing the `A144`/`A145`/`A147` family's «no frame» half). `A144` removed the card's
+ * `1px solid #a6cbdc` frame because the reader read it as «прямой угол с чёрной рамкой»
+ * against the window's own square, dark edge; the reader then asked for it back, **thicker**
+ * («верни скруглённую рамку, но сделай её потолще чем была»). So `.popup` draws
+ * `border: 2px solid #a6cbdc` with `border-radius: 12px` — the `A125` decorative role, a
+ * width the ruling leaves to the PM's default and this file records. The radius is a
+ * **drawn frame inside a square window**: it is not an attempt to round the window, because
+ * `A146` measured that a popup window cannot be rounded at all. The settings window keeps
+ * its own `1px` frame as the deliberate other case, and `src/popup/index.html` still draws
+ * **no** frame — the document only paints. The row separator and the checkbox keep their own
  * `#a6cbdc` borders: they are controls inside the surface, not its frame (`border: 0` on a
  * button is the removal of a painted edge, not the declaration of one).
  *
@@ -182,6 +202,9 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
 
     .popup {
       box-sizing: border-box;
+      width: 320px;
+      border: 2px solid #a6cbdc;
+      border-radius: 12px;
       padding: 16px;
       font: 13px/1.45 system-ui, sans-serif;
       color: #1b2a33;

@@ -4,36 +4,47 @@
     <meta charset="utf-8" />
     <title>inlineNotes</title>
     <!--
-      The popup's **surface**. This document is not the two-line shell the options
-      document is: the box the reader sees when the toolbar panel opens is `body`, and
-      `body` is what has to carry the shape (ruling `A145`, task `t14-03`).
+      The popup's **paint**. This document is not the two-line shell the options document
+      is: the box the reader sees when the toolbar panel opens is `body`, and `body` is
+      what has to carry the `A125` cream, or the user agent's white shows as a band around
+      the panel (ruling `A145`, kept by `A147`).
 
-      Why here and not in the component. Chrome clips a popup window to a rectangle and
-      paints the document box with the user agent's white; `app-root` and `.popup` were
-      cream and 320px wide *inside* that box, so the cream never reached the window edge
-      and the white showed as a band around it. Removing the card's frame (`A144`) then
-      removed the only rounded element and left a square white box. So the fill, the
-      panel-filling geometry and the rounded corners belong to the box that is the
-      window, and the component is content inside it.
+      Why here and not in the component. Chrome paints the document box with the user
+      agent's white; `app-root` and `.popup` are cream *inside* it, so a fill declared
+      only there never reaches the window edge. So the paint belongs to the box that is
+      the window, and the component is content inside it.
 
-      `overflow: hidden` is not decoration: it makes the paint and the rounded clip the
-      same box, so no descendant can paint a square corner over the arc. The width is
-      `100%` of the panel rather than the old `320px`, because the surface spans the
-      panel and the cream has to reach both edges.
+      **The document paints; it does not shape** (rulings `A146`, `A147`, superseding
+      `A145`). `A145` also gave this box the panel-filling geometry (`width: 100%`,
+      `min-height: 100vh`) and the rounded corners (`border-radius: 12px`, with
+      `overflow: hidden` to clip the fill to the same arc). Both halves are withdrawn, and
+      both are measured on the reader's screenshot (`test_img/…224902.png`, task `t14-04`):
 
-      No frame: no `border`, no `outline`, no `box-shadow`. That is the exact defect the
-      reader reported twice. The palette is `A125` only, and every other visual rule
-      still lives in the component stylesheet.
+      - the width collapsed the surface to `100px`, leaving the text a `66px` column, and
+        the title, the notice and the empty state each wrapped to three lines — a block box
+        with `width: auto` and `margin: 0` already fills the panel, so no geometry
+        declaration is needed here at all, and the `320px` belongs to `.popup` (`A147`);
+      - the radius is **not rendered**: the four cream corners at `(96,72)`, `(195,72)`,
+        `(96,335)`, `(195,335)` are square and `(97,73)`, `(98,74)`, `(99,75)` show no
+        anti-aliased step. Chrome draws a popup window as a rectangle and does not clip the
+        document to a `border-radius`, so no rounding is possible in an MV3 popup (`A146`)
+        and the popup ships as a cream rectangle that fills the window.
+
+      What is left is deliberately one rule of two declarations: the cream paint and
+      `margin: 0`. A `box-sizing: border-box` with no width, padding or border is a no-op,
+      and a declaration nothing measures is what `S14-21` flagged; it goes with the
+      geometry it belonged to.
+
+      No frame **on this document**: no `border`, no `outline`, no `box-shadow` here — the
+      paint is all this box owns. The drawn frame lives on the **card** (`.popup`), which
+      carries the reader's thickened `2px solid #a6cbdc` frame and its `12px` radius
+      (ruling `A148`, task `t14-04`). The palette is `A125` only, and every other visual
+      rule still lives in the component stylesheet.
     -->
     <style>
       body {
         margin: 0;
-        width: 100%;
-        min-height: 100vh;
-        box-sizing: border-box;
         background: #fdf7ee;
-        border-radius: 12px;
-        overflow: hidden;
       }
     </style>
   </head>
