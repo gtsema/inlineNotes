@@ -311,3 +311,26 @@ the direction: it removed the round shape instead of moving it to the box that o
 |---|---|---|
 | `S14-19` | **Two premises in a row rest on how Chrome renders a popup window, and neither is testable in this repository.** `A144` was wrong; `A145` may be too. The mitigation is not a better guess but an ordered run: try it, look at it, then write the ruling as fact. | browser-verification |
 | `S14-20` | The popup's surface is now the **document**, not a component. `src/popup/index.html` stops being a two-line shell and becomes a place where a visual rule lives, which is the opposite of the rule the options document follows («the only rule this document owns»). Two documents, two different philosophies, and the reason has to be written where both are. | spec + architecture |
+
+## t14-03 accepted (2026-11-19)
+
+Review `df3cab5f-9195-4945-a4d7-bf91fc34fe57` → **accepted**, all eight ACs pass, no blocking finding, and its one line on the
+question that matters: the spec and the code agree about **where** the popup's surface lives — the document box.
+
+Final gates on `f62fa9b`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1049 tests / 47 files**; checker 0 —
+**176 info**; `npm run typecheck` 0.
+
+### Ledger additions
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-21` | `src/popup/index.html:34` — `min-height: 100vh` is a declaration `A145` did not name. The engineer flagged it and the reviewer confirmed the reason (a white band below a short list), but it is now part of the pinned rule set while the ruling does not mention it: a reader comparing the two finds a gap. | spec + ruling |
+| `S14-22` | `tests/popup-window-look.spec.ts:446` — the raw-document absence scan reads the HTML comment too, so a future comment that spells `border:` as CSS rather than as prose goes red while declaring nothing. Deliberate and stated at `:445`. | test |
+| `S14-23` | `tests/popup-window-look.spec.ts:404-410` — the rule parser is a regex over a comment-stripped block, so it cannot model an at-rule or a nested block; `@media` would be read as a selector. No shipped rule uses one, and the failure mode is a red case, not a silent pass. | test |
+| `S14-24` | `docs/specs/content-overlay-ui.md:158` states `min-height: 100vh` but not what it buys (the cream reaching the bottom edge on a short list). One clause would stop the next reader from striking it as decoration. | spec |
+| `S14-25` | `docs/state/stage-14-popup-look.md:234` — the `A144` block still reads «The popup document's single `body { margin: 0 }` rule stays», which was true of `A144` and is superseded by `A145` later in the same file. The record is not contradictory read whole, but it wants a pointer. | process |
+| `S14-26` | `README.md:145` was false for two tasks: it still described the popup as keeping «форму карточки (рамка, скругление 12px …) при собственной ширине 320px» after `A144` removed the frame and `A145` the width. **Closed by the PM in this commit** — the note now says the window box draws the frame and the panel owns the width. | docs |
+
+`S14-13` stays open: the reader has still not confirmed the palette's reading, the trash glyph against the page editor's
+drawing (`S14-4`), the checkbox, or «nothing else moved». **Run 12** answers the corners and can answer the rest in the same
+pass.
