@@ -70,3 +70,11 @@ against `13px` at the dialog's scale.
 
 Both defaults will be implemented if no answer comes; neither changes any wording, and both are one-line values if the
 real window disagrees.
+
+## Answers (owner, 2026-11-19)
+
+**`1. 4px`** and **`2. 11px`** — both measured values, so `Q1a` and `Q2a` are implemented as stated and the slice carries
+no judgement of its own. The brief is `docs/state/t13-01-hint-gap-and-size.md`.
+
+`Q1c` (the «the space is already there» reading) was named in the question pool and rejected by the answer: the owner
+wants a **wider** gap, which is why `A137` makes it a declaration and why AC 1 fails a change that only inserts a space.
