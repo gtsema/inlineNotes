@@ -522,12 +522,117 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
     ).toThrow(/has no `async function main\(\)` outside a comment/);
   });
 
+  it('takes the live main() body when a string literal spells the header above it', () => {
+    /**
+     * The last unanchored search in the support module was this one (`t10-02` AC5, closing
+     * debt row `S10-6`): `codeOnly` had already made a commented copy unable to win, but
+     * `code.indexOf('async function main() {')` still landed on **any** occurrence — inside a
+     * string literal, after an assignment, anywhere mid-line — and the "body" it returned
+     * started in the middle of that line and ran to the next `\n}`.
+     */
+    const stringLiteralMainScript = shippedScript.replace(
+      "const distDir = join(projectRoot, 'dist');",
+      () =>
+        "const mainProse = 'async function main() {';\nconst distDir = join(projectRoot, 'dist');",
+    );
+    expect(stringLiteralMainScript, 'the fixture really edits the shipped script').not.toBe(
+      shippedScript,
+    );
+
+    // The old search really does bite: what sits before the match on its own line is an
+    // assignment, not indentation, so the leftmost occurrence is not a declaration.
+    const code = codeOnly(stringLiteralMainScript);
+    const unanchored = code.indexOf('async function main() {');
+    const lineStart = code.lastIndexOf('\n', unanchored) + 1;
+    expect(code.slice(lineStart, unanchored), 'the old search landed mid-line').toBe(
+      "const mainProse = '",
+    );
+
+    // The line-anchored extraction reads the declaration instead, and the verification order
+    // the pins depend on survives: under the old search the body started in that string and
+    // named neither check, so both order assertions inverted.
+    const body = buildScriptMainBodyFrom(stringLiteralMainScript);
+    expect(body.startsWith('async function main() {')).toBe(true);
+    expect(body).not.toContain('const mainProse =');
+    expect(body.indexOf('verifyOptionsAssetShips();'), 'verify before report').toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(body.indexOf('verifyOptionsAssetShips();')).toBeLessThan(body.indexOf('report();'));
+  });
+
+  /**
+   * One **live** declaration per extracted name (`t10-02` AC4, closing debt row `S10-5`).
+   * Line anchoring and comment stripping make the leftmost match the first *live*
+   * declaration, but the extraction still takes the leftmost one: two live
+   * `function fail (…)` declarations make the real build call the **later** one, because
+   * function declarations are hoisted, while the pins run the **first**. `t10-01b` AC8 item 3
+   * pinned the entry half of that (exactly one live `main().catch(...)`); nothing pinned the
+   * declaration half until here.
+   */
+  const BUILD_SCRIPT_EXTRACTED_NAMES = [
+    'fail',
+    'main',
+    'verifyManifestReferences',
+    'verifyOptionsAssetShips',
+    'verifyContentBundleHasNoAngular',
+  ];
+
+  /** Every top-level `function` declaration of a stripped script text, in shipped order. */
+  function liveFunctionNames(code: string): string[] {
+    return [
+      ...code.matchAll(/^[ \t]*(?:async[ \t]+)?function[ \t]+([A-Za-z_$][\w$]*)[ \t]*\(/gm),
+    ].map((match) => match[1] as string);
+  }
+
+  /** How many **live** declarations of one name a stripped script text carries. */
+  function liveDeclarationsOf(code: string, name: string): string[] {
+    return (
+      code.match(new RegExp(`^[ \\t]*(?:async[ \\t]+)?function[ \\t]+${name}[ \\t]*\\(`, 'gm')) ??
+      []
+    );
+  }
+
+  it('declares one live fail, one live main and one live copy of every extracted guard', () => {
+    const code = codeOnly(buildScriptSource());
+
+    for (const name of BUILD_SCRIPT_EXTRACTED_NAMES) {
+      expect(liveDeclarationsOf(code, name), `${name} has more than one live declaration`).toHaveLength(
+        1,
+      );
+    }
+
+    // The whole top-level set is named, so neither a new declaration the extraction could
+    // land on nor a rename escapes into an uncounted name. The pattern accepts indentation,
+    // so a **nested** duplicate of `fail` or `main` is counted here as well.
+    expect(liveFunctionNames(code).sort()).toEqual(
+      [
+        'buildContentBundle',
+        'cleanDist',
+        'copyManifest',
+        'fail',
+        'listDistFiles',
+        'logStep',
+        'main',
+        'readDistManifest',
+        'report',
+        'runAngularBuild',
+        'verifyContentBundleHasNoAngular',
+        'verifyManifestReferences',
+        'verifyOptionsAssetShips',
+      ].sort(),
+    );
+  });
+
   it('drives the shipped pins through the same extraction the decoy cases drive', () => {
     // Without this, the decoy cases above could exercise a helper the shipped pins never
-    // call. The shipped entry points delegate to the script-text ones, so the shipped text
-    // and the fixture text go through one extractor.
-    expect(buildScriptEntryStatement()).toBe(buildScriptEntryStatementFrom(shippedScript));
-    expect(buildScriptMainBody()).toBe(buildScriptMainBodyFrom(shippedScript));
+    // call. The two comparisons this case used to open with — `buildScriptEntryStatement()`
+    // against `buildScriptEntryStatementFrom(shippedScript)`, and the same pair for
+    // `buildScriptMainBody` — are **gone** (`t10-02` AC1, closing debt row `S10-1`): each
+    // compared a wrapper with the exact call the wrapper is *defined as*, on the same
+    // argument, so no edit to the shipped script or to the support module could turn either
+    // red — the tautology class `t10-01b` AC8 item 3 had already removed once. What
+    // delegation means is pinned where it is written, by the case below; what the extraction
+    // **does** is pinned by the assertions that stay here.
     expect(buildScriptFunctionSourceFrom(shippedScript, 'verifyOptionsAssetShips')).toMatch(
       /^function verifyOptionsAssetShips\(\) \{/,
     );
@@ -554,6 +659,90 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
         () => verify(manifestOf('options/index.html')),
         label,
       ).toThrow(/^build-extension: manifest reference "options\/index\.html" does not exist inside dist\/$/);
+    }
+  });
+
+  /**
+   * The delegation itself, pinned **where it is written** (`t10-02` AC1, closing debt row
+   * `S10-1`). The case above cannot carry that claim: comparing a shipped-source wrapper with
+   * the script-text extractor it delegates to compares a function with its own definition, so
+   * neither the shipped script nor the support module could ever turn it red. Instead the
+   * support module is read as text — comments stripped, pattern line-anchored, the same two
+   * rules the module applies to the build script — and every shipped-source entry point is
+   * pinned to be **one delegate call and nothing else**.
+   *
+   * The mutation this exists for, and the one named in the report: give a wrapper its own copy
+   * of the extraction. In `tests/support/build-script-guards.ts`, replace the body of
+   * `buildScriptEntryStatement()` with
+   * `return /^[ \t]*main\(\)\.catch\([\s\S]*?\n\}\);/m.exec(buildScriptSource())![0];`.
+   * The returned text is the same text, so every other pin in both suites stays green, and
+   * this case goes red — the wrapper stopped going through the one comment-stripped extractor
+   * the decoy cases drive, which is the finding 2 defect class arriving in the wrapper.
+   */
+  const SUPPORT_MODULE = 'tests/support/build-script-guards.ts';
+
+  /**
+   * `[shipped-source wrapper, script-text extractor, the whole body the wrapper is allowed
+   * to be]` — whitespace collapsed, so re-indenting a delegate is not a red, while giving it
+   * a second statement, a second source or a private copy of the pattern is.
+   */
+  const SHIPPED_ENTRY_DELEGATES: [string, string, string][] = [
+    [
+      'buildScriptMainBody',
+      'buildScriptMainBodyFrom',
+      'return buildScriptMainBodyFrom(buildScriptSource());',
+    ],
+    [
+      'buildScriptEntryStatement',
+      'buildScriptEntryStatementFrom',
+      'return buildScriptEntryStatementFrom(buildScriptSource());',
+    ],
+    [
+      'loadBuildFail',
+      'loadBuildFailFromScript',
+      'return loadBuildFailFromScript(buildScriptSource()) as (message: string) => never;',
+    ],
+    [
+      'loadBuildGuard',
+      'loadBuildGuardFromScript',
+      'return loadBuildGuardFromScript(name, stubs, buildScriptSource());',
+    ],
+    [
+      'runBuildScriptEntry',
+      'runBuildScriptEntryFromScript',
+      'return runBuildScriptEntryFromScript(buildScriptSource(), failingMain);',
+    ],
+  ];
+
+  /** One top-level `export function` body of a module text, comments removed, line-anchored. */
+  function moduleFunctionBody(moduleText: string, name: string): string {
+    const match = new RegExp(
+      `^[ \\t]*export (?:async[ \\t]+)?function ${name}\\b[^\\n{]*\\{([\\s\\S]*?)\\n\\}`,
+      'm',
+    ).exec(moduleText);
+    if (match === null) {
+      throw new Error(`the support module declares no top-level ${name} outside a comment`);
+    }
+    return (match[1] as string).trim().replaceAll(/\s+/g, ' ');
+  }
+
+  it('keeps every shipped-source entry point one delegate call to the script-text extractor', () => {
+    const moduleText = codeOnly(readFileSync(join(projectRoot, SUPPORT_MODULE), 'utf8'));
+
+    for (const [wrapper, delegate, body] of SHIPPED_ENTRY_DELEGATES) {
+      const actual = moduleFunctionBody(moduleText, wrapper);
+
+      // One statement, and it is the call the decoy cases already exercise.
+      expect(actual, wrapper).toBe(body);
+      expect(actual, `${wrapper} delegates to ${delegate}`).toContain(`${delegate}(`);
+
+      // The wrapper's only source is `buildScriptSource()`: it reads, strips, anchors or
+      // evaluates nothing of its own, so the shipped pins and the fixtures go through one
+      // extraction rather than two that can drift apart.
+      expect(
+        actual,
+        `${wrapper} re-implements the extraction instead of delegating`,
+      ).not.toMatch(/readFileSync|require|codeOnly|new RegExp|new Function|\.exec\(|\.indexOf\(|\.search\(/);
     }
   });
 });

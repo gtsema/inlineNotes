@@ -22,14 +22,18 @@
  *
  * **Every extraction in this module reads the script with its comments removed, and
  * anchors its pattern to a line start** (task `t10-01b` AC8 item 2, closing blocking
- * finding 2 of `t10-01`). The extractor used to search the script text as shipped and take
+ * finding 2 of `t10-01`; the `main()` header got its line anchor in `t10-02` AC5, closing
+ * debt row `S10-6`). The extractor used to search the script text as shipped and take
  * the leftmost match, so a block-commented copy of `fail` placed above a live
  * log-and-continue `fail` — or a commented copy of the `main().catch(...)` statement
  * placed above a live handler that swallows the rejection — was the dead text the pins
  * executed, while the real build logged and exited 0 and the whole suite stayed green.
  * `tests/toolchain-contract.spec.ts` ships exactly that decoy as a case, and pins that the
  * shipped-source entry points below delegate to the same script-text extractors the decoy
- * cases drive.
+ * cases drive. That delegation is now pinned in **this module's own text** (`t10-02` AC1,
+ * closing debt row `S10-1`): the case compares each shipped wrapper's body with the one
+ * delegate call it is allowed to be, so a wrapper that re-reads or re-extracts the script
+ * instead of delegating is a failing test rather than a comment.
  */
 
 import { readFileSync } from 'node:fs';
@@ -80,10 +84,16 @@ export function codeOnly(text: string): string {
  * remark R2b), and the *anchor* is comment-free for the reason `t10-01` blocking finding 2
  * names: a commented copy of `main()` above the live one used to be the text whose order
  * this returned.
+ *
+ * The header is found by the same **line-anchored pattern** the other two extractors use
+ * (`t10-02` AC5, closing debt row `S10-6`). The literal `indexOf` this had was the last
+ * unanchored search in the module: `codeOnly` kept a commented copy from winning, but an
+ * occurrence **inside a string literal** or anywhere mid-line still was, and the body this
+ * returned then started in the middle of that line and ended at the next `\n}`.
  */
 export function buildScriptMainBodyFrom(source: string): string {
   const code = codeOnly(source);
-  const open = code.indexOf('async function main() {');
+  const open = code.search(/^[ \t]*(?:async[ \t]+)?function main[ \t]*\([ \t]*\)[ \t]*\{/m);
   if (open < 0) {
     throw new Error('the build script has no `async function main()` outside a comment');
   }
@@ -108,6 +118,13 @@ export function buildScriptMainBody(): string {
  * is anchored to a line start, so a function named inside a string or a line of prose is
  * not a declaration either. A function that exists **only** in a comment makes this throw
  * rather than hand back dead text.
+ *
+ * What anchoring does **not** settle is a pair of **live** declarations of the same name:
+ * the search still takes the leftmost match, while the real script would call the **last**
+ * one (function declarations are hoisted). `tests/toolchain-contract.spec.ts` closes that
+ * gap with a count of one live declaration per extracted name (`t10-02` AC4, closing debt
+ * row `S10-5`), so a duplicate is a failing test rather than a hoisting race the pins
+ * resolve on their own.
  */
 export function buildScriptFunctionSourceFrom(source: string, name: string): string {
   const match = new RegExp(`^[ \\t]*function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, 'm').exec(

@@ -106,7 +106,25 @@ function readSource(relativePath: string): string {
   return readFileSync(join(projectRoot, relativePath), 'utf8');
 }
 
-/** The inline `styles` string of a single-inline-template component, verbatim. */
+/**
+ * The inline `styles` string of a single-inline-template component, **verbatim**.
+ *
+ * Deliberately not `codeOnly`, and the reason is the direction each scan reads in
+ * (`t10-02` AC6, closing debt row `S10-7`). Everything this text feeds is an **absence**
+ * claim: no rule that reaches the mascot declares `box-sizing`, no rule exceeds the dialog
+ * box, the palette owns every literal. For an absence claim the safe error direction is to
+ * read **more** text, so a commented-out `box-sizing: border-box` inside a reachable rule
+ * makes the pin red and a human decides whether the comment is a leftover or a rule being
+ * revived; stripping here would hide that declaration and turn the same edit green. The
+ * repository rule that shipped-code claims read stripped text (`t9-02b` review remark R2b)
+ * protects **presence** claims — a comment satisfying `toMatch(/process\.exitCode = 1/)` —
+ * and every presence claim about this surface is wrapped in `codeOnly` where it is made:
+ * the build-guard case reads `codeOnly(buildScriptSource())`, and the dialog-box case reads
+ * the whole of `src/options/index.html` through `codeOnly`. `documentStyles` below strips
+ * for the same reason as those two: it is read next to whole-file presence pins, and its
+ * `<!-- -->` prose is dead in the document's own parse anyway. Same file, two helpers, two
+ * directions, stated.
+ */
 function componentStyles(componentPath: string): string {
   const raw = readSource(componentPath);
   const styles = /styles:\s*`([\s\S]*?)`/.exec(raw)?.[1];
@@ -196,13 +214,47 @@ function shippedRules(css: string): ShippedRule[] {
   return rules;
 }
 
-/** The `<style>` block of a shipped HTML document, comments removed. */
+/**
+ * Every `<style>` block of an HTML document text, in shipped order, comments removed
+ * (`t10-02` AC2, closing debt row `S10-3`).
+ *
+ * The scan used to read the **first** block only: a second
+ * `<style>img { box-sizing: border-box }</style>` in `src/options/index.html` moved the
+ * mascot frame with every pin green, because the rules in that block were simply never
+ * read. Every block is read now, and the case that scans the document also pins how many
+ * blocks the shipped file owns, so a second block is a named decision rather than a shape
+ * the scan has to guess about.
+ */
+function styleBlocks(html: string): string[] {
+  return [...html.matchAll(/<style>([\s\S]*?)<\/style>/gi)].map((match) =>
+    codeOnly(match[1] as string),
+  );
+}
+
+/** The whole stylesheet of a shipped HTML document: every block, comments removed. */
 function documentStyles(relativePath: string): string {
-  const block = /<style>([\s\S]*?)<\/style>/i.exec(readSource(relativePath))?.[1];
-  if (block === undefined) {
+  const blocks = styleBlocks(readSource(relativePath));
+  if (blocks.length === 0) {
     throw new Error(`${relativePath} ships no <style> block`);
   }
-  return codeOnly(block);
+  return blocks.join('\n');
+}
+
+/**
+ * The one `<img class="mascot">` **element** of a shipped template, tag and attributes
+ * whole, whatever order the attributes sit in (`t10-02` AC3, closing debt row `S10-4`).
+ *
+ * The scan below reads stylesheets, and a stylesheet is the only place it can see a
+ * declaration. An inline `style="box-sizing: border-box"` on the element outranks every
+ * stylesheet rule and moves the 2 px frame inside the 80 px image box with the whole scan
+ * green, so the shape itself is pinned absent instead of scanned.
+ */
+function mascotElement(template: string): string {
+  const tag = /<img\b[^>]*\bclass="[^"]*\bmascot\b[^"]*"[^>]*\/?>/i.exec(template);
+  if (tag === null) {
+    throw new Error('the shipped template places no `img.mascot` element');
+  }
+  return tag[0];
 }
 
 /**
@@ -673,6 +725,12 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
  * the 80 px with every pin green. `A129` settled the mechanism (no inheritance, so only a
  * rule that matches the `img` itself can reach its box), and the scan below is scoped to
  * exactly that set of selectors.
+ *
+ * Two shapes the widened scan still could not see are closed beside it (`t10-02` AC2, AC3,
+ * debt rows `S10-3` and `S10-4`): a **second** `<style>` block in `src/options/index.html`,
+ * which the document reader skipped, and an **inline** `style` attribute on the element,
+ * which no stylesheet scan can read. What stays outside the walk is stated in the spec
+ * sentence and ledged as `S10-2`: an `#id`-shaped selector and a document-level ancestor.
  */
 describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-01b AC8 item 1; rulings A127, A129)', () => {
   const componentCss = componentStyles(join('src', 'options', 'options.component.ts'));
@@ -701,6 +759,57 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
     // The widened form of the absence ruling `A127` rests on: not "the `.mascot` body is
     // clean", but "no rule that can match this element declares the property at all".
     expect(boxSizingSelectorsReachingMascot(shippedCss)).toEqual([]);
+  });
+
+  it('reads every <style> block the document ships, and pins that it ships exactly one', () => {
+    // Debt row `S10-3` (`t10-02` AC2): the document reader took the **first** block only, so
+    // a second `<style>img { box-sizing: border-box }</style>` in `src/options/index.html`
+    // moved the 84 px footprint while the scan never saw the rule. Every block is read now,
+    // and the shipped count is pinned in the same case, so the widened scan cannot be
+    // narrowed back down without a red test.
+    expect(styleBlocks(readSource(join('src', 'options', 'index.html')))).toHaveLength(1);
+
+    const twoBlocks = [
+      '<style>',
+      '  body {',
+      '    margin: 0;',
+      '  }',
+      '</style>',
+      '<!-- HTML comment prose between blocks is not a rule and is not read as one -->',
+      '<style>',
+      '  img {',
+      '    box-sizing: border-box;',
+      '  }',
+      '</style>',
+    ].join('\n');
+    expect(boxSizingSelectorsReachingMascot(styleBlocks(twoBlocks).join('\n'))).toEqual(['img']);
+  });
+
+  it('ships no inline style attribute on the element the stylesheet scan cannot read', () => {
+    // Debt row `S10-4` (`t10-02` AC3): the scan reads stylesheets, so a declaration written
+    // on the element itself sat outside it completely —
+    // `<img class="mascot" style="box-sizing: border-box">` puts the 2 px frame inside the
+    // 80 px image box (the reading ruling `A127` states) with every stylesheet pin green.
+    // The scan cannot see that shape, so the shape is pinned absent instead.
+    const template = componentTemplate(join('src', 'options', 'options.component.ts'));
+    expect(mascotElement(template)).not.toMatch(/[\s]style\s*=/i);
+
+    // The pin is not vacuous and does not depend on attribute order: the reader hands back
+    // the same element when the declaration sits in front of `class`.
+    const counterfactual =
+      '<img style="box-sizing: border-box" class="mascot" src="assets/cat-mascot.png" alt="" />';
+    expect(mascotElement(counterfactual)).toMatch(/[\s]style\s*=/i);
+  });
+
+  it('reads a commented-out declaration of the component stylesheet instead of stripping it', () => {
+    // The direction `componentStyles` states (`t10-02` AC6, closing debt row `S10-7`): the
+    // component stylesheet is handed to the scan **verbatim**, because every claim made over
+    // it is an absence and the safe error of an absence scan is to read more text. So reviving
+    // a rule inside a comment is red rather than invisible. The selector reported here is the
+    // comment-shaped compound, and that is the intended outcome of the red.
+    const flagged = boxSizingSelectorsReachingMascot('/* .mascot { box-sizing: border-box; } */');
+    expect(flagged, 'the verbatim stylesheet text is scanned, comment and all').not.toEqual([]);
+    expect(flagged[0]).toContain('.mascot');
   });
 
   it('catches the counterfactual on every selector shape that reaches the element', () => {
