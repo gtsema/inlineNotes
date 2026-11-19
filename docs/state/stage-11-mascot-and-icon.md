@@ -104,3 +104,12 @@ fully opaque** navy pixels sits outside the circle, `16.5 px` of it inside the c
   stage budget is one verifiable slice at a time.
 
 Neither question blocks the other half of the stage: the icon (`A130`–`A133`) is independent of the framing.
+
+## Answers to the question pool (owner, 2026-11-19)
+
+- **Q1 → `Q1a`.** The circle stays and the artwork is scaled out until it fits inside it. Measured target: the painted
+  content spans 1243 px of the 1254 source, so it must be drawn at **≈ 129 px** of the 80 px image box (scale `0.1030`)
+  for the whole cat to survive the clip. The mascot gets visibly smaller; nothing else about the frame moves.
+- **Q2 → `Q2a`.** The icon lands at `src/icons/icon-128.png` (`A131`) and **the palette is not re-sampled in this
+  stage**. The mismatch between the `A125` decorative `#a6cbdc` and the new art's blue `#ace9f6` stays ledger row
+  `S11-1` for a later ruling.
