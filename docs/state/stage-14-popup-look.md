@@ -334,3 +334,48 @@ Final gates on `f62fa9b`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 
 `S14-13` stays open: the reader has still not confirmed the palette's reading, the trash glyph against the page editor's
 drawing (`S14-4`), the checkbox, or «nothing else moved». **Run 12** answers the corners and can answer the rest in the same
 pass.
+
+## Run 12 answered — the screenshot, measured (2026-11-19)
+
+The reader: «стало ещё хуже. посмотри я сделал скрин» — `test_img/Снимок экрана 2026-11-19 224902.png`, 243×387. The PM
+decoded the PNG (`zlib.inflateSync`, scanlines unfiltered) and measured it rather than judging it by eye.
+
+| Measurement | Value | What it means |
+|---|---|---|
+| Cream surface bounding box | **100 × 264 px** at `x 96…195`, `y 72…335` | the surface is a narrow column, not a panel |
+| Content width inside it | **66 px** (ink spans `x 113…178`) | `100 − 2×16` padding leaves 68 px, so the text has almost nothing to wrap in |
+| Text wrapping | title in **3** lines, notice in **3**, empty state in **3** | a symptom, not a style: the width collapsed |
+| Cream box corners | all four `(96,72)`, `(195,72)`, `(96,335)`, `(195,335)` are `#fdf7ee`, and `(97,73)`, `(98,74)`, `(99,75)` are too | **no rounding is rendered at all** |
+| Bands around the box | `#444746` above (from `y≈71`) and below (to `y≈386`) | the window is taller than the surface |
+| Window box | `x 92…199`, i.e. ~108 px wide, dark `#202124` background | Chrome's popup is a plain rectangle |
+
+**Two findings, and the second is the one that matters.**
+
+1. **The width regression is the PM's.** `A145` wrote «the width moves with the surface» and put `width: 100%` on `body`. In
+   a popup, `100%` resolves against a narrow initial containing block, so the surface collapsed to 100 px and the text wrapped
+   three times. The previous `320px` on `.popup` was doing real work. **This is reverted.**
+2. **`border-radius` on the document box is not rendered.** The measured corners are square, with no anti-aliased step at
+   `(97,73)`, `(98,74)`, `(99,75)`. `A145`'s premise is therefore false — **for the second time in this family** (`S14-19`) —
+   and this time it is a measurement from the reader's own screenshot rather than a guess.
+
+### Ruling
+
+| Ruling | Decision |
+|---|---|
+| `A146` | **The popup cannot be rounded, and the attempt is withdrawn.** Chrome draws a popup window as a rectangle and does not clip the document to a `border-radius`; measured on the reader's screenshot: square corners, and the window box (108 px) wider than the surface (100 px) with dark bands above and below. The popup ships as a **cream rectangle that fills the window** — the fill stays, the rounding goes, and the finding is recorded so no future task re-derives it. |
+| `A147` | **The width goes back to the component.** `320px` returns to `.popup` (reverting the PM's `A145` geometry error), `body` keeps `margin: 0` and the cream fill, and the document stops claiming a shape. The spec sentence «the document box is the surface» is narrowed to «the document box is **painted**; the component owns the width». |
+
+### The reader's alternative, and why it is the same wall
+
+The reader asked: «может быть сделать скруглённую рамку и вне её прозрачность?» — a rounded surface with transparent corners.
+**That is exactly what `A145` tried**, and the screenshot is the answer: with `border-radius` plus `overflow: hidden` on the
+document box, the corners outside the radius are still painted by the window itself, not left transparent — the popup window
+has no transparency to reveal, and Chrome does not clip its own chrome to our radius. The measurement above is the evidence:
+no anti-aliased corner exists anywhere in the capture, at any pixel. So the answer is: **not possible in an MV3 popup.**
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-27` | The reader's Run 10/12 items still unanswered beyond the corners: the palette's reading, the trash glyph against the page editor's drawing (`S14-4`), the checkbox, «nothing else moved». | look |
+| `S14-28` | `test_img/` is an untracked directory the reader created for the screenshot. The capture is the **evidence** for `A146`, so the ruling cites it, but the file is not in the repository: if the directory is cleaned, the measurement above is all that remains — and that is deliberate, because a 12 KB screenshot is not a spec artefact. | docs |
