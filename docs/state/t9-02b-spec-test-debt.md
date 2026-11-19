@@ -27,10 +27,13 @@ is about to be rewritten would be wasted work.
    no `action.default_icon`, no `content_scripts[0].css`) is narrowed in the same edit.
 5. **The mascot circle gets a byte-level pin (the `t9-02` review's blocking finding 1).** `border-radius: 50%` clips the
    mascot to the circle inscribed in its box, so «the whole artwork, the lifebuoy included, survives the frame» is a property
-   of the artwork, and nothing in the repo establishes it. Add an assertion that reads the shipped PNG's pixels (the file is
-   8-bit RGBA, 128×128 — decode it in the test the way `IHDR` is already read) and proves every non-transparent pixel lies
-   inside the inscribed circle. If the artwork does **not** fit, do not edit the PNG and do not weaken the assertion: report
-   it, and the PM rules on the frame instead.
+   of the artwork, and nothing in the repo established it. The PM decoded the shipped PNG with a scratch script outside the
+   repo (2026-11-19): 128×128 8-bit RGBA, **13 054** pixels with alpha ≥ 8, the content bounding box is the full square, the
+   farthest non-transparent pixel sits at radius **64.52**, and **162** non-transparent pixels lie outside the inscribed circle
+   of radius 64 — **none of them above alpha 156**, i.e. they are the artwork's own anti-aliasing, not drawn content. So the
+   claim holds, and the pin must say exactly that: decode the file in the test (the same file the `IHDR` test already reads) and
+   assert that **no pixel with alpha ≥ 200 lies outside the inscribed circle**, and that the count of semi-transparent pixels
+   beyond it stays in the hundreds rather than the tens of thousands. Do not edit the PNG and do not soften the assertion.
 6. **R3 of the `t9-02` review: the spec overstates the contrast mechanism.** `docs/specs/content-overlay-ui.md` says the test
    recomputes the ratio of *every* pair that carries text *from those literals*; the recomputation reads the test's own
    constants and its pair list omits one shipped pair — the field's `#1b2a33` on `#ffffff`. Either add that pair to the list
@@ -69,6 +72,11 @@ half-closed debt slice is worth more than an unfinished one. The `dist/` file co
 | # | Child | Result |
 |---|---|---|
 | — | not launched yet (after `t9-02` acceptance) | — |
+
+## Scratch evidence the PM already holds (so the pin has a target, not a guess)
+
+`/tmp/pngcheck.mjs` (outside the repo, not an artifact): inflated the shipped PNG's `IDAT`, unfiltered the scanlines, walked the
+alpha channel. Numbers above. The test must reach the same conclusion from the same file, in-repo.
 
 ## Explicitly **not** in this slice
 
