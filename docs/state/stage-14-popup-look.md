@@ -543,3 +543,21 @@ open as `S14-42`…`S14-44`; row 3 is a pointer request, row 5 is closed here.
 | `S14-42` | `tests/popup-window-look.spec.ts:113-116` — the file header's «the other **sixteen** stayed green» is right only if the two new cases are excluded; as written it reads like a total, and the file has 18 cases. | test prose |
 | `S14-43` | `tests/popup-window-look.spec.ts:520-522` — the corrected sentence cites `S14-39`/`S14-40`, but `S14-39` is the describe doc comment's row, not this paragraph's. The citation points one row off. | test prose |
 | `S14-44` | `tests/popup-window-look.spec.ts:98-103` — the new «which assertion goes red» row describes the regression in the past tense, as if it had happened, while every other row in the list uses the counterfactual phrasing. | test prose |
+
+## The screenshot stays out of the repository (owner's word, 2026-11-19)
+
+Asked three times whether `test_img/Снимок экрана 2026-11-19 224902.png` should be committed as the first-hand evidence for
+`A146`, the owner answered: **«скрин оставь вне гита. он не нужен»**.
+
+Recorded so the question is not re-opened:
+
+- `test_img/` stays **untracked**, and no spec sentence cites the file.
+- What the repository keeps is the **measurement** — `docs/specs/content-overlay-ui.md:158` carries the numbers (`100 × 264 px`,
+  `66 px` of content, three-line wrapping, square corners at `(96,72)`/`(195,72)`/`(96,335)`/`(195,335)`, no anti-aliased step
+  at `(97,73)`, `(98,74)`, `(99,75)`) and the finding they support, that Chrome draws a popup window as a rectangle and does not
+  clip the document to a `border-radius`.
+- `S14-28` is therefore **closed by decision**, not by adding the file: a 12 KB screenshot is not a spec artefact, and the
+  numbers are what the ruling rests on.
+
+If a future task ever needs to re-derive `A146`, the honest route is to take a fresh screenshot and measure it the same way —
+not to look for a file in `test_img/`, which is a working directory the owner may clean at any time.
