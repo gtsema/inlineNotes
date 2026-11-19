@@ -434,3 +434,38 @@ survived the commit that falsified it.
 | `S14-34` | `docs/state/t14-04-engineer.md` §1.3 claims «**16 cases**, unchanged in count» while the suite has **17** `it(` cases and the frame pins were folded into a pre-existing case. Report accuracy, not code. | docs |
 | `S14-35` | `src/popup/index.html:3-5` — the file header's paragraph still describes `body` as «the box the reader sees», the same framing the spec needs narrowed. Cosmetic, same fix. | source prose |
 | `S14-36` | `src/popup/popup.component.ts:114` calls `2px` «a width the ruling leaves to the PM's default»; `A148` does call it that. Same fact in three places (`S14-29`), no action beyond keeping them in step. | docs |
+
+## t14-04 accepted on attempt 2 (2026-11-19)
+
+Review `f4df7cb4-737b-401e-a265-79383f3f0c75` → **accepted**, no blocking finding. Its answer to the question the whole
+`A144`→`A148` chain turned on: **the spec now agrees with the rulings about who owns the shape** — the **card** (`.popup`,
+`A148`) owns the drawn form (`2px` frame, `12px` radius), the **document box** owns only the paint (`A125` cream and
+`margin: 0`), and the **component** owns the `320px` (`A147`, restoring `A141`).
+
+Final gates on `be790be`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1049 tests / 47 files**; checker 0 —
+**176 info**; `npm run typecheck` 0.
+
+Two ledger rows closed by this attempt (`S14-32` the `box-sizing` rationale, `S14-35` the `index.html` header). The rest stay
+open, and the reviewer added one: the `S14-21` rationale now lives in **three** places (`docs/specs/content-overlay-ui.md:158`,
+`src/popup/index.html:36`, `src/popup/popup.component.ts:114`), so a future re-wording must move all three — ledgered as
+`S14-37`.
+
+### Retro, the `A144`→`A148` chain
+
+- **Four shape rulings in one stage, and the first three were each written before the reader had seen the previous one
+  rendered.** `A144` removed a frame the reader wanted, `A145` moved a shape to a box that cannot carry it, `A146` measured
+  that the window cannot be rounded, and `A148` put the frame back **thicker**. The cost was three tasks; the cause was ruling
+  a visual claim without a screenshot in hand. `A146` is the first ruling in the chain that rests on a measurement, and it is
+  the one that ended the guessing.
+- **A screenshot is evidence, and it should be decoded rather than described.** The PM read the reader's PNG pixel by pixel:
+  the surface was `100 × 264 px` with `66 px` of content, the text wrapped three times, and the corners had no anti-aliased
+  step. Every one of those numbers came from the file, and two of them settled arguments that prose had been losing for two
+  tasks.
+- **The PM's own ruling caused the regression it then had to revert.** `A145`'s «the width moves with the surface» put
+  `width: 100%` on `body`, which in a popup resolves against a narrow initial containing block. The measurement caught it; the
+  wording did not. A geometry claim deserves the same treatment as a sight: measure before ruling.
+- **The same defect class appeared six times in Stage 14** — a sentence outliving the artifact it described: `A126`'s hash in
+  Stage 11, then «names none of the three», then «exactly `cat-mascot.png`», then the `A143` control sentences, then the
+  `A145` shape narration, and finally the two clauses about the document box. Each was caught by a reviewer reading the spec,
+  never by a test, because **no test reads a spec sentence**. The durable fix is not more care in prose: it is that a ruling
+  which changes an artifact must name the sentences it falsifies, in the same commit, as a checklist item.
