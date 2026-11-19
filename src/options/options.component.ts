@@ -48,6 +48,13 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
  * a file, reads a dimension of the PNG, or adds a storage read: the image reaches
  * the page as a relative URL the build's copied asset answers, which is why there
  * is no `data:` URI, no remote URL and no `web_accessible_resources` entry.
+ *
+ * The arrangement of `t12-01` (`A134`, `A135`, `A136`) is layout only: `.header` lays
+ * the mascot and the title out as a **centred column** (the art first, the title under
+ * it), and the `name explanation line` is a **parenthetical in italics** on the
+ * `label-line` of the `author-name field`, right after the `Имя` label. Both brackets
+ * and the italics are this template and this stylesheet; `OPTIONS_STRINGS.nameHint`
+ * keeps its wording, so `src/options/text.ts` is untouched (`A136`).
  */
 @Component({
   selector: 'app-root',
@@ -59,9 +66,10 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         <h1 class="title">{{ title }}</h1>
       </header>
 
-      <p class="hint">{{ nameHint }}</p>
-
-      <label class="label" for="author-name">{{ nameLabel }}</label>
+      <p class="label-line">
+        <label class="label" for="author-name">{{ nameLabel }}</label>
+        <span class="hint">({{ nameHint }})</span>
+      </p>
       <input
         class="input"
         id="author-name"
@@ -114,6 +122,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
 
     .header {
       display: flex;
+      flex-direction: column;
       align-items: center;
       gap: 12px;
       margin: 0 0 8px;
@@ -136,14 +145,17 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       font-weight: 600;
     }
 
-    .hint {
-      margin: 0 0 12px;
-      color: #7b6a55;
+    .label-line {
+      margin: 0 0 4px;
     }
 
     .label {
-      display: block;
-      margin-bottom: 4px;
+      display: inline;
+    }
+
+    .hint {
+      font-style: italic;
+      color: #7b6a55;
     }
 
     .input {

@@ -101,10 +101,18 @@ const TEXT_PAIRS: [string, string, string][] = [
  * shipped stylesheet has to join this table before the pair recomputation will accept
  * it, which is what keeps the pair list from drifting behind the stylesheet
  * (`t9-02` review remark R3, closed by `t9-02b` AC6).
+ *
+ * `t12-01` AC8 moved part of this map. `.hint` used to be the `<p class="hint">` under the
+ * header and is now the parenthetical on the label line; it keeps the `A125` ink it always
+ * carried, so its row stays, and the rule the change adds — `.label-line`, which paints the
+ * label line's text — joins it. Both are read on the card, so both name `.options`. No row is
+ * dropped: `.options`, `.counter`, `.input`, `.save` and the two message rules keep the rows
+ * they had.
  */
 const TEXT_ROLE_BACKGROUND: Record<string, string> = {
   '.options': ':host',
   '.hint': '.options',
+  '.label-line': '.options',
   '.counter': '.options',
   '.input': '.input',
   '.save': '.save',
@@ -741,20 +749,41 @@ describe('the build copies the asset and fails without it (t9-02 AC2)', () => {
   });
 });
 
-describe('the header (t9-02 AC3, ruling A124)', () => {
+describe('the header (t9-02 AC3, ruling A124; the centred column of t12-01 AC1, ruling A134)', () => {
   const styles = componentStyles(join('src', 'options', 'options.component.ts'));
   // The stripped read of the same stylesheet, for the presence claims below (`t10-02` AC8).
   const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
   const template = componentTemplate(join('src', 'options', 'options.component.ts'));
 
-  it('renders the mascot in the header, next to the existing title', () => {
+  it('renders the mascot as the header first child and the title as its second, each on its own line and both centred', () => {
     const header = /<header class="header">([\s\S]*?)<\/header>/.exec(template);
     if (header === null) {
       throw new Error('the options template has no header element');
     }
+    // The children of the header, in shipped order: the artwork, then the title. Both
+    // are direct elements of the header and nothing else sits between them, which is the
+    // containment and order claim that outlives the row arrangement (`t12-01` AC1).
+    const children = [...(header[1] as string).matchAll(/<(img|h1)\b[^>]*>/g)].map(
+      (match) => match[1] as string,
+    );
+    expect(children).toEqual(['img', 'h1']);
     expect(header[1]).toMatch(/<img class="mascot" src="assets\/cat-mascot\.png" alt="" \/>/);
     expect(header[1]).toMatch(/<h1 class="title">\{\{ title \}\}<\/h1>/);
     expect(header[1].indexOf('class="mascot"')).toBeLessThan(header[1].indexOf('class="title"'));
+
+    // Each on its own line: the header is a **column** (`A134`), so the two are stacked
+    // and not laid side by side; `align-items: center` puts both on the window's
+    // horizontal axis, and no `justify-content` is needed or declared to do it.
+    const headerCode = ruleBody(stylesCode, '.header');
+    expect(headerCode).toMatch(/display: flex/);
+    expect(headerCode).toMatch(/(?:^|;)\s*flex-direction:\s*column;/);
+    expect(headerCode).not.toMatch(/flex-direction:\s*row/);
+    expect(headerCode).toMatch(/(?:^|;)\s*align-items:\s*center;/);
+    // The gap that separated the two in the row is the same 12 px, now vertical, and the
+    // header's own bottom margin is unchanged (`t12-01` AC4, answer `Q2`).
+    expect(headerCode).toMatch(/(?:^|;)\s*gap:\s*12px;/);
+    expect(headerCode).toMatch(/(?:^|;)\s*margin:\s*0 0 8px;/);
+
     // The art carries no information, so it stays out of the accessibility tree
     // rather than gaining a second Russian string (AC4 allows exactly one).
     expect(header[1]).toMatch(/alt=""/);
@@ -1286,8 +1315,12 @@ describe('the page fills the Chrome dialog box (t9-02 AC7, ruling A124)', () => 
   });
 });
 
-describe('the field, the counter, the button and the message line (t9-02 AC6)', () => {
+describe('the field, the counter, the button and the message line (t9-02 AC6; the label line of t12-01 AC5, AC7; `A135`)', () => {
   const template = componentTemplate(join('src', 'options', 'options.component.ts'));
+  const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
+
+  /** The one `label-line` element of the shipped template, tag and contents whole. */
+  const labelLine = /<p class="label-line">([\s\S]*?)<\/p>/.exec(template)?.[1];
 
   it('renders the same controls with the same bindings as before the look landed', () => {
     expect(template).toMatch(/<label class="label" for="author-name">\{\{ nameLabel \}\}<\/label>/);
@@ -1298,8 +1331,59 @@ describe('the field, the counter, the button and the message line (t9-02 AC6)', 
     expect(template).toMatch(/<button class="save" type="button" \[disabled\]="!draft\(\)\.canSave" \(click\)="onSave\(\)">/);
     expect(template).toMatch(/@if \(view\(\)\.message !== null\) \{/);
     expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
-    // The look adds one explanation line and nothing else to the surface.
-    expect(template).toMatch(/<p class="hint">\{\{ nameHint \}\}<\/p>/);
+  });
+
+  /**
+   * The shape `t12-01` AC5 gives the `name explanation line` (`A135`): it is no longer a
+   * paragraph of its own under the header, but a **parenthetical in italics** on the label
+   * line, one space after `Имя`, and the field still comes immediately under that line. The
+   * count of the label and of the input stays one each — that half of the old pin is kept
+   * verbatim — and the wording stays in `src/options/text.ts`: the brackets and the italics
+   * are the template's and the stylesheet's (`A136`), so `nameHint` is interpolated bare.
+   */
+  it('renders the name explanation line as an italic parenthetical on the label line, not as a paragraph of its own', () => {
+    if (labelLine === undefined) {
+      throw new Error('the options template has no `label-line` element');
+    }
+
+    // One label element and one input element, as before, and the input comes after the
+    // label line, immediately (answer `Q4`).
+    expect(template.match(/<label\b/g) ?? []).toHaveLength(1);
+    expect(template.match(/<input\b/g) ?? []).toHaveLength(1);
+    expect(template.indexOf('class="label-line"')).toBeLessThan(template.indexOf('<input'));
+    expect(template.indexOf('</p>', template.indexOf('class="label-line"'))).toBeLessThan(
+      template.indexOf('<input'),
+    );
+
+    // The label line carries the label and the parenthetical, in that order, separated by
+    // one space and nothing else in between: `Имя (Это имя подписывает каждую заметку)`.
+    expect(labelLine).toMatch(/^\s*<label class="label" for="author-name">\{\{ nameLabel \}\}<\/label>\s/);
+    expect(labelLine).toMatch(/\s<span class="hint">\(\{\{ nameHint \}\}\)<\/span>\s*$/);
+    // The rendered text of the line is the label, one space, then the bracketed sentence.
+    const rendered = labelLine
+      .replaceAll(/\(\{\{ nameHint \}\}\)/g, `(ЭТО_ИМЯ)`)
+      .replaceAll(/\{\{ nameLabel \}\}/g, 'ИМЯ')
+      .replaceAll(/<[^>]+>/g, '')
+      .replaceAll(/\s+/g, ' ')
+      .trim();
+    expect(rendered).toBe('ИМЯ (ЭТО_ИМЯ)');
+
+    // And it is a parenthetical and italics, owned by presentation: the brackets sit in the
+    // markup around the interpolation, never inside the string — which is why the string's
+    // own pin below can stay verbatim (`A136`).
+    expect(OPTIONS_STRINGS.nameHint).toBe('Это имя подписывает каждую заметку');
+    expect(OPTIONS_STRINGS.nameHint).not.toMatch(/[()]/);
+    expect(labelLine).not.toMatch(/\(\(/);
+    expect(ruleBody(stylesCode, '.hint')).toMatch(/(?:^|;)\s*font-style:\s*italic;/);
+    // The hint has left the header: nothing above the label line mentions it, and no
+    // `<p class="hint">` remains anywhere in the template.
+    expect(template).not.toMatch(/<p class="hint"/);
+    expect(template.indexOf('class="hint"')).toBeGreaterThan(template.indexOf('</header>'));
+    expect(ruleBody(stylesCode, '.hint')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
+    // The label line is the element that owns the space under the label, so the input keeps
+    // the 4 px it always had (`Q4`).
+    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
+    expect(ruleBody(stylesCode, '.label')).toMatch(/display: inline/);
   });
 
   /**
