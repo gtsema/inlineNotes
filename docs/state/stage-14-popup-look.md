@@ -524,3 +524,22 @@ right, and the prose is wrong again.
 
 The seventh instance of the class, and the **first one the reviewer found in a test file rather than a spec**. The pattern has
 not changed: a sentence describing the code survives the commit that changes the code, and no test reads a sentence.
+
+## t14-05 accepted on attempt 2 (2026-11-19)
+
+Review `0ca4baed-3300-4bb4-8c68-31d472ed6035` → **accepted**, no blocking finding. Its one line: the test file's prose now
+matches the shipped rules — `:host` declares `display: block` and exactly one geometry, the `4px` inset, and the paragraph
+says so while keeping the card as the one box that sizes and frames itself. It also noted the sentence now agrees with the
+spec's counterpart at `docs/specs/content-overlay-ui.md:163`.
+
+Final gates on `45ff3e1`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 — **1051 tests / 47 files**; checker 0 —
+**176 info**; `npm run typecheck` 0. `expect(` count verified by the PM at **152 before and after**, `it(` at 18.
+
+`S14-39`, `S14-40` and `S14-41` are **answered and closed** by this attempt. The reviewer's rows 1, 2 and 4 are new and stay
+open as `S14-42`…`S14-44`; row 3 is a pointer request, row 5 is closed here.
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-42` | `tests/popup-window-look.spec.ts:113-116` — the file header's «the other **sixteen** stayed green» is right only if the two new cases are excluded; as written it reads like a total, and the file has 18 cases. | test prose |
+| `S14-43` | `tests/popup-window-look.spec.ts:520-522` — the corrected sentence cites `S14-39`/`S14-40`, but `S14-39` is the describe doc comment's row, not this paragraph's. The citation points one row off. | test prose |
+| `S14-44` | `tests/popup-window-look.spec.ts:98-103` — the new «which assertion goes red» row describes the regression in the past tense, as if it had happened, while every other row in the list uses the counterfactual phrasing. | test prose |
