@@ -24,7 +24,10 @@
  *   module of `src/content/`, no module sets a tab index or intercepts `Tab`, and the
  *   icon-only `action row` stayed inside the page widgets — `src/popup/` and
  *   `src/options/` carry no inline glyph and keep their Russian words. The rendered half
- *   of the same acceptance lives in `tests/content-card-actions.spec.ts`.
+ *   of the same acceptance lives in `tests/content-card-actions.spec.ts`. The popup's own
+ *   icon-only delete control is **not** an exception to this pin but a later ruling on a
+ *   different surface: task `t14-01` / ruling `A143` gave `src/popup/` one inline glyph of
+ *   its own, and that pin now names the one file instead of asserting an empty list.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -374,22 +377,40 @@ describe('the refusal wording is one total map (A33, A47)', () => {
     expect(contentFilesMatching(/key\s*===\s*['"]Tab['"]/)).toEqual([]);
   });
 
-  it('kept the icon-only row inside the page widgets, and the extension words intact (A114)', () => {
-    // The popup and the options page were explicitly out of scope: their buttons keep
-    // their words, so an inline glyph or the shared glyph class appearing there is a
-    // scope violation, not a style choice.
-    for (const dir of ['src/popup', 'src/options']) {
-      const files = shippedContentFilesAt(path.join(ROOT, dir));
-      expect(files.length).toBeGreaterThan(0);
-      const offenders = files
+  it('kept the icon-only row inside the page widgets, and the extension words intact (A114; one popup glyph since A143, t14-01)', () => {
+    // The popup and the options page were out of scope for `A114`: their buttons kept
+    // their words, so an inline glyph or the shared glyph class appearing there was a
+    // scope violation, not a style choice. Ruling `A143` (task `t14-01`) moved exactly one
+    // control of `src/popup/` into the icon-only shape, so the popup half now names the
+    // one file that carries the glyph instead of asserting an empty list — the pin is
+    // narrowed to a fact, not deleted. `src/options/` keeps the empty list.
+    const popupFiles = shippedContentFilesAt(path.join(ROOT, 'src', 'popup'));
+    expect(popupFiles.length).toBeGreaterThan(0);
+    expect(
+      popupFiles
         .filter((file) => codeOnly(file).includes('<svg'))
-        .map((file) => toPosix(path.relative(ROOT, file)));
-      expect(offenders).toEqual([]);
-      const glyphOffenders = files
+        .map((file) => toPosix(path.relative(ROOT, file))),
+    ).toEqual(['src/popup/popup.component.ts']);
+    // The page widget's glyph class is still not reused by the popup: `S14-4` accepts a
+    // second drawing, not a shared class borrowed across the layer boundary.
+    expect(
+      popupFiles
         .filter((file) => codeOnly(file).includes('CARD_ICON_CLASS'))
-        .map((file) => toPosix(path.relative(ROOT, file)));
-      expect(glyphOffenders).toEqual([]);
-    }
+        .map((file) => toPosix(path.relative(ROOT, file))),
+    ).toEqual([]);
+
+    const optionsFiles = shippedContentFilesAt(path.join(ROOT, 'src', 'options'));
+    expect(optionsFiles.length).toBeGreaterThan(0);
+    expect(
+      optionsFiles
+        .filter((file) => codeOnly(file).includes('<svg'))
+        .map((file) => toPosix(path.relative(ROOT, file))),
+    ).toEqual([]);
+    expect(
+      optionsFiles
+        .filter((file) => codeOnly(file).includes('CARD_ICON_CLASS'))
+        .map((file) => toPosix(path.relative(ROOT, file))),
+    ).toEqual([]);
     // The words themselves are still the words of those surfaces, pinned as literals so
     // this pin does not import a second layer into the content boundary file.
     const popupText = readFileSync(path.join(ROOT, 'src', 'popup', 'text.ts'), 'utf8');

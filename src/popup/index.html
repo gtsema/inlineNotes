@@ -3,6 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title>inlineNotes</title>
+    <!--
+      The only rule this document owns, the same one `src/options/index.html` owns: the
+      card fills the toolbar panel from edge to edge, and the body's default margin is the
+      one thing between the card and that panel (task `t14-01`, answer `Q1`, ruling
+      `A141`). The palette and every other visual rule live in the component stylesheet,
+      not here.
+    -->
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <app-root></app-root>

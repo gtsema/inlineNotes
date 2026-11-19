@@ -34,6 +34,13 @@ import { MemoryStoragePort, indexValue, slotValue, storedEntry, storedIndexOf } 
  * `t5-06` (AC1-AC10 of that card): one row per **author** of the page, one aggregate
  * checkbox and one `Удалить` per row, each of them **one** core call.
  *
+ * `t14-01` (`A143`) turned that control icon-only: the word is the button's `aria-label`
+ * and `title` and no longer its visible text. The assertions about the group write are
+ * behaviour and did not move with it; only the two describe titles that named the
+ * labelled button were restated, because a title naming an artifact that no longer prints
+ * a word is the defect class this repository keeps catching. The accessible-name half is
+ * pinned in `tests/popup-window-look.spec.ts`, which reads the popup's template.
+ *
  * Everything here runs against the in-memory port and a fake active-tab read, because
  * the popup owns no rule of its own: `PageEntriesService` is the wiring of
  * `loadSettings` / `loadEntries` / `setVisibleForAuthor` / `deleteEntriesOfAuthor` /
@@ -498,7 +505,7 @@ describe('AC2 the aggregate checkbox writes the visibility of a whole author gro
   });
 });
 
-describe('AC3 a foreign row is marked foreign and keeps `Удалить`', () => {
+describe('AC3 a foreign row is marked foreign and keeps its group delete', () => {
   it('marks ownership by the header word and the row class, never by a new sentence (`A82`)', async () => {
     const f = fixture({
       records: [
@@ -709,7 +716,7 @@ describe('AC4 the states that are not a list', () => {
   });
 });
 
-describe('AC5 the group `Удалить` removes the row immediately', () => {
+describe('AC5 the group delete removes the row immediately', () => {
   /** Two records of the reader, one of `vasya`, one of `petya`, in creation order. */
   const four = (): unknown[] => [
     storedEntry({ id: 'aaa1a1a1a1a1', authorName: OWN_NAME, createdAt: '2026-01-01T00:00:00.000Z' }),

@@ -49,7 +49,9 @@ export const POPUP_STRINGS = {
   notInjectable: 'На этой странице подсветка недоступна',
   /** Ownership header of the reader's own row (ruling `A82`). */
   ownEntry: 'Вы',
-  /** Row delete control, present for every row of the page (ruling `A25`). */
+  /** Row delete control, present for every row of the page (ruling `A25`). Since `t14-01`
+   * (ruling `A143`) the button prints no word: this string is its `aria-label` **and**
+   * its `title`, which is the accessible name of an icon-only control. */
   delete: 'Удалить',
 } as const;
 

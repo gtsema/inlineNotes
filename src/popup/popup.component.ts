@@ -31,8 +31,28 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
 );
 
 /**
+ * The hit box of the row's delete button, in CSS pixels (task `t14-01`, answer `Q5`,
+ * ruling `A143`): the same `24px` the page widgets declare as `ACTION_HIT_BOX_PX`, so
+ * the icon-only shape matches across surfaces. The box is a named constant because the
+ * control carries no visible label any more and the declared box is the only thing
+ * that keeps it pressable; a test reads the stylesheet **text** for it, which is the
+ * only way to pin a size that no rendered attribute states.
+ */
+export const POPUP_DELETE_HIT_BOX_PX = 24;
+
+/** The glyph drawn inside that box, smaller than the box on purpose (answer `Q5`). */
+export const POPUP_DELETE_ICON_PX = 16;
+
+/**
+ * The coordinate space the glyph is drawn in; it scales into `POPUP_DELETE_ICON_PX`.
+ * The `viewBox` is the one `src/content/overlay/action-icons.tsx` uses, because the two
+ * drawings are the same drawing (ledger row `S14-4`).
+ */
+const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
+
+/**
  * Popup (`t4-01-popup-list`, reshaped by `t5-06`): the authors of the current page,
- * one row each, with one show/hide checkbox and one `Удалить` per row.
+ * one row each, with one show/hide checkbox and one icon-only delete button per row.
  *
  * The component is a facade, in the shape `t4-02` set for the options page: it owns
  * signals, two click handlers and the wording lookup, and every decision — which page,
@@ -43,11 +63,25 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
  * The row is the popup contract sentence of rulings `A95` and `A108`: the `author row`
  * label (`ownership header` + ` — ` + the entry count, ruling `A82` for the word), one
  * checkbox whose state is the **aggregate** of that author's `visibility flag`s, and one
- * `Удалить` that takes every entry of that author on this page. Both handlers pass the
- * row's `authorName` to the service, which answers with exactly one core call: there is
- * no id in a row to loop over, and no per-entry write is imported by this layer. There
+ * delete button that takes every entry of that author on this page. Both handlers pass
+ * the row's `authorName` to the service, which answers with exactly one core call: there
+ * is no id in a row to loop over, and no per-entry write is imported by this layer. There
  * is no edit affordance and no expansion on this surface at all: no textarea, no
  * `Сохранить`, no list of the author's notes, and the service imports no comment write.
+ *
+ * Since `t14-01` (ruling `A143`) the delete control is **icon-only**, in the shape the
+ * page widgets' `action row` has carried since `A114`: its only child is an inline
+ * `<svg>`, the Russian word `Удалить` moved from visible text to `aria-label` and
+ * `title`, and the glyph is `aria-hidden` so a screen reader hears one name per control.
+ * The behaviour did not move with the word: one press is still exactly one core
+ * `deleteEntriesOfAuthor` for the whole author group (`A25`, `A108`).
+ *
+ * The look of this document is the closed `A125` palette in the settings card's shape
+ * (`A140`, `A141`, `t14-01`): cream surface, `#1b2a33` ink, `#7b6a55` secondary,
+ * `#a6cbdc` decorative, `#b3261e` refusal kept from before `A125`, and the `#b8480d`
+ * action colour on the checkbox. The shape is shared with `src/options/`, the width is
+ * not: the panel is `320px` (a toolbar popup), the settings card is `360px` (a dialog
+ * box). No colour is invented here, and no mascot is drawn (`A142`).
  *
  * The notices of ruling `A83` are rendered **above** the list and the list still
  * renders below them, because stored entries that become invisible are stored entries
@@ -92,8 +126,31 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
                 />
                 <span class="author">{{ labelOf(row) }}</span>
               </label>
-              <button class="delete" type="button" (click)="onRemove(row.authorName)">
-                {{ deleteLabel }}
+              <button
+                class="delete"
+                type="button"
+                [attr.aria-label]="deleteLabel"
+                [attr.title]="deleteLabel"
+                (click)="onRemove(row.authorName)"
+              >
+                <svg
+                  [attr.width]="deleteIconPx"
+                  [attr.height]="deleteIconPx"
+                  [attr.viewBox]="deleteIconViewBox"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M4.5 7 L19.5 7" />
+                  <path d="M9.5 7 L9.5 4.5 L14.5 4.5 L14.5 7" />
+                  <path d="M6.5 7 L7.5 19.5 L16.5 19.5 L17.5 7" />
+                  <path d="M10 10.5 L10 16.5" />
+                  <path d="M14 10.5 L14 16.5" />
+                </svg>
               </button>
             </li>
           }
@@ -102,16 +159,25 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
     </main>
   `,
   styles: `
+    :host {
+      display: block;
+      background: #fdf7ee;
+    }
+
     .popup {
       width: 320px;
-      padding: 12px;
+      box-sizing: border-box;
+      padding: 16px;
+      border: 1px solid #a6cbdc;
+      border-radius: 12px;
+      background: #fdf7ee;
       font: 13px/1.45 system-ui, sans-serif;
-      color: #1f1f1f;
+      color: #1b2a33;
     }
 
     .title {
-      margin: 0 0 4px;
-      font-size: 14px;
+      margin: 0 0 8px;
+      font-size: 15px;
       font-weight: 600;
     }
 
@@ -143,11 +209,15 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       align-items: center;
       gap: 8px;
       padding: 4px 0;
-      border-top: 1px solid #e3e3e3;
+      border-top: 1px solid #a6cbdc;
+    }
+
+    .row:first-child {
+      border-top: 0;
     }
 
     .row--foreign .author {
-      color: #6b6b6b;
+      color: #7b6a55;
     }
 
     .toggle {
@@ -156,6 +226,17 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       align-items: center;
       gap: 6px;
       min-width: 0;
+      font-size: 13px;
+    }
+
+    .toggle input[type='checkbox'] {
+      flex: none;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      border: 1px solid #a6cbdc;
+      border-radius: 3px;
+      accent-color: #b8480d;
     }
 
     .author {
@@ -165,13 +246,32 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
     }
 
     .delete {
+      display: inline-flex;
       flex: 0 0 auto;
-      padding: 2px 8px;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: #b8480d;
+      cursor: pointer;
+    }
+
+    .delete svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
     }
 
     .empty {
       margin: 0;
-      color: #6b6b6b;
+      color: #7b6a55;
     }
   `,
 })
@@ -184,6 +284,31 @@ export class PopupComponent implements OnInit {
   readonly title: string = POPUP_STRINGS.title;
   readonly emptyState: string = POPUP_STRINGS.emptyState;
   readonly deleteLabel: string = POPUP_STRINGS.delete;
+
+  /**
+   * The delete glyph's box, as an attribute: `POPUP_DELETE_ICON_PX` in px. The number is
+   * `24` and the box is `16`, so this is the smaller of the two.
+   */
+  readonly deleteIconPx: string = String(POPUP_DELETE_ICON_PX);
+
+  /**
+   * The glyph's coordinate space, as an attribute. Both this glyph and
+   * `DeleteActionIcon` of the page editor are drawn in `0 0 24 24`; the icon scales into
+   * `POPUP_DELETE_ICON_PX`.
+   *
+   * **Why this glyph is declared here instead of imported** (ledger row `S14-4`, ruling
+   * `A143`, task `t14-01` AC10): the drawing already exists once, as `DeleteActionIcon`
+   * in `src/content/overlay/action-icons.tsx`. That module is **Preact**, it lives under
+   * `src/content/`, and this surface is an **Angular** standalone component with no
+   * cross-layer import: `tests/toolchain-contract.spec.ts` pins the layer boundary and
+   * `tests/content-create-card-boundaries.spec.ts` pins that no module under `src/popup/`
+   * carries an inline glyph belonging to the page widgets — which `t14-01` AC4 changes for
+   * this one control, by its own ruling. So the shape is re-declared in the popup's own
+   * idiom and the duplication is stated here, at the declaration, instead of being
+   * discovered later as a drifting copy. Nothing pins that the two drawings stay the same
+   * shape; that is the debt `S14-4` carries.
+   */
+  readonly deleteIconViewBox: string = POPUP_DELETE_ICON_VIEW_BOX;
 
   ngOnInit(): void {
     void this.apply(this.service.open());
@@ -217,8 +342,10 @@ export class PopupComponent implements OnInit {
   }
 
   /**
-   * `Удалить` of the row: **one** core `deleteEntriesOfAuthor` through the service, for
-   * every entry of this author on this page, own or foreign (rulings `A25`, `A108`).
+   * The delete control of a row: **one** core `deleteEntriesOfAuthor` through the
+   * service, for every entry of this author on this page, own or foreign (rulings `A25`,
+   * `A108`). Ruling `A143` moved the word `Удалить` from this control's visible text to
+   * its `aria-label` and `title`; the call below is exactly the one it made before.
    */
   onRemove(authorName: string): void {
     void this.apply(this.service.removeAllOfAuthor(authorName));
