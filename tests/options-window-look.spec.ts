@@ -860,14 +860,23 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
     // `<img class="mascot" style="box-sizing: border-box">` puts the 2 px frame inside the
     // 80 px image box (the reading ruling `A127` states) with every stylesheet pin green.
     // The scan cannot see that shape, so the shape is pinned absent instead.
+    // `t10-02c`: the assertion over the **shipped** element runs through
+    // `carriesInlineStyle`, the same reader the binding counterfactuals below use, not through
+    // the literal `style=`. The literal saw one of the four shapes Angular ships an inline style
+    // in, so the pin that reads the real template was blind to `[style.box-sizing]`,
+    // `[style]` and `[attr.style]` on `src/options/options.component.ts:58` while three
+    // hand-typed fixtures went red. The decoy case below (`t10-02c` case 2) is the guard against
+    // a future narrowing of this line: it reads a hand-typed `[style.box-sizing]` mascot
+    // element through the same helper, so trading the helper back for a literal turns that case
+    // red in the same commit.
     const template = componentTemplate(join('src', 'options', 'options.component.ts'));
-    expect(mascotElement(template)).not.toMatch(/[\s]style\s*=/i);
+    expect(carriesInlineStyle(mascotElement(template)), template).toBe(false);
 
     // The pin is not vacuous and does not depend on attribute order: the reader hands back
     // the same element when the declaration sits in front of `class`.
     const counterfactual =
       '<img style="box-sizing: border-box" class="mascot" src="assets/cat-mascot.png" alt="" />';
-    expect(mascotElement(counterfactual)).toMatch(/[\s]style\s*=/i);
+    expect(carriesInlineStyle(mascotElement(counterfactual)), counterfactual).toBe(true);
 
     // The same outranking declaration in the two Angular shapes the literal `style=` could not
     // see (`t10-02` AC9b, closing debt row `S10-12`): a property binding on the style property
@@ -890,6 +899,30 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
     ]) {
       expect(carriesInlineStyle(mascotElement(innocent)), innocent).toBe(false);
     }
+  });
+
+  it('keeps the shipped absence pin on the widened reader, not on the literal `style=`', () => {
+    // `t10-02c`. The case above reads the **shipped** template through whatever reader its
+    // assertion was written with, and attempt 2 left that assertion on the literal `style=`
+    // while only widening a fixture helper: `[style.box-sizing]="'border-box'"` on
+    // `src/options/options.component.ts:58` moved the frame (ruling `A127`: the 2 px frame then
+    // paints inside the 80 px image box) with the pin that reads the real element green. The
+    // shipped line now calls `carriesInlineStyle`, and this case is the decoy that keeps it
+    // there: a hand-typed mascot element carrying the shape is handed to the **same helper the
+    // shipped assertion uses**, so narrowing the shipped line back to a literal is a change the
+    // diff shows as a red test, not as a silently re-tightened line.
+    const decoy =
+      '<img class="mascot" [style.box-sizing]="\'border-box\'" src="assets/cat-mascot.png" alt="" />';
+    expect(carriesInlineStyle(mascotElement(decoy)), decoy).toBe(true);
+
+    // The same reader, the same element shape, and the shipped tree's own answer one helper
+    // call away: this is the assertion the case above makes over `src/options/`, restated here
+    // on a fixture so the two cannot drift apart without a red.
+    const shipped = componentTemplate(join('src', 'options', 'options.component.ts'));
+    const pinned = mascotElement(
+      '<img class="mascot" alt="" src="assets/cat-mascot.png" />',
+    );
+    expect(carriesInlineStyle(mascotElement(shipped))).toBe(carriesInlineStyle(pinned));
   });
 
   it('reads a commented-out declaration of the component stylesheet instead of stripping it', () => {

@@ -77,6 +77,24 @@ assertions were added beside them: three counterfactuals (one per binding shape)
 and two innocent elements (attributes reordered; an attribute *value* containing the word `style`)
 answer `false`, so the widened scan cannot be satisfied by a matcher that fires on everything.
 
+> **Correction (`t10-02c`, engineer, 2026-11-19).** The paragraph above is wrong about where the
+> widening landed, and that is exactly why the defect survived attempt 2. Only the **fixture
+> helper** was widened: the assertion that reads the **shipped** template stayed the literal
+> `expect(mascotElement(template)).not.toMatch(/[\s]style\s*=/i)`. So the three binding shapes
+> were exercised on hand-typed strings only, and `[style.box-sizing]="'border-box'"` on the real
+> mascot element (`src/options/options.component.ts:58`) left the pin that reads the real element
+> **green**. The `M4` row below is not evidence of the shipped pin: the literal reader answers
+> `false` for a `[style.x]` spell out, so reducing the helper to the literal branch also reddened
+> this case. `N4` in the PM's log reddened the *neighbouring* case *"renders the mascot in the
+> header, next to the existing title"* (its exact `toMatch` over the `<img … />` tag), not the
+> absence pin — which is the second reason the hole survived. The shipped assertion now calls
+> `carriesInlineStyle` (`t10-02c` case *"keeps the shipped absence pin on the widened reader, not
+> on the literal `style=`"*, whose decoy is a hand-typed `[style.box-sizing]` element read by the
+> same helper). The claim is therefore true of the **current** tree, not of `01354da` as shipped:
+> at `01354da` the four shapes were pinned on fixtures and the shipped element was pinned against
+> `style=` alone. This note corrects the claim rather than the history; the body above is left as
+> written.
+
 ## 5. AC 9c, 9d, 9e
 
 * **9c** — `liveExportedFunctionNames` + `SUPPORT_MODULE_EXPORTED_NAMES` pin the support module's
@@ -194,3 +212,15 @@ Staged files: none (`git diff --cached --name-only` → empty). `git diff --quie
    is not justified by this slice; the risk is stated instead.
 7. The two accepted AC 3 inline-style assertions were **not** rewritten; the binding-shape
    assertions were added beside them, so the pin set is a strict superset of the accepted one.
+
+## Correction (t10-02c)
+
+This report overstates AC 9b in section 4 and in note 7, and the overstatement is the defect
+`t10-02c` closes. Read section 4 with the correction note now printed there: at `01354da` only the
+fixture helper `carriesInlineStyle` was widened, while the assertion reading the **shipped**
+template stayed the literal `not.toMatch(/[\s]style\s*=/i)`. The four shapes were pinned on
+hand-typed strings only, so `[style.box-sizing]="'border-box'"` on the real mascot element
+(`src/options/options.component.ts:58`) moved the frame with that pin green. Committed in
+`t10-02c`: the shipped assertion now calls the widened reader, and a decoy case reads a hand-typed
+`[style.box-sizing]` element through the same helper, so a future narrowing of the shipped line is
+visible in the diff. Full evidence in `docs/state/t10-02c-engineer.md`.
