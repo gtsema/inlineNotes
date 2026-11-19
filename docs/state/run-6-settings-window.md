@@ -19,8 +19,8 @@ found no `inlineNotes`). Run 6 needs either the user's Chrome reloaded by hand, 
    the same claim, and it is also what `A127` means in practice (80 px image, 84 px painted).
 4. **The name loop still works from the window.** Type a name → `Сохранить` becomes enabled → the confirmation line appears in
    the accent color → reload a page, open the popup, the name is in effect. Then set the name to spaces only and record that
-   `Сохранить` is disabled and what «disabled» looks like — this is the sight the pending `A127`-adjacent ruling on the
-   disabled state needs.
+   `Сохранить` is disabled and what «disabled» looks like — this is the sight ruling **`A128`** (pending the user's word, see
+   `docs/state/stage-9-review-debt.md` D5) needs.
 5. **The popup entry still leads here.** With an empty name, the popup line «Укажите имя в настройках» still opens the same
    window (`A122`).
 6. **The explanation line reads right.** «Это имя подписывает каждую заметку» — the user's own words on whether it answers the

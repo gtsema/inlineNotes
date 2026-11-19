@@ -71,7 +71,10 @@ half-closed debt slice is worth more than an unfinished one. The `dist/` file co
 
 | # | Child | Result |
 |---|---|---|
-| — | not launched yet (after `t9-02` acceptance) | — |
+| 1 | `extension-engineer` `4ef94a1c-8d35-463d-9cc5-53a7ea4da78e` | **the slice shipped** as `4c49f8a` (4 files, +639/−11), then the session died while writing its report — an overlapping `edit` call after a compaction. Gates green at the commit. |
+| 1b | resume `a178fe87-85c4-43ef-b118-c3809bf703df` | died on infrastructure (`verify: layer 7 never rang — an illegal memory access`). No repo change. |
+| 1c | `extension-engineer` `7ab60f23-52e4-437e-a0cc-3bb27c567283` | fresh session, verification-only: re-read the commit, re-ran the four gates, produced the report. Routed it to its run directory instead of the repo; the PM copied it to `docs/state/t9-02b-engineer.md`. |
+| 2 | `code-reviewer` `86487d90-c468-4013-9dd7-e30d56f9b5a2` | **accepted**, no blocking finding, 8 remarks — `docs/state/t9-02b-review.md` |
 
 ## Scratch evidence the PM already holds (so the pin has a target, not a guess)
 
@@ -82,16 +85,33 @@ alpha channel. Numbers above. The test must reach the same conclusion from the s
 
 The disabled `Сохранить` state (`.save:disabled { opacity: 0.45 }`) puts the label near 1.4:1 against its own button. WCAG
 1.4.3 exempts inactive controls, so no rule breaks and no AC fails, but `A125` names no disabled role. Changing it is an
-observable-behavior change and needs a ruling (`A127` is pending the user's word), so it stays out of a docs-and-pins slice.
+observable-behavior change and needs a ruling (**`A128`** is the free number for it; `A127` is already the 80 px/84 px ruling —
+the collision the `t9-02b` review caught as R7), so it stays out of a docs-and-pins slice. The user's word is still outstanding;
+the proposed default is `opacity: 0.55` (label at `#b8480d` on the cream card = 5.29:1).
 
 ## Delegation count
 
-Expected 2 (engineer, reviewer). Used: 0.
+Expected 2 (engineer, reviewer). Used: 4 engineer runs (one shipped the slice, two died on infrastructure, one re-verified and
+wrote the report) + 1 reviewer run. The ceiling is 4; the two infrastructure deaths are charged, which is why the count is at it.
 
 ## Verdicts
 
-Pending.
+**Reviewer: `accepted`, no blocking finding** (`docs/state/t9-02b-review.md`). Every AC 1–9 passes; the extraction of the shipped
+guards into an executable form, the PNG decode pin, the pair-list fix, the `{{`-count replacement and the message-color mapping
+are all judged real pins rather than wording.
+
+**PM acceptance: accepted.** The PM's own mutation check agrees with the reviewer that the guard pin is behavioral: renaming
+`verifyOptionsAssetShips` in the shipped script (leaving the script valid) failed 3 tests with a named message; restoring the file
+returned 26/26 green and an empty `git diff`.
+
+**Carried forward, not closed here** (the remarks the reviewer asks the next slice to carry as numbers): **R1** — the injected
+throwing `fail` in `tests/support/build-script-guards.ts:88-90` is the one reimplementation that can drift: nothing pins that the
+shipped `fail` throws, nor that a failed check becomes exit code 1. **R2** — two spec sentences still say «pinned» about things
+no assertion holds: the absence of `box-sizing` on `.mascot` (the 84 px footprint, `A127`), and the pair-list wording at the edge
+of the palette bullet. **R3** — `codeOnly` is exported and unused while two spec files keep their own copies: three variants of
+one helper. **R4** — the AC 4 negatives read only `.ts/.tsx/.html/.json` and are name-shaped, so a future `src/**/*.mjs` or an
+indirect call escapes them. Recorded in `docs/state/stage-9-review-debt.md`.
 
 ## Open questions
 
-- None behavioral. This slice exists only to keep the evidence chain honest; the user-visible effect is zero.
+- `A128` (the disabled `Сохранить` state) is owed by the user. Nothing else in this slice is behavioral.

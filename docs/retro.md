@@ -261,3 +261,32 @@ the six-item browser list is deliberately still open (`прогон будет �
 - **Dead pointers, again, mine.** `A115` put `tests/content-card-actions.spec.ts:395-397` into the model spec and the very next
   commit moved that pin to `:451-463`. A pointer into a test file is a liability the size of the test file: name the test, keep the
   line only when it is cheap to re-grep at the next touch.
+
+## Stage 9 — the settings window, the cat, and two sentences I wrote as facts (2026-11-19)
+
+Tasks: `t9-01-options-window` (accepted after changes requested), `t9-02-settings-window-look` (accepted after changes
+requested), `t9-02b-spec-test-debt` (accepted, no blocking finding). Stage 9 spent its delegation ceiling on infrastructure, not
+on wrong code: 2 engineer runs + 2 reviewer runs for `t9-01`/`t9-02`, then 4 engineer runs + 1 reviewer for `t9-02b`, of which
+**two engineer runs died on the runtime** (one overlapping `edit` call after a compaction, one `verify: layer 7 never rang — an
+illegal memory access`) with the work already committed.
+
+- **My defect, twice in one stage, is the same one `A117` named.** I wrote «never produces a horizontal scrollbar» into the spec
+  in `t9-01`, and then — while closing that very finding — wrote that the mascot renders «whole, including the lifebuoy» inside a
+  `border-radius: 50%` clip. Both were browser claims with no run behind them, and the reviewer blocked both
+  (`t9-01` finding 2, `t9-02` finding 1). The rule is not new; my writing habit is. A sentence about what the reader sees either
+  names a run number or is written as a requirement whose sight a named run owes — and I now write that clause in the same edit
+  that introduces the sentence, not after the review.
+- **A claim about an image can be cheap to settle, if someone decodes the bytes.** The lifebuoy question took a scratch script
+  (inflate `IDAT`, unfilter, walk the alpha channel): 13 054 painted pixels, 162 of them beyond the clip circle, **none above
+  alpha 156** — anti-aliasing, not artwork. That turned a reviewer's reasonable «no evidence path at all» into a pin the suite now
+  holds (`tests/options-window-look.spec.ts`, artwork vs circle). When the artifact is a file, measure the file.
+- **Pinning a script by grep is not pinning it.** Both `t9-01` R2 and `t9-02` R2 landed as substring scans; `t9-02b` fixed it by
+  **extracting the shipped guard's own text and calling it** with injected stubs, so a missing `dist/` file answers with the
+  failure. My own mutation check (rename the guard, script stays valid) failed 3 tests with a named message. A pin that survives
+  renaming the thing it names is worth the extraction ceremony.
+- **Infrastructure failures need a rule of their own.** Two dead engineer runs were not charged as task attempts (the code was
+  committed and green); the fresh sessions were told to **verify and report only**, never to re-implement. That kept the
+  two-attempt budget honest and prevented a second engineer from rewriting a landed slice.
+- **The reviewer cannot be given images on this runtime.** One review run died in the vision encoder (`503`) after opening the
+  screenshot. Fix: visual claims reach a review as measured numbers (computed styles, ratios, painted box sizes) and the brief
+  forbids opening image files. Recorded here so the next stage's brief starts that way.
