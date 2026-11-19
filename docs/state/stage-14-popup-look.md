@@ -618,3 +618,32 @@ surface colour, and changing one would break the "the same author, the same colo
 |---|---|---|
 | `S14-45` | The disabled state of the page widgets' save button has no `A125` role, exactly like the settings window's (`D5`/`A128`, unruled since Stage 9). Two surfaces now share the gap. | ruling |
 | `S14-46` | The tooltip is included by `A152`; if the owner meant only the two cards, one file reverts. | ruling |
+
+## Answers (owner, 2026-11-19): «1. дефолт» / «2. сделать»
+
+**1 — the tooltip is included.** `A152` stands: `src/content/overlay/tooltip-style.ts` takes the same `A125` mapping as the two
+page cards, so the page stops having one widget on the old greys.
+
+**2 — the disabled state is ruled at last.** This closes `D5` / `A128`, open since Stage 9 and re-ledgered twice.
+
+| Ruling | Decision |
+|---|---|
+| `A153` | **The disabled state stops being expressed as `opacity`.** Measured in Stage 9: `opacity` fades the fill and the label **together**, so the label can never stay legible — at `0.45` the label measured **1.42:1** against its own button and `1.38:1` against the card; the withdrawn `0.55` proposal measured `1.68:1`. The disabled state is therefore stated as **colours**: background `#e3c3aa`, label `#1b2a33`, which measures **8.88:1** and stays visibly washed out against the enabled `#b8480d` (fill-vs-card `1.56` against `4.97`). `WCAG 1.4.3` exempts inactive controls, so this is a legibility choice, not a compliance fix — which is why it needed a ruling and not a patch. |
+
+### Scope of `A153`
+
+- It applies to **every** disabled action control of the extension: the page widgets' save button (`card-style.ts`, today
+  `#6b7280` on `#e9ecef` with a `#c8cdd2` border) and the settings window's `Сохранить` (today `opacity: 0.45`). One state, one
+  appearance, two surfaces — the same reasoning that produced `A140`.
+- The page widgets' disabled triple already has **no** `A125` role, and this ruling gives it one: `#e3c3aa` fill with the
+  `#1b2a33` ink, and the border takes the decorative `#a6cbdc` like every other control.
+- The settings window's `opacity: 0.45` is **removed** rather than retuned; the label keeps the same ink and the fill changes.
+  That is the whole change on that surface.
+- Ledger `S14-45` and the Stage 9 row `D5` are **closed by this ruling**. The measured numbers above are the record; the
+  withdrawn `0.55` proposal is not used.
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-47` | `A153` fixes one disabled appearance for two surfaces that are drawn by **different layers** (`src/content/overlay/card-style.ts` is Preact CSS-in-string, `src/options/options.component.ts` is an Angular `styles` block). Nothing pins that the two stay in step: a change to one leaves the other behind. A cross-layer check is possible — both files are read as text by existing suites — but it is not this task's. | test + architecture |
