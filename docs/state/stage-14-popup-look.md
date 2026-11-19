@@ -379,3 +379,31 @@ no anti-aliased corner exists anywhere in the capture, at any pixel. So the answ
 |---|---|---|
 | `S14-27` | The reader's Run 10/12 items still unanswered beyond the corners: the palette's reading, the trash glyph against the page editor's drawing (`S14-4`), the checkbox, «nothing else moved». | look |
 | `S14-28` | `test_img/` is an untracked directory the reader created for the screenshot. The capture is the **evidence** for `A146`, so the ruling cites it, but the file is not in the repository: if the directory is cleaned, the measurement above is all that remains — and that is deliberate, because a 12 KB screenshot is not a spec artefact. | docs |
+
+## The reader's answer to `A146`: the frame comes back, thicker (2026-11-19)
+
+The PM offered a choice after `A146` — accept square corners, or bring the frame back so the square reads as intended. The
+reader: **«верни скруглённую рамку, но сделай её потолще чем была»**.
+
+| Ruling | Decision |
+|---|---|
+| `A148` | **The card carries a `2px` `#a6cbdc` frame with a `12px` radius.** `A144` removed a `1px` frame because three shapes disagreed at the corners; `A146` then measured that the window itself cannot be rounded, so the disagreement is not between the card and a rounded window — it is between a drawn frame and a square window, and a **thicker** frame is what makes the square read as deliberate. The colour stays the `A125` decorative role; `2px` is the PM default for «потолще» and is the value the reader's eye will judge. |
+
+### What `A148` does and does not reopen
+
+- **`A146` stands untouched.** No popup **window** can be rounded; that is a measurement, not a preference, and `A148` does not
+  attempt it. The spec keeps the clause saying so, and the frame is drawn **inside** the square window.
+- **`A147` stands untouched.** The `320px` belongs to the component, not to the document box. The `body` rule keeps the paint
+  and the zero margin and nothing else.
+- **`A144`'s finding is not repealed, only outvoted.** Its measurement — a card's arc against a square window edge reads as a
+  broken outline — was correct, and the answer turned out to be a **thicker** frame rather than no frame, because a thin line
+  reads as an attempt at a rounded window while a `2px` line reads as a border.
+- **The absence pins written for `A144`/`A145` are reversed by this ruling.** That is the one case where deleting an assertion
+  is correct, and the report must name every one removed and why.
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-29` | `2px` is a PM default for «потолще», exactly like the `11px` hint size and the `4px` gap in Stage 13. If the reader's eye disagrees, it is a one-value change — and the value is now load-bearing for a pin, so it moves with the spec sentence. | ruling + look |
+| `S14-30` | Three consecutive shape rulings (`A144`, `A145`, `A146`) were each written before the reader had seen the previous one rendered. `A148` is the first that answers a **measurement** rather than a guess — and the cost of the earlier two was three tasks. The discipline for the rest of this stage: a shape claim is only ruled after a screenshot, never before. | process |
