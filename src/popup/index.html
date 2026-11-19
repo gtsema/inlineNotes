@@ -5,9 +5,10 @@
     <title>inlineNotes</title>
     <!--
       The popup's **paint**. This document is not the two-line shell the options document
-      is: the box the reader sees when the toolbar panel opens is `body`, and `body` is
-      what has to carry the `A125` cream, or the user agent's white shows as a band around
-      the panel (ruling `A145`, kept by `A147`).
+      is: `body` is the box the window is drawn from, so `body` is what has to carry the
+      `A125` cream, or the user agent's white shows as a band around the panel (ruling
+      `A145`, kept by `A147`). Being painted does not make it the surface: the shape is
+      the card's, not this box's.
 
       Why here and not in the component. Chrome paints the document box with the user
       agent's white; `app-root` and `.popup` are cream *inside* it, so a fill declared
@@ -17,10 +18,11 @@
       **The document paints; it does not shape** (rulings `A146`, `A147`, superseding
       `A145`). `A145` also gave this box the panel-filling geometry (`width: 100%`,
       `min-height: 100vh`) and the rounded corners (`border-radius: 12px`, with
-      `overflow: hidden` to clip the fill to the same arc). Both halves are withdrawn, and
-      both are measured on the reader's screenshot (`test_img/…224902.png`, task `t14-04`):
+      `overflow: hidden` to clip the fill to the same arc). Both halves of that added shape
+      are withdrawn — the paint above is kept — and both are measured on the reader's
+      screenshot (`test_img/…224902.png`, task `t14-04`):
 
-      - the width collapsed the surface to `100px`, leaving the text a `66px` column, and
+      - the width collapsed the cream to `100px`, leaving the text a `66px` column, and
         the title, the notice and the empty state each wrapped to three lines — a block box
         with `width: auto` and `margin: 0` already fills the panel, so no geometry
         declaration is needed here at all, and the `320px` belongs to `.popup` (`A147`);
