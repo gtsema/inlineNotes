@@ -257,3 +257,57 @@ Final gates on `1cc38ae`: `npm run build` 0, `dist/` **12 files**; `npm test` 0 
 | `S14-16` | `tests/popup-window-look.spec.ts:271-273` — `everything` is the same string as `styles`; the alias reads as a second read but is the text already in scope. Cosmetic. | test style |
 | `S14-17` | `docs/specs/content-overlay-ui.md:156` — the `Popup look` lead bullet still opens «the popup is the settings window's **card**», which a skimming reader can take as a drawn frame even though the sub-bullet two lines down states the absence. | spec |
 | `S14-18` | **`A144` rests on Chrome drawing the window's own radius, and no test verifies it.** Every pin reads stylesheet text; whether the corners actually look rounded is a manual `dist/` load. This is the exact claim Run 11 exists to settle, and the reason it must be recorded rather than assumed. | browser-verification |
+
+## Run 11 answered — the premise of `A144` is false (2026-11-19)
+
+The reader's answer: **«1. углы не скруглённые вообще. прямой угол с чёрной рамкой»**.
+
+That is the outcome `S14-18` was written to catch, and it falsifies `A144`'s premise. The measurement behind it is in the
+shipped code: the popup document is
+
+```html
+<style>body { margin: 0; }</style>
+<body><app-root></app-root></body>
+```
+
+`body` is a plain block box painted **white** by the user agent, and it is the box that fills the toolbar panel. `app-root`
+and `.popup` are cream and 320 px wide **inside** it. So three things were true all along and only one of them was visible
+while the card had a frame:
+
+- the popup window does **not** round its own content — Chrome clips a popup window to a plain rectangle;
+- `body` is the white rectangle the reader sees, and its corners are square by definition;
+- the cream surface inside it never touched the window edge, so the white showed as a band around it.
+
+Removing the card's frame therefore removed the only element that had ever been rounded and left a white rectangle with
+black-adjacent edges. `A144` traded a rounded card for a square window — the opposite of what the reader asked for.
+
+**Ruling.**
+
+| Ruling | Decision |
+|---|---|
+| `A145` | **The rounding moves to the document box.** `body` — the box that is the window — gains the cream fill, the window-filling geometry and the rounded corners (`border-radius`, and `overflow: hidden` so the cream and the rounded clip belong to the same box). `app-root` and `.popup` stop being the surface and become content inside it: no fill, no width of their own beyond the content, no frame. The popup therefore reads as a rounded cream panel because the **document** is rounded, not because a card inside it is. |
+
+`A144` is **superseded, not deleted**: its finding stands — a card drawn inside a square box cannot make the window look
+rounded, and the `#a6cbdc` arc against the window edge was the artefact the reader first reported. What `A144` got wrong was
+the direction: it removed the round shape instead of moving it to the box that owns the shape.
+
+### What this task must carry
+
+- The **width** moves with the surface. `320px` was the card's width; the document box must be the panel's width, so the
+  cream reaches both edges and the rounded corners are the window's corners. `.popup` keeps its `16px` padding and the type
+  scale; the `320px` constant is re-homed to the box that is now the surface, and the pin that reads it follows.
+- The `body { margin: 0 }` rule stops being a one-declaration rule — it becomes the surface rule, and the spec sentence that
+  says «one rule, one declaration» (and the pin that asserts exactly that) both move with it. **This is the pin most likely to
+  be deleted by accident**; it must be rewritten to pin the new rule set, not dropped.
+- The white `body` background is the visible defect: the new rule must paint the box, and the pin must assert the paint
+  rather than the absence of a frame.
+- `A145`'s premise — «Chrome clips a popup to a rectangle, and a `border-radius` on `body` is visible» — is **again a sight**,
+  not a measurement. It is the second premise in a row that no test can check, so this time the task states it as a claim to
+  be verified by a run **before** the pins are written as fact, and the run is named in the brief.
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-19` | **Two premises in a row rest on how Chrome renders a popup window, and neither is testable in this repository.** `A144` was wrong; `A145` may be too. The mitigation is not a better guess but an ordered run: try it, look at it, then write the ruling as fact. | browser-verification |
+| `S14-20` | The popup's surface is now the **document**, not a component. `src/popup/index.html` stops being a two-line shell and becomes a place where a visual rule lives, which is the opposite of the rule the options document follows («the only rule this document owns»). Two documents, two different philosophies, and the reason has to be written where both are. | spec + architecture |
