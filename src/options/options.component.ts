@@ -55,6 +55,15 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
  * `label-line` of the `author-name field`, right after the `Имя` label. Both brackets
  * and the italics are this template and this stylesheet; `OPTIONS_STRINGS.nameHint`
  * keeps its wording, so `src/options/text.ts` is untouched (`A136`).
+ *
+ * The separation and the size of that parenthetical are `t13-01` (`A137`, `A138`), and
+ * both are **declarations**, not characters: the newline between `</label>` and the
+ * `<span class="hint">` already collapses to one word-space, so a second whitespace
+ * character would render as the same single space and change nothing the reader can
+ * see — `.hint` therefore carries `margin-left: 4px`, the smallest declared step that
+ * reads as a wider gap than a word-space, and `font-size: 11px` against the surface's
+ * inherited `13px`, keeping the italic style and the unchanged `#7b6a55` ink (`A125`).
+ * Both are presentation, so `src/options/text.ts` is untouched here too (`A136`).
  */
 @Component({
   selector: 'app-root',
@@ -154,7 +163,9 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .hint {
+      margin-left: 4px;
       font-style: italic;
+      font-size: 11px;
       color: #7b6a55;
     }
 

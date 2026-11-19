@@ -1319,6 +1319,15 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
   const template = componentTemplate(join('src', 'options', 'options.component.ts'));
   const stylesCode = componentCodeStyles(join('src', 'options', 'options.component.ts'));
 
+  /**
+   * The two **declared** values `t13-01` adds to the parenthetical (`A137`, `A138`). Both are
+   * measured, not chosen here: the owner's answers were «4px» and «11px», and the surface's own
+   * base size is the `13px` of the `.options` shorthand the label inherits.
+   */
+  const HINT_GAP = '4px';
+  const HINT_SIZE = '11px';
+  const SURFACE_BASE_SIZE = '13px';
+
   /** The one `label-line` element of the shipped template, tag and contents whole. */
   const labelLine = /<p class="label-line">([\s\S]*?)<\/p>/.exec(template)?.[1];
 
@@ -1384,6 +1393,81 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     // the 4 px it always had (`Q4`).
     expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
     expect(ruleBody(stylesCode, '.label')).toMatch(/display: inline/);
+  });
+
+  /**
+   * `t13-01` AC1–AC3, AC5: the gap and the size of the parenthetical are **declarations**.
+   *
+   * This case exists because the assertion above cannot answer for a gap (ledger row `S12-3`,
+   * closed by `A139`): it replaces the markup with its rendered text, collapses `\s+` to one
+   * space and then asserts `ИМЯ (ЭТО_ИМЯ)` — a pin that **normalises its input** is blind to
+   * everything normalisation removes, and the thing this task ships is exactly the difference
+   * between one space and four pixels. So the rendered assertion keeps its job (the wording of
+   * the line, and the fact that the line is one line) and the **declaration** is pinned here,
+   * by reading the `.hint` rule body. The two assertions that would go red if the gap were
+   * removed are named in `docs/state/t13-01-engineer.md` and were proved by a mutation applied
+   * and reverted in the same session.
+   *
+   * `A137` also rules out the change a reader might have asked for: a second whitespace
+   * character collapses to the same single space, so the gap has to be declared. The absence of
+   * that non-change is pinned beside the declaration — the label and the parenthetical stay on
+   * the same source line, separated by exactly one newline.
+   */
+  it('declares the gap after the label and the smaller size of the parenthetical (t13-01 AC1-AC3, AC5; `A137`, `A138`)', () => {
+    if (labelLine === undefined) {
+      throw new Error('the options template has no `label-line` element');
+    }
+
+    // The gap is a declaration on `.hint`, read from the stripped rule body so a
+    // commented-out `margin-left` cannot stand in for a shipped one.
+    const hint = ruleBody(stylesCode, '.hint');
+    expect(hint).toMatch(/(?:^|;)\s*margin-left:\s*4px;/);
+
+    // And the size is a declaration too, explicitly below the surface's own base: the label
+    // inherits the `.options` shorthand (`13px`), and the parenthetical steps down from it.
+    expect(hint).toMatch(/(?:^|;)\s*font-size:\s*11px;/);
+    expect(ruleBody(stylesCode, '.options')).toMatch(/(?:^|;)\s*font:\s*13px\/1\.45 system-ui, sans-serif;/);
+
+    // Neither of the two new declarations replaced the ones the line already carried: the
+    // italics and the `A125` ink are still there (`A138` keeps both).
+    expect(hint).toMatch(/(?:^|;)\s*font-style:\s*italic;/);
+    expect(hint).toMatch(new RegExp(`(?:^|;)\\s*color:\\s*${PALETTE.hint};`));
+
+    // The two literals are the ones the ruling names, and they are not spelled anywhere else
+    // on the surface: a second rule carrying the same size would be a second owner of it.
+    expect(stylesCode.match(/margin-left:/g) ?? []).toHaveLength(1);
+    expect(stylesCode.match(/font-size:\s*11px/g) ?? []).toHaveLength(1);
+
+    // AC1's other half: the gap is **not** a second whitespace character. The markup keeps
+    // exactly one separator between the label and the bracket — the newline HTML collapses to
+    // one space — so the visible widening can only come from the declaration above.
+    // The read is line-ending agnostic on purpose: this repository checks its sources out
+    // with `\r\n`, and a pin on the checkout's line endings would be a pin on git config.
+    const separator = /<\/label>(\s*)<span/.exec(labelLine)?.[1];
+    if (separator === undefined) {
+      throw new Error('the shipped template puts no separator between the label and the hint');
+    }
+    expect(separator, 'one newline and the indentation, and nothing else').toMatch(/^\r?\n[ ]+$/);
+    // And the only whitespace in that separator is the newline and its indentation: every
+    // other character is a space, and the assertion above already forbids a tab, a second
+    // newline and a second space beside the indentation — which is the character AC1 forbids
+    // and the change a reader might mistake for the fix.
+    expect([...separator].filter((character) => character === ' ')).toHaveLength(
+      separator.length - 2,
+    );
+    expect(separator).not.toContain('\t');
+    expect(labelLine).toMatch(/<\/label>\r?\n\s*<span class="hint">/);
+
+    // Nothing else on the line moved (AC3): the label keeps its `for`, the line keeps its
+    // margin, the label keeps `display: inline`, and the input still comes immediately after
+    // the line. The surface's base size is unchanged, so only `.hint` steps down.
+    expect(template).toMatch(/<label class="label" for="author-name">\{\{ nameLabel \}\}<\/label>/);
+    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
+    expect(ruleBody(stylesCode, '.label')).toMatch(/display: inline/);
+    expect(stylesCode.match(new RegExp(`font-size:\\s*${SURFACE_BASE_SIZE}`, 'g')) ?? []).toHaveLength(0);
+    expect(stylesCode.match(new RegExp(`font-size:\\s*${HINT_SIZE}`, 'g')) ?? []).toHaveLength(1);
+    expect(hint).toContain(HINT_GAP);
+    expect(hint).toContain(HINT_SIZE);
   });
 
   /**
