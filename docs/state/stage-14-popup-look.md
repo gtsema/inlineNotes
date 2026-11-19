@@ -407,3 +407,30 @@ reader: **«верни скруглённую рамку, но сделай её
 |---|---|---|
 | `S14-29` | `2px` is a PM default for «потолще», exactly like the `11px` hint size and the `4px` gap in Stage 13. If the reader's eye disagrees, it is a one-value change — and the value is now load-bearing for a pin, so it moves with the spec sentence. | ruling + look |
 | `S14-30` | Three consecutive shape rulings (`A144`, `A145`, `A146`) were each written before the reader had seen the previous one rendered. `A148` is the first that answers a **measurement** rather than a guess — and the cost of the earlier two was three tasks. The discipline for the rest of this stage: a shape claim is only ruled after a screenshot, never before. | process |
+
+## t14-04 reviewed — one blocking finding, and it is the same defect class again (2026-11-19)
+
+Review `5f8024fc-7bf0-49dd-bf9d-d0819db7add3` → **changes requested**. Seven of the eight ACs pass, the deleted `A144` assertions are
+**fully replaced and in two places strengthened** (presence twins over the same two strings on the same rule body, plus an
+exactly-one `border` / exactly-one `border-radius` count), and the one failure is prose:
+
+- `docs/specs/content-overlay-ui.md:158` says the document box carries «**nothing else** — no width, no `min-height`, no
+  `border-radius`, no `overflow`, no `box-sizing`» as if the cream half were withdrawn too. It was **kept** by `A147`.
+- `:159` says «**Both** halves are withdrawn» — false for the same reason.
+- `:155`/`:158` still call the document the «surface» and say it «carries the rounded shape», which is the `A145` framing the
+  brief ordered narrowed to the paint.
+
+The reviewer's own summary is the sharpest way to put it: the code and the pins agree with the rulings, and **the spec still
+narrates the withdrawn one**. This is the fifth instance of the same class in Stage 14 alone, and the second where the sentence
+survived the commit that falsified it.
+
+### Ledger additions
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-31` | `docs/specs/content-overlay-ui.md:158` — «no width, … no `overflow`» is a substring-shaped claim: `min-width:` and `max-width:` both contain `width:`, so a reintroduced geometry under those spellings would pass the pin. The test's `WITHDRAWN_DOCUMENT_SHAPE` list is safe only because the document happens to declare nothing. | spec + test |
+| `S14-32` | `docs/specs/content-overlay-ui.md:158` states «no `box-sizing`» as a rule without saying why it is pinned absent (its removal was a no-op, `S14-21`). A bullet that outlives its reasoning invites a future reader to re-add it. | spec |
+| `S14-33` | `tests/popup-window-look.spec.ts:321` — the case title says «no colour outside the **five** `A125` roles» while the assertion pins **seven** plus the refusal. Same looseness as `S14-8`. | test prose |
+| `S14-34` | `docs/state/t14-04-engineer.md` §1.3 claims «**16 cases**, unchanged in count» while the suite has **17** `it(` cases and the frame pins were folded into a pre-existing case. Report accuracy, not code. | docs |
+| `S14-35` | `src/popup/index.html:3-5` — the file header's paragraph still describes `body` as «the box the reader sees», the same framing the spec needs narrowed. Cosmetic, same fix. | source prose |
+| `S14-36` | `src/popup/popup.component.ts:114` calls `2px` «a width the ruling leaves to the PM's default»; `A148` does call it that. Same fact in three places (`S14-29`), no action beyond keeping them in step. | docs |
