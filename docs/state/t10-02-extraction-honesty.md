@@ -176,3 +176,25 @@ Expected 2 (engineer, reviewer). Used: 3 engineers (two crashed runs of the same
 and one untrue sentence added, which is what AC 6 was supposed to eliminate. Attempt 2 is bounded to AC 8-10 of this brief.
 
 Review artifact: `docs/state/t10-02-review.md` (copied by the PM; the role has no write tool).
+
+## Stage 10 residue, third pass — `t10-02c` (2026-11-19)
+
+`t10-02c` (`7a66202`) closed the hole the attempt-2 review found and I had wrongly called closed: the inline-style
+absence pin over the **shipped** template now reads the widened helper, and the decoy lives in the repository as a
+test instead of a one-off mutation. Verified independently: adding `[style.box-sizing]="'border-box'"` to the mascot
+element turns **3** cases red, and one of them is the named absence pin itself.
+
+Two lessons, both about my own verification rather than the code:
+
+- **A red from a mutation is not evidence until the failing case is named.** My `N4` was red — from the *neighbouring*
+  case `renders the mascot in the header, next to the existing title`, whose exact `toMatch(/<img class="mascot" src=… alt="" \/>/)`
+  fires on any added attribute. The pin that was supposed to catch the binding stayed green, and I read the red as a
+  pass. Reading the failing case name, not the count, is the whole discipline.
+- **Widening a helper is not widening the pin.** Attempt 2 widened `carriesInlineStyle` and exercised it on hand-typed
+  strings; the shipped assertion kept its own narrow literal. A widened helper plus an unwidened call site is the same
+  hole with better prose, and only a mutation **of the shipped file** distinguishes the two.
+
+The attempt-2 reviewer (`1c9e8a3c-e084-4b0a-b92c-308a1a415437`) never delivered a verdict: it looped, its output hit
+1.7 MB / 17k lines with one paragraph repeated to the end, and the run was truncated. It found the defect above and
+stopped; the remaining AC 8 / 9a / 9c-e / 10 checks were left unfinished and are **unverified by review** as of this
+commit.
