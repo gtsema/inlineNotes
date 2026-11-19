@@ -358,3 +358,22 @@ illegal memory access`) with the work already committed.
 - **Centring is relative to something, and the something has to be named.** The column centres on the card's content box,
   which is inset by the host's `16px` padding — so it is not centred on the dialog box. Nobody noticed until the reviewer
   asked; it is `S12-5` and the owner's eyes decide whether it matters.
+
+## Stage 13 — a 4 px gap and an 11 px parenthetical
+
+- **A pin that compares a count against its own input cannot fail.** The AC 1 assertion read
+  `filter(spaces).length === separator.length - 2`, so adding a space raised both sides at once. The PM measured it:
+  inserting one extra space before the parenthetical leaves all **46** tests green — and that is precisely the change the
+  reader might mistake for the fix, and precisely the change the pin's own comment claims to forbid. `tab` and a second
+  newline are caught; the second space is not. Ledgered as `S13-3`.
+- **The pin this task replaced would have caught it.** `S12-3`'s collapsed-text read (`replaceAll(/\s+/g,' ')` then
+  `toBe('ИМЯ (ЭТО_ИМЯ)')`) sees two spaces where the new declaration pin sees none. Replacing a pin is not automatically
+  an upgrade: the old one was blind to the *declaration* and sharp on the *text*, the new one is the reverse, and the
+  stage needed both.
+- **An absence assertion is only as wide as the form it names.** `toHaveLength(0)` over `font-size:\s*13px` pins «no
+  explicit 13 px declaration», not «the base size is unchanged» — the base is a `font:` shorthand and is pinned
+  elsewhere. The sentence next to the assertion says the broader thing. Ledgered as `S13-4`.
+- **A reviewer that loops is worse than a reviewer that stops.** Run `36ac3920` repeated one paragraph to 1.3 MB and was
+  truncated without a verdict; the finding it did produce (the over-claiming comment) the PM then measured in three
+  minutes. When a review run exceeds its budget without a verdict, the PM measures the open question directly instead of
+  relaunching — the measurement is cheaper than the second review.
