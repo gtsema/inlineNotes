@@ -70,6 +70,24 @@ Exactly the two new cases go red; the other 16 stay green, which is the proof th
 and that it is the only thing the change moved. No `git checkout` was used anywhere, and no loop
 ended with `git checkout -- .`.
 
+**The PM's three stronger mutations** (`S14-41`, added in `t14-05b`), each from its own `cp` copy of
+`src/popup/popup.component.ts`, restored from that copy after observing. They are the stronger
+evidence, because they vary the **owner** and the **size** of the gap rather than one digit of it,
+and they were run by the PM outside this report:
+
+| Mutation | What goes red |
+|---|---|
+| the `4px` inset **dropped** from `:host` (`padding: 4px;` deleted, `display: block` kept) | the same two `A149` cases |
+| the inset **moved onto `body`** (`padding: 4px` added to the document rule) | the same two `A149` cases |
+| the inset **changed to `8px`** | the same two `A149` cases |
+
+So the pin does not merely respond to a changed digit: a gap that disappears, one that the wrong box
+claims, and one of the wrong size all turn it red, and in every case the other sixteen pins of this
+file stay green. The `4px → 5px` run above is kept as the local reproduction; the three rows above
+are the proof that the pin is about the **claim** `A149` makes, not about the spelling `5px`.
+Attributed to the PM: they were applied and observed on the PM's side, and the recovery is the `cp`
+copy named above.
+
 ## Gates (profile order; run on the final tree after the restore)
 
 | Command | Exit | Count quoted |

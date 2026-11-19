@@ -95,6 +95,12 @@ import { codeOnly } from './support/build-script-guards';
  *   `body` or onto `.popup` — → `declares the 4px inset on :host and keeps display: block
  *   there` and `leaves the gap off the document box and off the card` (`A149`, `t14-05`).
  *   It is the pin `t14-05` adds; nothing else in this file moved with it (`S14-38`).
+ * - **`:host` claimed a geometry it does not own** — it gained a `width`, a `border-radius`,
+ *   an `overflow` (a clip) or a `margin` → `leaves the paint to the document box and keeps
+ *   the width on the component`, whose `:host` half is exactly those four absences. Its
+ *   `padding` is **not** one of them: since `A149` the inset is the one geometry `:host`
+ *   declares, and it is pinned **present** in the `A149` describe named in the row above, so
+ *   a reader must not expect that row to cover it. The row is added in `t14-05b` (`S14-40`).
  *
  * The first, the third and the fourth were proved by mutations applied, observed and
  * reverted from a `cp` copy in the sessions that wrote this file
@@ -511,12 +517,15 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     expect(styles).not.toMatch(paint);
     expect(ruleBody(stylesCode, ':host')).not.toMatch(/background/);
     expect(ruleBody(stylesCode, '.popup')).not.toMatch(/background/);
-    // `:host` is content inside the box and declares no geometry of its own at all: no
-    // width, no radius, no clip and no margin. `.popup` is the **one** box that sizes and
-    // frames itself (`A147`'s `320px`, `A148`'s `2px` border and `12px` radius), so its
-    // width and its frame are excluded from this loop and pinned present in the two cases
-    // above; what stays off the card is a **clip** and a **margin**, and the radius is
-    // asserted **present** there rather than absent here.
+    // `:host` is content inside the box and declares no width, no radius, no clip and no
+    // margin, which is what the four absences below read. It is not declaration-free: since
+    // `A149` it declares exactly one thing, the `4px` inset padding that sets the card off
+    // the window edge, **present**-pinned in the `A149` describe near the end of this file
+    // and deliberately not asserted absent here (`t14-05b`, `S14-39`/`S14-40`). `.popup` is
+    // the **one** box that sizes and frames itself (`A147`'s `320px`, `A148`'s `2px` border
+    // and `12px` radius), so its width and its frame are excluded from this loop and pinned
+    // present in the two cases above; what stays off the card is a **clip** and a **margin**,
+    // and the radius is asserted **present** there rather than absent here.
     const host = ruleBody(stylesCode, ':host');
     expect(host).not.toMatch(/(?:^|;)\s*width:/);
     expect(host).not.toMatch(/border-radius:/);
@@ -629,8 +638,11 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
 });
 
 /**
- * The `4px` inset of ruling `A149` (task `t14-05`). One case, one presence claim, and the
- * counter-claims that make it a pin rather than a restatement:
+ * The `4px` inset of ruling `A149` (task `t14-05`). **Two cases**: one presence claim — the
+ * inset is on `:host` and it is `4px` — and one set of counter-claims that make it a pin
+ * rather than a restatement (`S14-39`, corrected in `t14-05b`). The presence is stated once,
+ * so a case that merely repeated it would pin nothing new; the counter-claims are the half
+ * that names the boxes the gap must **not** appear on:
  *
  * - **the inset is on `:host`** — the box that contains the card, so the gap sits between
  *   the window edge and the frame;
@@ -649,10 +661,12 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
  * The mutation that turns this red: `padding: 4px` moved off `:host` — the `ruleBody(:host)`
  * lookup then throws "declares no rule for …"-adjacent failures on the containment line, and
  * with the declaration merely changed to `padding: 5px` (or moved onto `body`) the `toContain`
- * and the `ruleBody` assertions of this case fail while every other pin in the file stays
- * green. Applied, observed and reverted from a `cp` copy in `t14-05` (see
- * `docs/state/t14-05-engineer.md`); the `:host` was not `padding`-free when proved, so the
- * further mutations that turn it red are the two `not.toContain`/absence halves below.
+ * and the `ruleBody` assertions of the presence case fail, and the counter-claim case fails
+ * with them through the stylesheet-wide `padding: 4px` count, while every other pin in the
+ * file stays green. Applied, observed and reverted from a `cp` copy in `t14-05` (see
+ * `docs/state/t14-05-engineer.md`), which also records the PM's three stronger mutations —
+ * the inset dropped entirely, moved onto `body`, and changed to `8px` — each of which turns
+ * the same two cases red.
  */
 describe('the card is inset 4px from the window edge on :host (t14-05 AC1–AC3; ruling A149)', () => {
   const stylesCode = componentCodeStyles();
