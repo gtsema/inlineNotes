@@ -7,7 +7,13 @@ import { describe, expect, it } from 'vitest';
 
 import { OptionsComponent } from '../src/options/options.component';
 import { OPTIONS_MESSAGE_TEXT, OPTIONS_STRINGS, nameCounterText } from '../src/options/text';
-import { buildScriptMainBody, buildScriptSource, loadBuildGuard } from './support/build-script-guards';
+import {
+  buildScriptMainBody,
+  buildScriptSource,
+  codeOnly,
+  loadBuildGuard,
+  runBuildScriptEntry,
+} from './support/build-script-guards';
 
 /**
  * The settings-window look of task `t9-02` (rulings `A123`, `A124`, `A125`, `A126`).
@@ -98,14 +104,6 @@ const TEXT_ROLE_BACKGROUND: Record<string, string> = {
 
 function readSource(relativePath: string): string {
   return readFileSync(join(projectRoot, relativePath), 'utf8');
-}
-
-/** Strips comments, so a claim about shipped code is not satisfied by prose. */
-function codeOnly(text: string): string {
-  return text
-    .replaceAll(/\/\*[\s\S]*?\*\//g, ' ')
-    .replaceAll(/<!--[\s\S]*?-->/g, ' ')
-    .replaceAll(/\/\/[^\n]*/g, ' ');
 }
 
 /** The inline `styles` string of a single-inline-template component, verbatim. */
@@ -477,6 +475,25 @@ describe('the build copies the asset and fails without it (t9-02 AC2)', () => {
     expect(script).toMatch(/main\(\)\.catch\(/);
     expect(script).toMatch(/process\.exitCode = 1/);
   });
+
+  /**
+   * The substring pins above name the exit code; they do not produce it. This case runs
+   * the shipped guard, the shipped `fail` and the shipped `main().catch(...)` statement in
+   * one chain (`t10-01` D1, closing `t9-02b` review remark R1), so "a `dist/` without the
+   * copied mascot fails the build" now ends in an exit code that this test watched happen.
+   */
+  it('makes the missing copied asset an exit code through the shipped handler', async () => {
+    const absent = loadBuildGuard('verifyOptionsAssetShips', {
+      distDir: DIST_ROOT,
+      existsSync: () => false,
+    });
+    const run = await runBuildScriptEntry(() => {
+      absent();
+    });
+    expect(run.exitCode).toBe(1);
+    expect(run.logged).toHaveLength(1);
+    expect(run.logged[0]).toContain('dist/options/assets/cat-mascot.png is missing');
+  });
 });
 
 describe('the header (t9-02 AC3, ruling A124)', () => {
@@ -505,6 +522,13 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
     expect(mascot).toMatch(/object-fit: cover/);
     expect(mascot).toMatch(/object-position: center/);
     expect(mascot).toContain(`border: 2px solid ${PALETTE.decorative}`);
+    // Ruling `A127` reads the 80 px as the **image box** and the 2 px frame as painted
+    // outside it, so the footprint is 84 px. That reading stands or falls on a declaration
+    // this stylesheet does not make: `box-sizing` is not inherited by `img`, and the
+    // shipped `.mascot` rule declares none of its own. Adding `box-sizing: border-box`
+    // here would move the frame inside the 80 px and falsify the spec sentence, which is
+    // exactly why the absence is pinned (`t10-01` D2, closing `t9-02b` review remark R2a).
+    expect(mascot).not.toMatch(/\bbox-sizing\b/);
   });
 });
 

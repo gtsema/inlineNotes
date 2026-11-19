@@ -3,7 +3,15 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { buildScriptMainBody, buildScriptSource, loadBuildGuard } from './support/build-script-guards';
+import {
+  buildScriptEntryStatement,
+  buildScriptMainBody,
+  buildScriptSource,
+  codeOnly,
+  loadBuildFail,
+  loadBuildGuard,
+  runBuildScriptEntry,
+} from './support/build-script-guards';
 
 /**
  * Toolchain contracts of task `t1-01`.
@@ -37,6 +45,31 @@ interface ManifestShape {
   icons?: Record<string, string>;
 }
 
+/**
+ * The file types a shipped module can be written in (`t10-01` D4, closing `t9-02b` review
+ * remark R4). The set used to be `ts`, `tsx`, `html`, `json`, so a future ES module under
+ * `src/` — a helper a later task has every reason to add — was invisible to every negative
+ * scan in this file while the spec said "scans the shipped source". The set is now every
+ * type a shipped module or a shipped asset can be written in, and the case below pins that
+ * nothing under `src/` sits outside it without being named.
+ */
+const SHIPPED_TEXT_EXTENSIONS =
+  /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|html|json|css|scss|svg|txt|md|xml|yml|yaml|webmanifest)$/i;
+
+/** Every file under a directory, repository-relative and slash-separated, whatever its type. */
+function allFilesUnder(dir: string): string[] {
+  const absoluteDir = join(projectRoot, dir);
+  const files: string[] = [];
+  for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      files.push(...allFilesUnder(join(dir, entry.name)));
+      continue;
+    }
+    files.push(join(dir, entry.name).replaceAll('\\', '/'));
+  }
+  return files.sort();
+}
+
 function sourceFiles(dir: string): SourceFile[] {
   const absoluteDir = join(projectRoot, dir);
   const files: SourceFile[] = [];
@@ -45,7 +78,7 @@ function sourceFiles(dir: string): SourceFile[] {
       files.push(...sourceFiles(join(dir, entry.name)));
       continue;
     }
-    if (!/\.(ts|tsx|html|json)$/.test(entry.name)) {
+    if (!SHIPPED_TEXT_EXTENSIONS.test(entry.name)) {
       continue;
     }
     files.push({
@@ -54,11 +87,6 @@ function sourceFiles(dir: string): SourceFile[] {
     });
   }
   return files;
-}
-
-/** Strips comments so the boundary checks look at code, not at prose. */
-function codeOnly(text: string): string {
-  return text.replaceAll(/\/\*[\s\S]*?\*\//g, ' ').replaceAll(/\/\/[^\n]*/g, ' ');
 }
 
 /** The `import ... from '...'` clauses of one source file, comments removed. */
@@ -223,11 +251,168 @@ describe('the dist/ reference check fails a manifest reference that does not shi
   });
 });
 
+describe('a failed build check becomes a non-zero exit, through the shipped code (t9-02b R1, closed by t10-01 D1)', () => {
+  /**
+   * The link the guard pin stopped short of (`t9-02b` review remark R1): the shipped
+   * `fail` was never executed — the support module injected its own throwing stand-in —
+   * and "a failed check becomes `process.exitCode = 1`, not a log line" was pinned by two
+   * substrings. A `fail` that logged and returned, or a handler that swallowed the
+   * rejection, left the whole suite green while the build shipped a broken `dist/` at
+   * exit 0.
+   *
+   * Below, both halves are **run**: the shipped `fail`, and the shipped
+   * `main().catch(...)` statement with only `main`, `console` and `process` replaced.
+   */
+  const distDir = resolve(projectRoot, 'dist');
+
+  const manifestOf = (optionsPage: string): Record<string, unknown> => ({
+    manifest_version: 3,
+    content_scripts: [{ matches: ['http://*/*', 'https://*/*'], js: ['content.js'] }],
+    action: { default_popup: 'popup/index.html' },
+    options_ui: { page: optionsPage, open_in_tab: false },
+  });
+
+  it('throws the shipped failure, so a check that only logs is a failing test', () => {
+    const fail = loadBuildFail();
+    expect(() => fail('the check failed')).toThrow(/^build-extension: the check failed$/);
+  });
+
+  it('answers an absent reference with the shipped failure, not with an injected one', () => {
+    const verify = loadBuildGuard('verifyManifestReferences', {
+      distDir,
+      existsSync: (path) => !path.endsWith(join(distDir, 'options', 'index.html')),
+    });
+    expect(() => verify(manifestOf('options/index.html'))).toThrow(
+      /^build-extension: manifest reference "options\/index\.html" does not exist inside dist\/$/,
+    );
+  });
+
+  it('turns a thrown check failure into exit code 1 in the shipped handler', async () => {
+    const run = await runBuildScriptEntry(() => {
+      loadBuildFail()('dist/options/index.html is missing');
+    });
+    expect(run.logged).toEqual(['build-extension: dist/options/index.html is missing']);
+    expect(run.exitCode).toBe(1);
+  });
+
+  it('carries a real reference check all the way to the exit code', async () => {
+    const verify = loadBuildGuard('verifyManifestReferences', {
+      distDir,
+      existsSync: (path) => !path.endsWith(join(distDir, 'options', 'index.html')),
+    });
+    const run = await runBuildScriptEntry(() => {
+      verify(manifestOf('options/index.html'));
+    });
+    expect(run.exitCode).toBe(1);
+    expect(run.logged).toHaveLength(1);
+    expect(run.logged[0]).toContain(
+      'manifest reference "options/index.html" does not exist inside dist/',
+    );
+  });
+
+  it('leaves no exit code for a build whose checks pass, and lets main() swallow nothing', async () => {
+    // The exit code is a consequence of a failure, not an unconditional assignment: a
+    // `main()` that finished sets nothing.
+    const clean = await runBuildScriptEntry(() => undefined);
+    expect(clean.exitCode).toBeUndefined();
+    expect(clean.logged).toEqual([]);
+
+    // And the chain above only means something if a throw inside the real `main()` reaches
+    // the shipped handler, so `main()` owns no error handling of its own. With comments
+    // already stripped from the body, naming a `catch` in prose does not clear this.
+    const body = buildScriptMainBody();
+    expect(body).not.toMatch(/\btry\b/);
+    expect(body).not.toMatch(/\bcatch\b/);
+    expect(body).not.toMatch(/\bfinally\b/);
+    expect(body).not.toMatch(/allSettled/);
+
+    // The handler is attached to the shipped `main`, not to a copy of it.
+    expect(buildScriptEntryStatement()).toMatch(/^\s*main\(\)\.catch\(/);
+  });
+});
+
+describe('the contract scans read every shipped text file through one comment-stripping helper (t10-01 D3, D4)', () => {
+  /** The only file under `src/` no scan can read as text, named so a second one is a decision. */
+  const UNREADABLE_SHIPPED_FILES = ['src/options/assets/cat-mascot.png'];
+
+  it('reads every file under src/ as text, or names the one it cannot read', () => {
+    // A file type outside the scanned set is the quiet way a negative scan stops seeing
+    // shipped code: the scan reports `[]` and looks green. Naming the one binary asset is
+    // what keeps that from happening to a future `src/` module.
+    const unread = allFilesUnder('src').filter(
+      (path) => !SHIPPED_TEXT_EXTENSIONS.test(path),
+    );
+    expect(unread).toEqual(UNREADABLE_SHIPPED_FILES);
+  });
+
+  it('strips block, line and HTML comments, and keeps the code between them', () => {
+    const stripped = codeOnly(
+      ['callOne(); /* block prose */', 'callTwo(); // line prose', '<!-- html prose -->callThree();'].join(
+        '\n',
+      ),
+    );
+    for (const prose of ['block prose', 'line prose', 'html prose']) {
+      expect(stripped, prose).not.toContain(prose);
+    }
+    for (const call of ['callOne();', 'callTwo();', 'callThree();']) {
+      expect(stripped, call).toContain(call);
+    }
+  });
+
+  /**
+   * The suites that still keep a private copy of the comment-stripping helper. The
+   * `t9-02b` review counted three (the support module plus the two contract suites, which
+   * `t10-01` D3 consolidates); measuring the repository from the inside counts these eight
+   * more. They are named here so the debt is a measured list rather than a guess, and so a
+   * ninth copy is a failing test instead of another quiet variant.
+   */
+  const LEGACY_CODE_ONLY_COPIES = [
+    'tests/content-anchor-boundaries.spec.ts',
+    'tests/content-create-card-boundaries.spec.ts',
+    'tests/content-overlay-host.spec.ts',
+    'tests/content-spa-refresh.spec.ts',
+    'tests/core-storage-keys.spec.ts',
+    'tests/core-storage-port.spec.ts',
+    'tests/entry-rules.spec.ts',
+    'tests/page-key.spec.ts',
+  ].sort();
+
+  it('imports the shared helper in the two contract suites instead of keeping a copy', () => {
+    for (const path of ['tests/toolchain-contract.spec.ts', 'tests/options-window-look.spec.ts']) {
+      const text = codeOnly(readFileSync(join(projectRoot, path), 'utf8'));
+      expect(
+        /\b(?:function|const)\s+codeOnly\b/.test(text),
+        `${path} declares a private copy of the comment-stripping helper`,
+      ).toBe(false);
+      expect(
+        text,
+        `${path} does not import the one helper from tests/support`,
+      ).toMatch(/\bcodeOnly\b[^;]*from\s*'\.\/support\/build-script-guards'/);
+    }
+  });
+
+  it('names the remaining private copies, so the set cannot grow', () => {
+    const declarers = allFilesUnder('tests')
+      .filter((path) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/i.test(path))
+      .filter((path) =>
+        /\b(?:function|const)\s+codeOnly\b/.test(
+          codeOnly(readFileSync(join(projectRoot, path), 'utf8')),
+        ),
+      )
+      .sort();
+    expect(declarers).toEqual([LEGACY_CODE_ONLY_COPIES, 'tests/support/build-script-guards.ts'].flat());
+  });
+});
+
 describe('the settings window stays Chrome-owned, and the manifest names no unused reference (t9-01 AC1, AC2; t9-02b AC4)', () => {
   /**
    * The two negatives the `t9-01` review answered "true in the tree, unpinned" (remark
    * R3). `t9-02b` AC4 chooses the pin over the narrowing, and pins the vacuous half of
    * the same remark as the **absence** it is, so the narrowed spec sentence cannot rot.
+   *
+   * `t10-01` D4 widens what "the shipped source" means to those two negatives: the scan
+   * now reads every shipped text file type, and the shapes below catch the same call
+   * written without a dotted name.
    */
   it('ships no code that resizes or closes the settings window', () => {
     const offenders = sourceFiles('src')
@@ -237,6 +422,28 @@ describe('the settings window stays Chrome-owned, and the manifest names no unus
       })
       .map((file) => file.path);
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The name-shaped negatives above are only as wide as their spelling (`t9-02b` review
+   * remark R4): `window\s*\.\s*close\s*\(` does not see the same call reached through a
+   * computed member, a string name, or a saved reference. These are the shapes that call
+   * comes back in, and each one is a failing test here.
+   */
+  const INDIRECT_WINDOW_CALL_SHAPES: [string, RegExp][] = [
+    ['a computed access on a window-like object', /\b(?:window|globalThis|self|top|parent|frames|defaultView)\s*\[/],
+    ['a bracket access that names the method as a string', /\[\s*['"`](?:close|resizeTo|resizeBy|moveTo|moveBy|open|openOptionsPage)['"`]\s*\]/],
+    ['a call through a computed member', /\]\s*\(/],
+    ['an alias of the method, taken without calling it', /=\s*[\w$.]*\b(?:close|resizeTo|resizeBy|moveTo|moveBy)\s*;/],
+  ];
+
+  it('reaches the window or the options page through no computed member, bracket name or alias', () => {
+    for (const file of sourceFiles('src')) {
+      const code = codeOnly(file.text);
+      for (const [shape, pattern] of INDIRECT_WINDOW_CALL_SHAPES) {
+        expect(pattern.test(code), `${file.path}: ${shape}`).toBe(false);
+      }
+    }
   });
 
   it('names the settings surface in no content-layer module, and in exactly one shipped control', () => {
