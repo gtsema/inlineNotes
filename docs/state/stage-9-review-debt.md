@@ -18,3 +18,21 @@ claims. They are collected here so the next stage can pick them as numbered work
 
 Stage 9 used its three tasks. D1–D4 are a **pin-cleanup slice** and D5 needs a ruling first, so the next stage opens with them
 only if the user asks for it; nothing here blocks loading `dist/` or using the extension.
+
+## Status after Stage 10 (2026-11-19)
+
+- **D1 closed** by `196ec0c` + `92eece2`: the shipped `fail` is extracted and executed inside every guard, and the shipped
+  `main().catch(...)` handler runs with only `main`/`console`/`process` stubbed. PM mutations: `fail` → `console.error` fails 8 tests;
+  removing `process.exitCode = 1` fails 5; a commented throwing decoy above a live log-only `fail` fails 9 (and the same decoy over an
+  intact live `fail` stays green at 89/89).
+- **D2 closed**: the 84 px reading is pinned as an absence over every selector that can reach the `img`, and the palette sentence now
+  describes the walk the test really performs. Mechanism ruled `A129` with a Chrome measurement.
+- **D3 closed**: one shared comment-stripper for the two contract suites, with its behavior pinned and the surviving eight local copies
+  named by a pin (carried forward as `S10-10`).
+- **D4 closed by widening**: 19 text types over every file under `src/` recursively, four structural shapes, a named list for the rest.
+  Residual narrow sets in five other suites stay as `S10-9`.
+- **D6 closed**: the README now states the build-before-test order and the synced counts.
+- **D5 stays open by decision**: `A128` was never issued, so the shipped `opacity: 0.45` stands.
+- **D7 closed at stage close** (see above).
+
+New debt from Stage 10 lives in `docs/state/stage-10-review-debt.md` (`S10-1` … `S10-10`).

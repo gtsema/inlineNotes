@@ -297,3 +297,25 @@ illegal memory access`) with the work already committed.
 - **A question I asked three times and never got an answer to is not a decision.** `A128` (the disabled `Сохранить`) stayed
   unissued, so shipped `opacity: 0.45` stands and the item is written into `docs/state/stage-9-review-debt.md` as `D5`. Silence
   keeps the current behavior; it never changes it.
+
+## Stage 10 — pin cleanup (`t10-01`, accepted on attempt 2)
+
+- **What the stage was for.** Nothing shipped changed: Stage 9 left five sentences that said «pinned» where no assertion sat, and one
+  assertion whose subject was its own helper.
+- **The defect that cost the second attempt.** Attempt 1 closed the debt and still left a **silent** failure mode: the extractor read
+  unstripped source and took the leftmost match, so a commented-out copy of `fail` is what the pins executed. The reviewer found it by
+  building a decoy; my own check (`9` red with a decoy over a broken live `fail`, `89` green with the same decoy over an intact one)
+  proved the fix. Lesson kept: **an extraction helper is a parser; a parser gets decoy cases, or it is not pinned.**
+- **A tautology removed can be re-imported.** Item 3 deleted `expect(x).toMatch(/^main\(\)\.catch\(/)` because the helper either returns
+  that text or throws; attempt 2 added `toBe` between two calls that are the same call. The review caught it (`S10-1`). Lesson: after
+  deleting an unfailable assertion, re-read the new ones for the same shape.
+- **The reviewer was wrong about CSS, and the measurement settled it in one step.** It asserted `box-sizing` is inherited, therefore the
+  shipped 84 px contradicted the stylesheet. Chrome returned `content-box` on the `img` while `:host` computes `border-box`. The ruling
+  `A129` and the numbers are in the state file; the part of the finding that was right — the pin could not see a declaration that would
+  move the frame — was accepted and fixed. Lesson kept: **a mechanical claim from a reviewer is checked by measurement, not by rank.**
+- **Spec hygiene is a count problem.** Two sentences in this stage broke on a number, not an idea: «two `box-sizing` declarations» where
+  the stylesheet ships three, and «wider than real matching, never fewer» where two shapes escape. Both are now stated as limits with
+  ledger rows. Lesson: a count inside a sentence is an assertion the stylesheet can outgrow; prefer naming the escape.
+- **Bookkeeping that is not mechanical stays manual.** README carries the test and checker counts, and the checker's info count moves
+  whenever a spec mentions a file — so every spec edit moves README. Nothing goes red when they drift. A candidate for a future gate:
+  pin the counts the same way `A126` pins the asset hash.
