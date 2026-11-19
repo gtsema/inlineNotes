@@ -119,3 +119,15 @@ a missing control.
 |---|---|---|
 | `S14-4` | The trash glyph will exist **twice** in the repository — once in `src/content/overlay/action-icons.tsx` (Preact) and once in the popup (Angular) — because the layer boundary forbids the import. Nothing pins that the two drawings stay the same shape. | test + boundary |
 | `S14-5` | The row's hit box. The page widgets use `24px` (`ACTION_HIT_BOX_PX`) with a `16px` glyph; the popup has no such constant yet, and a popup row is denser than a page card. The stage picks one and says why. | ruling |
+
+## Answers (owner, 2026-11-19): «всё дефолты»
+
+All five defaults stand, so the slice carries no judgement of its own:
+
+| Question | Answer |
+|---|---|
+| Q1 — the card shape | the settings card shape **plus** the popup's own body margin zeroed (the `src/options/index.html` way) |
+| Q2 — the mascot | **none** (`A142`) |
+| Q3 — the row's controls | the checkbox's box and the delete button are styled to the `A125` palette |
+| Q4 — the empty state and the notices | empty line in `#7b6a55`, refusal in `#b3261e` (already shipped), the `name_required` button keeps its underline |
+| Q5 — the trash hit box | `24px` with a `16px` glyph, the same numbers as the page widgets' `ACTION_HIT_BOX_PX` / `ACTION_ICON_PX`, so the icon-only shape matches across surfaces (`S14-5`) |
