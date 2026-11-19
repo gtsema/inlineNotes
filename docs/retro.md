@@ -319,3 +319,26 @@ illegal memory access`) with the work already committed.
 - **Bookkeeping that is not mechanical stays manual.** README carries the test and checker counts, and the checker's info count moves
   whenever a spec mentions a file — so every spec edit moves README. Nothing goes red when they drift. A candidate for a future gate:
   pin the counts the same way `A126` pins the asset hash.
+
+## Stage 11 — the mascot replaced, the extension's first icon
+
+- **A provenance ruling written as a hash does not survive the artwork being replaced.** `A126` pinned the mascot by
+  SHA-256 and the spec repeated it in prose; when the owner swapped the file, the hash kept pointing at a file that no
+  longer shipped, and **no test reads the spec for a hash**, so the sentence rotted silently until a reviewer read the
+  line instead of the tests. Three instances of the same class in this stage: the `A126` hash, the «names none of the
+  three» manifest sentence, and «exactly `cat-mascot.png`» on the unreadable-file list. The fix each time was to correct
+  the sentence, never the artifact.
+- **A distance is only meaningful with its origin named.** The PM reported «the farthest painted pixel» as `621.46` —
+  measured from the painted bounding-box centre. `object-fit` and `border-radius` work from the **image** centre, where
+  the same pixel is `628.00`. The two plausible origins differ by 6.5 px and change the required scale by 1.6×, so the
+  brief asked for a CSS shrink the artwork did not need. The engineer stopped instead of choosing a side; the brief was
+  the thing that was wrong.
+- **An `expect` count is not evidence that the right thing broke.** In `t10-02` the PM read a red mutation as a pass
+  because it did not read the failing case's name — the red came from a neighbouring exact-tag assertion. Read the case
+  name, not the count.
+- **A child that blocks on a contradiction is worth more than a child that resolves it.** The engineer refused to pick
+  between two readings of AC 2/AC 3 and the refusal is what surfaced a wrong measurement. Stopping is the correct
+  behaviour when the brief contradicts itself.
+- **The build's own guard caught the icon before any test did.** `verifyManifestReferences()` already resolved `icons`
+  and `action.default_icon`; moving `src/icons/icon-128.png` away failed the build with the reference named. The
+  presence pin then only had to say *what* the manifest declares, because the build already says *whether it exists*.

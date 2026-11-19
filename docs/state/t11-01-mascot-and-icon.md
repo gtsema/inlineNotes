@@ -112,15 +112,39 @@ the report.
 
 | # | Child | Result |
 |---|---|---|
-| — | not launched | — |
+| 1 | `extension-engineer` `ae39f67d-1425-4bc6-ac1a-50b017c91dfe` | **blocked on AC 3 and correctly so** — `Q1a`'s CSS fit contradicted AC 3's own sentence. No commit. PM answered with `option 1` and corrected the brief (`d4d536f`); the same run then delivered `48f3446` |
+| 1r | `code-reviewer` `0d471052-6661-4493-aacc-b7d4e8f52aa9` | **changes requested**, one blocking finding: two spec sentences still described the old artwork and the old one-file unreadable list |
+| 2 | `extension-engineer` `577d6989-13b1-43bd-b18a-99b3f35582cf` | delivered `f5e5bec` — one file, 2 lines, `docs/` only |
+| 2r | `code-reviewer` `20e29be7-650b-4c69-a571-0898ad0c16dc` | **accepted**, no blocking finding; ten non-blocking rows for the ledger |
 
 ## Delegation count
 
-Expected 2 (engineer, reviewer). Used: 0.
+Expected 2 (engineer, reviewer). Used: 4 (one blocked run that resumed and delivered, one ordering review, one
+docs-only attempt, one confirming review).
 
 ## Verdicts
 
-Pending.
+**Attempt 1 not accepted** on AC 7 (two stale spec sentences). **Attempt 2 accepted** (`f5e5bec` + report `4989d94`).
+
+## Attempt 2 acceptance and the non-blocking rows it left
+
+`f5e5bec` is one file and two lines, and the reviewer verified the bytes itself (`git show f5e5bec:src/options/assets/cat-mascot.png |
+sha256sum` → `c26769ca…af475e`, 20 009 bytes) rather than trusting the report. Its verdict on the mascot-provenance record:
+**internally consistent** — the source half and the shipped half are each stated once and agree with the pinned tests.
+
+The reviewer's non-blocking rows, ledgered so they do not rot:
+
+| Row | What is left | Class |
+|---|---|---|
+| `S11-7` | `docs/specs/content-overlay-ui.md:92` still attributes the **Run 6 sight** («saw the whole cat with its lifebuoy») to the current artwork, while Run 6 was recorded in Stage 9 on the `A123` artwork. The sight is historical. | spec |
+| `S11-8` | `docs/specs/content-overlay-ui.md:93` — «every value is sampled from the artwork itself» now points at art that no longer ships. This is `S11-1` seen from the spec side. | spec + ruling |
+| `S11-9` | `docs/specs/content-overlay-ui.md:91` — «pins **that hash**» has its antecedent one sentence away, and the test pins the **shipped** hash, never the uncommitted source one. | spec |
+| `S11-10` | `docs/specs/content-overlay-ui.md:49` — the `settings window` term row still attributes the surface's look to `t9-02` alone. Cosmetic. | spec |
+| `S11-11` | `tests/options-window-look.spec.ts:618` — the describe title still reads «(t9-02 AC1, rulings A123 + A126)» for bytes `A130` governs, while its own docstring two lines up says so. A label outliving its artifact. | test |
+| `S11-12` | The spec never states the load-bearing fact that `src/icons/icon-128.png` and `src/options/assets/cat-mascot.png` are **byte-identical** (one artwork, one conversion, two use sites). It is pinned in the test, not written in the spec. | spec |
+| `S11-13` | The provenance the spec points at is verifiable but **not reproducible**: the one-off `convert.mjs` lives in the uncommitted `.t11-source/` and the source bytes are deliberately uncommitted, so the source hash can only be checked against the report's own table. | docs |
+| `S11-14` | This state file's own bookkeeping (attempts, delegation count, verdicts) lagged the body until this edit — the same class as the spec sentences: a record outliving what it described. | process |
+| `S11-3` | closed by the PM in this commit: `README.md` now says `dist/` 12 files, **1031** tests, **176** info, «Стадии 1–11», and carries a Stage 11 note about the icon and the new mascot. | docs |
 
 ## Correction 1 (PM, 2026-11-19, after the engineer's block)
 
