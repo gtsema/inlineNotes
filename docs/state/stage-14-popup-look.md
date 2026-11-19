@@ -469,3 +469,33 @@ open, and the reviewer added one: the `S14-21` rationale now lives in **three** 
   `A145` shape narration, and finally the two clauses about the document box. Each was caught by a reviewer reading the spec,
   never by a test, because **no test reads a spec sentence**. The durable fix is not more care in prose: it is that a ruling
   which changes an artifact must name the sentences it falsifies, in the same commit, as a checklist item.
+
+## Run 13 answered (2026-11-19): the frame is right, the surface needs a margin
+
+The reader: **«1-5 — всё хорошо. Можно сделать отступ от края она до линии. где-то 4px»**, plus the two carried questions
+answered — **«6. мусорки одинаковые. всё ок»** and **«7. палитра ок»**.
+
+So the whole `A144`→`A148` chain is settled by the eye, and `S14-4` and `S14-13` close with it. One new request: a **gap
+between the window edge and the frame**, «где-то 4px».
+
+### What that means in this layout, measured
+
+The frame belongs to `.popup` (the card), and the card sits inside `:host` inside `body`. With the current rules the card's
+edge touches the window edge, so the `2px` `#a6cbdc` line runs along the panel's own edge — which is exactly why the reader
+asked for air. `4px` is his number, so it is a value, not a judgement.
+
+| Ruling | Decision |
+|---|---|
+| `A149` | **The card is inset from the window edge by `4px`.** The gap is declared on the box that contains the card (`:host`), not on `body`: `body` carries the paint and nothing else (`A147`), and giving the document a padding would put the cream back under the frame's own gap in a way the withdrawn-shape pin forbids. `:host` gains `padding: 4px` and keeps `display: block`; the card keeps its `2px` frame, its `12px` radius, its `320px` width and its `16px` inner padding. |
+
+**The arithmetic the task must respect:** the `4px` gap is **outside** the card, so the card's `320px` and its `16px` padding
+are unchanged — the panel simply becomes `4 + 320 + 4` wide. If the reader's eye later wants the whole thing to stay at
+`320px` including the gap, that is a different ruling and a different number (`S14-38`).
+
+### Ledger
+
+| Row | What is left | Class |
+|---|---|---|
+| `S14-4` | **Closed** by Run 13: the reader compared the popup's trash glyph with the page editor's and reports them the same. | look |
+| `S14-13` | **Closed** by Run 13: «палитра ок». | look |
+| `S14-38` | Whether the `4px` gap lives inside the `320px` or outside it. `A149` puts it outside, so the panel widens by 8 px; a reader who wants the total unchanged needs a new value for the card. | ruling |
