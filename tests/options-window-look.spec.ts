@@ -137,6 +137,139 @@ function ruleBody(styles: string, selector: string): string {
   return styles.slice(open + 1, close);
 }
 
+/**
+ * A rule of a shipped stylesheet: its **selector** and its declaration block
+ * (`t10-01b` AC8 item 1).
+ *
+ * The mascot pin used to read one rule body. `box-sizing` declared on any **other** selector
+ * that matches the same element — `img`, `*`, `.header img` — moves the 2 px frame inside the
+ * 80 px image box and falsifies the 84 px footprint of ruling `A127`, while a body-scoped
+ * pin stays green. Ruling `A129` measured the shipped page at 84×84, so the scan is scoped to
+ * every selector that can reach the element.
+ */
+interface ShippedRule {
+  selector: string;
+  body: string;
+}
+
+/** One element of the shipped options page, as far as a CSS selector can name it. */
+interface ElementShape {
+  tag: string;
+  classes: string[];
+  /** The custom element the component renders into: the one `:host` names. */
+  isHost?: boolean;
+}
+
+/**
+ * The `settings mascot` as the shipped template places it: `img.mascot` inside
+ * `header.header` inside `main.options` inside the component host. Only a rule that matches
+ * **this** element can move its frame, because `box-sizing` is not an inherited property
+ * (`A129`), which is why the `:host` and `.options` declarations of `border-box` — pinned in
+ * the dialog-box case below — never reach it.
+ */
+const MASCOT_ELEMENT: ElementShape = { tag: 'img', classes: ['mascot'] };
+
+/** Every element between the mascot and the component root, innermost first. */
+const MASCOT_ANCESTORS: ElementShape[] = [
+  { tag: 'header', classes: ['header'] },
+  { tag: 'main', classes: ['options'] },
+  { tag: 'app-root', classes: [], isHost: true },
+];
+
+/**
+ * Every `selector { declarations }` pair of a shipped stylesheet text, in shipped order. The
+ * two shipped option surfaces style this element with plain rules only — the options project
+ * declares no global stylesheet (`styles: []`, pinned in the angular.json case) and neither
+ * stylesheet uses an at-rule, and a rule nested in one is reached anyway, as the
+ * counterfactual case below shows — so a flat rule scan is the whole set, and the case that
+ * names the reachable rules pins the set it found.
+ */
+function shippedRules(css: string): ShippedRule[] {
+  const rules: ShippedRule[] = [];
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = (match[1] as string).replaceAll(/\s+/g, ' ').trim();
+    if (selector.length === 0) {
+      continue;
+    }
+    rules.push({ selector, body: match[2] as string });
+  }
+  return rules;
+}
+
+/** The `<style>` block of a shipped HTML document, comments removed. */
+function documentStyles(relativePath: string): string {
+  const block = /<style>([\s\S]*?)<\/style>/i.exec(readSource(relativePath))?.[1];
+  if (block === undefined) {
+    throw new Error(`${relativePath} ships no <style> block`);
+  }
+  return codeOnly(block);
+}
+
+/**
+ * Whether one compound — `img`, `.mascot`, `*`, `:host`, `img[alt=""]` — names one shape.
+ *
+ * `:host` names the component host and nothing inside it. A compound that names an `id`
+ * cannot match: no element in the mascot's chain carries one. An attribute selector, an
+ * unknown pseudo-class or a pseudo-element is treated as **able** to match, because a scan
+ * that guesses wrong here must guess on the side of flagging more rules.
+ */
+function compoundMatchesShape(compound: string, shape: ElementShape): boolean {
+  const tag = /^[A-Za-z][\w-]*/.exec(compound)?.[0];
+  if (tag !== undefined && tag.toLowerCase() !== shape.tag) {
+    return false;
+  }
+  const simples = compound.match(/[.#][\w-]+|\[[^\]]*\]|::?[A-Za-z-]+(?:\([^)]*\))?/g) ?? [];
+  for (const simple of simples) {
+    if (simple.startsWith('.')) {
+      if (!shape.classes.includes(simple.slice(1))) {
+        return false;
+      }
+    } else if (simple.startsWith('#')) {
+      return false;
+    } else if (simple.startsWith(':host')) {
+      if (shape.isHost !== true) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether a shipped selector can match the mascot element.
+ *
+ * The scan reads compounds, not a CSS engine: it splits on combinators and does not model
+ * which combinator it was or the sibling order of the template, so `.title + .mascot` counts
+ * as reaching the element even though the shipped template puts the title after the image.
+ * That is deliberately **wider** than real matching, and it is the safe direction for a pin
+ * whose assertion is an absence: a wider scan can only ever flag more rules. Every compound
+ * left of the last one has to name some element of the shipped chain.
+ */
+function selectorCanReachMascot(selector: string): boolean {
+  return selector.split(',').some((complex) => {
+    const compounds = complex.split(/[\s>+~]+/).filter((compound) => compound.length > 0);
+    if (compounds.length === 0) {
+      return false;
+    }
+    if (!compoundMatchesShape(compounds[compounds.length - 1] as string, MASCOT_ELEMENT)) {
+      return false;
+    }
+    return compounds
+      .slice(0, -1)
+      .every((compound) =>
+        MASCOT_ANCESTORS.some((ancestor) => compoundMatchesShape(compound, ancestor)),
+      );
+  });
+}
+
+/** Every shipped selector that both reaches the mascot and declares `box-sizing`. */
+function boxSizingSelectorsReachingMascot(css: string): string[] {
+  return shippedRules(css)
+    .filter((rule) => selectorCanReachMascot(rule.selector))
+    .filter((rule) => /\bbox-sizing\b/.test(rule.body))
+    .map((rule) => rule.selector);
+}
+
 function sha256(relativePath: string): string {
   return createHash('sha256').update(readFileSync(join(projectRoot, relativePath))).digest('hex');
 }
@@ -523,12 +656,103 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
     expect(mascot).toMatch(/object-position: center/);
     expect(mascot).toContain(`border: 2px solid ${PALETTE.decorative}`);
     // Ruling `A127` reads the 80 px as the **image box** and the 2 px frame as painted
-    // outside it, so the footprint is 84 px. That reading stands or falls on a declaration
-    // this stylesheet does not make: `box-sizing` is not inherited by `img`, and the
-    // shipped `.mascot` rule declares none of its own. Adding `box-sizing: border-box`
-    // here would move the frame inside the 80 px and falsify the spec sentence, which is
-    // exactly why the absence is pinned (`t10-01` D2, closing `t9-02b` review remark R2a).
+    // outside it, so the footprint is 84 px; ruling `A129` gives the mechanism — `box-sizing`
+    // is not inherited, and Chrome measures `img.mascot` at `content-box`, 80 px box, 2 px
+    // border, 84×84 painted. That reading stands or falls on a declaration this stylesheet
+    // does not make. Adding `box-sizing: border-box` here would move the frame inside the
+    // 80 px and falsify the spec sentence, which is why the absence is pinned (`t10-01` D2,
+    // closing `t9-02b` review remark R2a). The scope of that absence is the next case.
     expect(mascot).not.toMatch(/\bbox-sizing\b/);
+  });
+});
+
+/**
+ * The scope `t10-01b` AC8 item 1 adds. The pin above reads the `.mascot` body only, so the
+ * same counterfactual written on a different selector that matches the same element —
+ * `img { box-sizing: border-box }`, `* { … }`, `.header img { … }` — moved the frame inside
+ * the 80 px with every pin green. `A129` settled the mechanism (no inheritance, so only a
+ * rule that matches the `img` itself can reach its box), and the scan below is scoped to
+ * exactly that set of selectors.
+ */
+describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-01b AC8 item 1; rulings A127, A129)', () => {
+  const componentCss = componentStyles(join('src', 'options', 'options.component.ts'));
+  const documentCss = documentStyles(join('src', 'options', 'index.html'));
+  const shippedCss = `${componentCss}\n${documentCss}`;
+
+  it('matches the element the shipped template actually places', () => {
+    // The element model above is an assumption about the template unless this holds: the
+    // tag, the class and the chain a descendant selector has to walk.
+    const template = componentTemplate(join('src', 'options', 'options.component.ts'));
+    expect(template).toMatch(
+      /<main class="options">\s*<header class="header">\s*<img class="mascot"/,
+    );
+    expect(shippedRules(documentCss).map((rule) => rule.selector)).toEqual(['body']);
+    expect(shippedRules(componentCss).length).toBeGreaterThan(10);
+  });
+
+  it('names exactly one shipped rule as able to reach the mascot', () => {
+    const reachable = shippedRules(shippedCss)
+      .filter((rule) => selectorCanReachMascot(rule.selector))
+      .map((rule) => rule.selector);
+    expect(reachable).toEqual(['.mascot']);
+  });
+
+  it('declares no box-sizing on any shipped rule whose selector can reach the mascot', () => {
+    // The widened form of the absence ruling `A127` rests on: not "the `.mascot` body is
+    // clean", but "no rule that can match this element declares the property at all".
+    expect(boxSizingSelectorsReachingMascot(shippedCss)).toEqual([]);
+  });
+
+  it('catches the counterfactual on every selector shape that reaches the element', () => {
+    // The scan is what carries the claim, so the scan is run against text that should make
+    // it speak. Every one of these selectors matches `img.mascot` in the shipped template.
+    for (const selector of [
+      '.mascot',
+      'img',
+      '*',
+      '.header img',
+      'header > img',
+      '.options img',
+      'main .header img',
+      ':host .mascot',
+      'img.mascot',
+      'img[alt=""]',
+      '.mascot:hover',
+    ]) {
+      const fixture = `${selector} {\n  box-sizing: border-box;\n  width: 80px;\n}`;
+      expect(boxSizingSelectorsReachingMascot(fixture), selector).toEqual([selector]);
+    }
+
+    // A rule wrapped in an at-rule is still a rule: the flat scan reaches the inner block, so
+    // an `@media` wrapper cannot hide the declaration either.
+    expect(
+      boxSizingSelectorsReachingMascot(
+        '@media screen and (min-width: 400px) {\n  .header img {\n    box-sizing: border-box;\n  }\n}',
+      ),
+    ).toEqual(['.header img']);
+  });
+
+  it('leaves every selector that cannot reach the element alone', () => {
+    // Without this half the scan could pass by matching nothing at all. `:host` and
+    // `.options` are the two rules that really do declare `box-sizing: border-box` on this
+    // surface, and neither can reach the image (`A129`).
+    for (const selector of [
+      ':host',
+      '.options',
+      '.title',
+      'h1',
+      'p',
+      'button',
+      'input',
+      '.header .title',
+      'main > .hint',
+      'h1 img',
+      '.save:disabled',
+      'body',
+    ]) {
+      const fixture = `${selector} {\n  box-sizing: border-box;\n}`;
+      expect(boxSizingSelectorsReachingMascot(fixture), selector).toEqual([]);
+    }
   });
 });
 

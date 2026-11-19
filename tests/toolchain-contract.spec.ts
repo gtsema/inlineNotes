@@ -1,16 +1,22 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildScriptEntryStatement,
+  buildScriptEntryStatementFrom,
+  buildScriptFunctionSourceFrom,
   buildScriptMainBody,
+  buildScriptMainBodyFrom,
   buildScriptSource,
   codeOnly,
   loadBuildFail,
+  loadBuildFailFromScript,
   loadBuildGuard,
+  loadBuildGuardFromScript,
   runBuildScriptEntry,
+  runBuildScriptEntryFromScript,
 } from './support/build-script-guards';
 
 /**
@@ -326,8 +332,229 @@ describe('a failed build check becomes a non-zero exit, through the shipped code
     expect(body).not.toMatch(/\bfinally\b/);
     expect(body).not.toMatch(/allSettled/);
 
-    // The handler is attached to the shipped `main`, not to a copy of it.
-    expect(buildScriptEntryStatement()).toMatch(/^\s*main\(\)\.catch\(/);
+    // The handler is attached to the shipped `main`, and there is exactly **one** live
+    // handler for the extraction to attach it to.
+    //
+    // This pin used to match the extractor's own return value against the statement shape
+    // the extractor requires before it returns anything: it was tautological, and no change
+    // to the shipped script could make it fail (`t10-01` review answer 7, closed by
+    // `t10-01b` AC8 item 3). What can fail is the number of live handlers the extraction has
+    // to choose between, and what the handler it chose really does.
+    const liveHandlers = codeOnly(buildScriptSource()).match(/^[ \t]*main\(\)\.catch\(/gm) ?? [];
+    expect(liveHandlers, 'the shipped script ships exactly one live entry handler').toHaveLength(
+      1,
+    );
+    expect(buildScriptEntryStatement()).toContain('process.exitCode = 1;');
+  });
+});
+
+describe('the extraction runs live code, never a comment copy (t10-01 review blocking finding 2, closed by t10-01b AC8 item 2)', () => {
+  /**
+   * The one silent failure mode the D1 chain kept (`t10-01` review blocking finding 2): the
+   * extractors searched the script **as shipped** and took the leftmost match, so a
+   * block-commented copy of `fail` — or of the `main().catch(...)` statement, or of
+   * `main()` itself — placed above the live one was the text the pins executed. A build that
+   * logged its failures and exited 0 kept every pin green, because the pins were running a
+   * comment.
+   *
+   * Below, each decoy is built out of the **shipped script text** with one declaration
+   * replaced, so the fixture is the real script plus a lie in a comment. Each case then
+   * states the red signal: the assertion the shipped pin makes stops holding, which is what
+   * a shipped decoy does to that pin now.
+   */
+  const distDir = resolve(projectRoot, 'dist');
+  const shippedScript = buildScriptSource();
+
+  const manifestOf = (optionsPage: string): Record<string, unknown> => ({
+    manifest_version: 3,
+    content_scripts: [{ matches: ['http://*/*', 'https://*/*'], js: ['content.js'] }],
+    action: { default_popup: 'popup/index.html' },
+    options_ui: { page: optionsPage, open_in_tab: false },
+  });
+
+  /** The shipped script with a commented throwing `fail` above a live log-and-continue one. */
+  const logAndContinueScript = shippedScript.replace(
+    buildScriptFunctionSourceFrom(shippedScript, 'fail'),
+    () =>
+      [
+        '/*',
+        'function fail(message) {',
+        "  throw new Error('build-extension: ' + message);",
+        '}',
+        '*/',
+        'function fail(message) {',
+        '  console.error(message);',
+        '}',
+      ].join('\n'),
+  );
+
+  /** The shipped script with a commented exit-setting handler above a live swallowing one. */
+  const swallowingEntryScript = shippedScript.replace(
+    buildScriptEntryStatementFrom(shippedScript),
+    () =>
+      [
+        '/*',
+        'main().catch((error) => {',
+        '  console.error(error instanceof Error ? error.message : String(error));',
+        '  process.exitCode = 1;',
+        '});',
+        '*/',
+        'main().catch(() => {',
+        '  void 0;',
+        '});',
+      ].join('\n'),
+  );
+
+  /**
+   * The shipped script with a **well-ordered** commented `main()` above a live `main()` that
+   * reports the folder before it verifies it. The live half is what the build really runs,
+   * and it is the half the order pins have to read.
+   */
+  const swappedOrderScript = shippedScript
+    .replace('  verifyOptionsAssetShips();\n  report();', () =>
+      '  report();\n  verifyOptionsAssetShips();',
+    )
+    .replace('async function main() {', () =>
+      [
+        '/*',
+        'async function main() {',
+        '  verifyOptionsAssetShips();',
+        '  report();',
+        '}',
+        '*/',
+        'async function main() {',
+      ].join('\n'),
+    );
+
+  /**
+   * Every commented copy here sits at a **line start** inside its comment, so line anchoring
+   * alone would not have been enough: it is the comment-stripped search that makes the live
+   * declaration the leftmost one. Each case therefore starts by showing where the old,
+   * unstripped, leftmost pattern landed.
+   */
+
+  it('takes the live `fail` when a throwing copy sits in a comment above it', () => {
+    // The decoy really does bite: the pattern this module used before — unstripped text,
+    // leftmost match — lands on the comment copy, so the pins executed a `fail` that threw
+    // while the script shipped one that only logged.
+    const leftmostBefore = /function fail\([^)]*\) \{[\s\S]*?\n\}/.exec(logAndContinueScript);
+    expect(leftmostBefore?.[0]).toContain('throw new Error(');
+
+    const lifted = buildScriptFunctionSourceFrom(logAndContinueScript, 'fail');
+    expect(lifted).not.toContain('throw');
+    expect(lifted).toContain('console.error(message);');
+  });
+
+  it('makes the guard pin red for a `fail` that only logs, instead of running a comment', async () => {
+    const verify = loadBuildGuardFromScript(
+      'verifyManifestReferences',
+      { distDir, existsSync: () => false },
+      logAndContinueScript,
+    );
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      // The shipped pin is `expect(() => verify(manifest)).toThrow(...)`. Against this script
+      // the guard answers an absent reference with **nothing**, so that pin fails — which is
+      // the outcome the decoy used to hide.
+      expect(() => verify(manifestOf('options/index.html'))).not.toThrow();
+
+      // And the chain does not reach an exit code either: the shipped handler is the shipped
+      // one, but nothing throws into it any more. The build logs its failures and walks away
+      // with a broken `dist/` at exit 0 — the symptom `t9-02b` review remark R1 named.
+      const run = await runBuildScriptEntryFromScript(logAndContinueScript, () => {
+        verify(manifestOf('options/index.html'));
+      });
+      expect(run.exitCode).toBeUndefined();
+      expect(errors.mock.calls.length, 'the decoy script logs the failure').toBeGreaterThan(0);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it('takes the live entry statement when a commented handler sits above it', async () => {
+    // Same bite on the entry half: the commented handler is the leftmost match, and a live
+    // handler that swallows the rejection sits below it.
+    const leftmostBefore = /\nmain\(\)\.catch\([\s\S]*?\n\}\);/.exec(swallowingEntryScript);
+    expect(leftmostBefore?.[0]).toContain('process.exitCode = 1;');
+
+    const lifted = buildScriptEntryStatementFrom(swallowingEntryScript);
+    expect(lifted).toContain('main().catch(() => {');
+    expect(lifted).not.toContain('process.exitCode');
+
+    // The shipped pins are `expect(run.exitCode).toBe(1)` and `expect(run.logged).toEqual(
+    // [...])`. Against this script a thrown failure leaves no exit code and no log line, so
+    // both fail — the loud end a live handler that swallows deserves.
+    const run = await runBuildScriptEntryFromScript(swallowingEntryScript, () => {
+      throw new Error('build-extension: dist/manifest.json is missing');
+    });
+    expect(run.exitCode).toBeUndefined();
+    expect(run.logged).toEqual([]);
+  });
+
+  it('takes the live main() when a well-ordered copy sits in a comment above it', () => {
+    // The commented copy verifies before it reports; the live one reports first. The order
+    // pins read the live one now, so they go red on a script that really reports a broken
+    // `dist/` before it verifies it — where the unstripped `indexOf` used to land on the
+    // copy in the comment and stay green.
+    const leftmostBefore = /async function main\(\) \{[\s\S]*?\n\}/.exec(swappedOrderScript);
+    expect(leftmostBefore?.[0]).toContain('verifyOptionsAssetShips();\n  report();');
+
+    const body = buildScriptMainBodyFrom(swappedOrderScript);
+    expect(body).toContain('report();');
+    expect(body.indexOf('report();')).toBeLessThan(body.indexOf('verifyOptionsAssetShips();'));
+  });
+
+  it('refuses to run a function that exists only inside a comment', () => {
+    // The alternative to a red pin is a throw: an extraction that finds nothing cannot
+    // quietly execute prose.
+    expect(() =>
+      buildScriptFunctionSourceFrom(
+        '/* function fail(message) {\n  throw new Error(message);\n} */',
+        'fail',
+      ),
+    ).toThrow(/declares no top-level function fail outside a comment/);
+    expect(() =>
+      buildScriptEntryStatementFrom('/* main().catch(() => {\n  process.exitCode = 1;\n}); */'),
+    ).toThrow(/has no `main\(\)\.catch\(\.\.\.\)` statement outside a comment/);
+    expect(() =>
+      buildScriptMainBodyFrom('/* async function main() {\n  report();\n} */'),
+    ).toThrow(/has no `async function main\(\)` outside a comment/);
+  });
+
+  it('drives the shipped pins through the same extraction the decoy cases drive', () => {
+    // Without this, the decoy cases above could exercise a helper the shipped pins never
+    // call. The shipped entry points delegate to the script-text ones, so the shipped text
+    // and the fixture text go through one extractor.
+    expect(buildScriptEntryStatement()).toBe(buildScriptEntryStatementFrom(shippedScript));
+    expect(buildScriptMainBody()).toBe(buildScriptMainBodyFrom(shippedScript));
+    expect(buildScriptFunctionSourceFrom(shippedScript, 'verifyOptionsAssetShips')).toMatch(
+      /^function verifyOptionsAssetShips\(\) \{/,
+    );
+
+    const shipped = loadBuildFail();
+    const fromScript = loadBuildFailFromScript(shippedScript);
+    expect(() => shipped('the same message')).toThrow(/^build-extension: the same message$/);
+    expect(() => fromScript('the same message')).toThrow(/^build-extension: the same message$/);
+
+    const viaShipped = loadBuildGuard('verifyManifestReferences', {
+      distDir,
+      existsSync: (path) => !path.endsWith(join(distDir, 'options', 'index.html')),
+    });
+    const viaScript = loadBuildGuardFromScript(
+      'verifyManifestReferences',
+      { distDir, existsSync: (path) => !path.endsWith(join(distDir, 'options', 'index.html')) },
+      shippedScript,
+    );
+    for (const [label, verify] of [
+      ['loadBuildGuard', viaShipped],
+      ['loadBuildGuardFromScript', viaScript],
+    ] as const) {
+      expect(
+        () => verify(manifestOf('options/index.html')),
+        label,
+      ).toThrow(/^build-extension: manifest reference "options\/index\.html" does not exist inside dist\/$/);
+    }
   });
 });
 
