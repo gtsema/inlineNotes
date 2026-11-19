@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+
+import { buildScriptMainBody, buildScriptSource, loadBuildGuard } from './support/build-script-guards';
 
 /**
  * Toolchain contracts of task `t1-01`.
@@ -25,12 +27,14 @@ interface ManifestShape {
   permissions?: string[];
   host_permissions?: string[];
   optional_permissions?: string[];
-  action?: { default_popup?: string };
+  action?: { default_popup?: string; default_icon?: unknown };
   /** Ruling `A118`: the settings surface is a Chrome window, not a tab. */
   options_ui?: { page?: string; open_in_tab?: boolean };
   /** Declared in this shape only so the `A118` absence pin compiles; Chrome rejects the pair. */
   options_page?: string;
-  content_scripts?: { matches?: string[]; js?: string[] }[];
+  content_scripts?: { matches?: string[]; js?: string[]; css?: string[] }[];
+  /** The reference check resolves these; `t9-02b` AC4 pins that this manifest names none. */
+  icons?: Record<string, string>;
 }
 
 function sourceFiles(dir: string): SourceFile[] {
@@ -145,6 +149,120 @@ describe('manifest contract', () => {
     );
     expect(spec).toContain('- Permissions:');
     expect(spec).toContain('`storage` and `tabs`');
+  });
+});
+
+describe('the dist/ reference check fails a manifest reference that does not ship (t9-01 AC3; t9-01 R2 + t9-02 R2, closed by t9-02b AC3)', () => {
+  /**
+   * The check is run **as behavior** here. The pin that stands next to the manifest
+   * contract matches substrings of `scripts/build-extension.mjs`, so it proves the
+   * script *names* the check, not that the check fails the build; the only evidence for
+   * "a missing `dist/options/index.html` fails the build" was then an engineer's one-off
+   * mutation quoted in a commit message.
+   */
+  const distDir = resolve(projectRoot, 'dist');
+
+  /** The shipped manifest's shape, with its options reference replaced per case. */
+  const manifestOf = (optionsPage: string): Record<string, unknown> => ({
+    manifest_version: 3,
+    content_scripts: [{ matches: ['http://*/*', 'https://*/*'], js: ['content.js'] }],
+    action: { default_popup: 'popup/index.html' },
+    options_ui: { page: optionsPage, open_in_tab: false },
+  });
+
+  it('fails the build when dist/options/index.html is absent', () => {
+    const verify = loadBuildGuard('verifyManifestReferences', {
+      distDir,
+      existsSync: (path) => !path.endsWith(join(distDir, 'options', 'index.html')),
+    });
+    expect(() => verify(manifestOf('options/index.html'))).toThrow(
+      /manifest reference "options\/index\.html" does not exist inside dist\//,
+    );
+  });
+
+  it('refuses a reference that leaves dist/ before it asks the filesystem', () => {
+    const verify = loadBuildGuard('verifyManifestReferences', { distDir, existsSync: () => true });
+    expect(() => verify(manifestOf('/options/index.html'))).toThrow(/is not relative to dist\//);
+    expect(() => verify(manifestOf('../outside/index.html'))).toThrow(/is not relative to dist\//);
+  });
+
+  it('accepts the manifest the shipped build really produced', () => {
+    // `npm run build` runs before `npm test` (ruling `A62`), so `dist/manifest.json`
+    // exists here: a reference check that trips on the real folder is a red gate, never
+    // a skipped case.
+    const verify = loadBuildGuard('verifyManifestReferences', { distDir, existsSync });
+    const shipped: unknown = JSON.parse(readFileSync(join(distDir, 'manifest.json'), 'utf8'));
+    expect(() => verify(shipped)).not.toThrow();
+  });
+
+  it('existence-checks every collected reference, verifies before reporting, and exits non-zero', () => {
+    const script = codeOnly(buildScriptSource());
+    expect(script).toMatch(/for \(const reference of references\)/);
+    expect(script).toMatch(/if \(!existsSync\(join\(distDir, reference\)\)\)/);
+    expect(script).toMatch(/manifest reference "\$\{reference\}" does not exist inside dist\//);
+
+    // The order lives nowhere but in `main()`, and a check after the folder report would
+    // print a healthy-looking `dist/` for a build that has to fail.
+    const body = buildScriptMainBody();
+    for (const call of [
+      'verifyManifestReferences(manifest);',
+      'verifyContentBundleHasNoAngular();',
+      'verifyOptionsAssetShips();',
+      'report();',
+    ]) {
+      expect(body.indexOf(call), call).toBeGreaterThanOrEqual(0);
+    }
+    expect(body.indexOf('verifyManifestReferences(manifest);')).toBeLessThan(
+      body.indexOf('report();'),
+    );
+    expect(body.indexOf('verifyOptionsAssetShips();')).toBeLessThan(body.indexOf('report();'));
+
+    // A verification failure is an exit code, not a log line.
+    expect(script).toMatch(/main\(\)\.catch\(/);
+    expect(script).toMatch(/process\.exitCode = 1/);
+  });
+});
+
+describe('the settings window stays Chrome-owned, and the manifest names no unused reference (t9-01 AC1, AC2; t9-02b AC4)', () => {
+  /**
+   * The two negatives the `t9-01` review answered "true in the tree, unpinned" (remark
+   * R3). `t9-02b` AC4 chooses the pin over the narrowing, and pins the vacuous half of
+   * the same remark as the **absence** it is, so the narrowed spec sentence cannot rot.
+   */
+  it('ships no code that resizes or closes the settings window', () => {
+    const offenders = sourceFiles('src')
+      .filter((file) => {
+        const code = codeOnly(file.text);
+        return /\bwindow\s*\.\s*close\s*\(/.test(code) || /\bresizeTo\s*\(/.test(code);
+      })
+      .map((file) => file.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('names the settings surface in no content-layer module, and in exactly one shipped control', () => {
+    const pageOffenders = sourceFiles('src/content')
+      .filter((file) =>
+        /\bopenOptionsPage\b|\boptions_ui\b|\boptions_page\b/.test(codeOnly(file.text)),
+      )
+      .map((file) => file.path);
+    expect(pageOffenders).toEqual([]);
+
+    // Ruling `A122`: the popup's name-required notice keeps the one call site, and it is
+    // the only one anywhere in the shipped source.
+    const callers = sourceFiles('src')
+      .filter((file) => /\bopenOptionsPage\b/.test(codeOnly(file.text)))
+      .map((file) => file.path);
+    expect(callers).toEqual(['src/popup/popup.component.ts']);
+  });
+
+  it('declares no icons, no action.default_icon and no content-script css', () => {
+    // The reference check resolves all three and this manifest uses none of them; the
+    // spec says so in those words, and this absence is what keeps that sentence honest
+    // instead of vacuously true.
+    const manifest = readManifest();
+    expect(manifest.icons).toBeUndefined();
+    expect(manifest.action?.default_icon).toBeUndefined();
+    expect(manifest.content_scripts?.[0]?.css).toBeUndefined();
   });
 });
 
