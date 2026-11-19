@@ -59,12 +59,50 @@ around them. Close exactly those six rows.
 
 | # | Child | Result |
 |---|---|---|
-| — | not launched | — |
+| 1 | `extension-engineer` `4816c481-af5d-4e9c-b69d-9881b99ab01a` | crashed on infrastructure (`prefill: … illegal instruction`) while running its mutation checks. The slice was written but **uncommitted**.
+| 1b | resumed as `32aa76ba-28df-4958-ae14-6dda91f69ac9` | died after ~2.5 min with `the engine stopped unexpectedly (exit code -11)`; no edits, the slice stayed in the tree
+| 1c | `extension-engineer` `08843a4f-d253-4c0e-a230-8f8aa7f459c3` (finish-only) | told **not** to rewrite the slice: fix the one red gate (`TS2322` on `liveDeclarationsOf`), run the four gates, one commit, report in one `write` call |
+
+### The accident and the recovery (PM, 2026-11-19) — read before trusting any t10-02 number
+
+The slice stayed uncommitted through two crashes, which made it fragile, and the PM then broke it twice while verifying it:
+
+1. A verification loop finished each mutation with `git checkout -- .`, which reverted **the whole uncommitted slice** rather than the
+   mutation. For a moment the engineer's work existed only in its run session log.
+2. Recovery: replaying the child's own `edit` calls (`type: "toolCall"`, `arguments.edits[]`, in order, LF/CRLF tolerant) rebuilt the
+   slice to the same diffstat — 4 files, **+329/−14** — and `npm test` returned to **1019 tests / 46 files**.
+3. A second loop restored one file with `git checkout -- tests/support/build-script-guards.ts` and lost that file's 23 lines; the same
+   replay put them back and the diffstat matched again. `docs/state/t10-02-extraction-honesty.md` itself was lost in step 1 and is
+   rewritten here.
+
+Discipline adopted: a file holding uncommitted work is restored **from a copy** (`cp` from `…/inlinenotes-verify/backup`), never by
+`git checkout`, and a mutation loop never ends with `git checkout -- .`. The slice is parked at
+`…/inlinenotes-verify/slice-backup/` so a third accident costs nothing.
+
+One gate was genuinely red in the slice, and the accident did not cause it: `npm run typecheck` reports
+`tests/toolchain-contract.spec.ts(589,5): TS2322 — 'RegExpMatchArray | []' is not assignable to 'RegExpMatchArray'` (the helper
+`liveDeclarationsOf` promises a match array and can answer `[]`). `npm test` passes over it because Vitest transpiles without type
+checking — which is precisely why `typecheck` is a gate and not a courtesy.
+
+### The four mutation checks, as run by the PM on the restored slice
+
+Each mutation was applied to one file, the two touched suites were run, and the file was restored from a copy:
+
+```
+M1  tests/support/build-script-guards.ts — buildScriptEntryStatement() re-implements the extraction instead of one delegate call
+                                            -> 1 failed  (the delegation pin caught it)
+M2  src/options/index.html — a second <style>img { box-sizing: border-box }</style> block
+                                            -> 4 failed  (every-block scan plus the exactly-one pin)
+M3  src/options/options.component.ts — style="box-sizing: border-box" on the mascot element
+                                            -> 2 failed  (the inline-style absence pin)
+M4  scripts/build-extension.mjs — a second live `function fail (message)` declaration
+                                            -> 10 failed (the one-live-declaration pin)
+```
 
 ## Delegation count
 
-Expected 2 (engineer, reviewer). Used: 0.
+Expected 2 (engineer, reviewer). Used: 3 engineers (two crashed runs of the same slice, one finish-only run) + the reviewer still owed.
 
 ## Verdicts
 
-Pending.
+Pending the finish-only run and the review.
