@@ -351,3 +351,20 @@ the profiles it can read. The user's record is one statement: «Я всё про
   `Сохранить`; whether «Это имя подписывает каждую заметку» is the right wording for a first-time reader.
 - **Ruling `A128` was never issued.** The user closed the stage without answering the disabled-state question, so the shipped
   `.save:disabled { opacity: 0.45 }` stands unchanged, and the item stays open as `D5` in `docs/state/stage-9-review-debt.md`.
+
+### Addendum to Run 6 (2026-11-19, after the t10-01 review)
+
+The user re-confirmed the settings surface in their own Chrome: «Я проверил - там всё нормально отображается». The mascot, the
+palette and the window itself render as specified — this is a **sight**, and it is the second independent one for `A129`'s frame
+question.
+
+Why the PM could not see it: the `chrome_devtools` MCP drives a **different Chrome instance** from the one holding the unpacked
+extension, so the extension's settings **dialog** never appears in the PM's page list. The PM's measurements therefore come from
+the same built page served over `http://127.0.0.1:8124/options/index.html` (page id 13: `img.mascot` computes `content-box`,
+80 px box, 2 px border, painted 84×84) — same bytes, different window.
+
+One measured fact stays on the record: the tab `file:///C:/Users/user/Desktop/test/inlineNotes/dist/options/index.html` shows an
+**empty `app-root`** (0 children, no `img`), i.e. opening the built page as a plain file renders nothing. That is not how the
+extension is used and not how the user verified it; it is recorded so nobody later mistakes a blank `file://` tab for a broken
+build. Console messages for that tab were not captured, so the mechanism (module script blocked on a `file://` origin) is stated
+as an inference, not as an observation.
