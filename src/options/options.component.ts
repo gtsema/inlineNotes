@@ -124,7 +124,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       height: 80px;
       flex: none;
       border-radius: 50%;
-      object-fit: cover;
+      object-fit: contain;
       object-position: center;
       border: 2px solid #a6cbdc;
     }

@@ -48,7 +48,11 @@ interface ManifestShape {
   /** Declared in this shape only so the `A118` absence pin compiles; Chrome rejects the pair. */
   options_page?: string;
   content_scripts?: { matches?: string[]; js?: string[]; css?: string[] }[];
-  /** The reference check resolves these; `t9-02b` AC4 pins that this manifest names none. */
+  /**
+   * The reference check resolves these. `t9-02b` AC4 pinned that this manifest named none;
+   * ruling `t9-02b` R3 is replaced by `t11-01` AC6, which pins that both are declared and
+   * resolve to one shipped file.
+   */
   icons?: Record<string, string>;
 }
 
@@ -628,6 +632,10 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
       [
         'buildContentBundle',
         'cleanDist',
+        // `t11-01`: the icon copy is the build's second asset step, and both of its
+        // functions are named here so neither can become an uncounted declaration.
+        'copyDir',
+        'copyIcons',
         'copyManifest',
         'fail',
         'listDistFiles',
@@ -893,12 +901,19 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
 });
 
 describe('the contract scans read every shipped text file through one comment-stripping helper (t10-01 D3, D4)', () => {
-  /** The only file under `src/` no scan can read as text, named so a second one is a decision. */
-  const UNREADABLE_SHIPPED_FILES = ['src/options/assets/cat-mascot.png'];
+  /**
+   * The only files under `src/` no scan can read as text, named so a third one is a decision.
+   * `src/icons/icon-128.png` joined the list with `t11-01` (`A131`): it is the same binary
+   * artwork as the mascot, and no shipped text scan has anything to say about either.
+   */
+  const UNREADABLE_SHIPPED_FILES = [
+    'src/icons/icon-128.png',
+    'src/options/assets/cat-mascot.png',
+  ];
 
   it('reads every file under src/ as text, or names the one it cannot read', () => {
     // A file type outside the scanned set is the quiet way a negative scan stops seeing
-    // shipped code: the scan reports `[]` and looks green. Naming the one binary asset is
+    // shipped code: the scan reports `[]` and looks green. Naming the binary assets is
     // what keeps that from happening to a future `src/` module.
     const unread = allFilesUnder('src').filter(
       (path) => !SHIPPED_TEXT_EXTENSIONS.test(path),
@@ -1023,13 +1038,28 @@ describe('the settings window stays Chrome-owned, and the manifest names no unus
     expect(callers).toEqual(['src/popup/popup.component.ts']);
   });
 
-  it('declares no icons, no action.default_icon and no content-script css', () => {
-    // The reference check resolves all three and this manifest uses none of them; the
-    // spec says so in those words, and this absence is what keeps that sentence honest
-    // instead of vacuously true.
+  it('declares the one 128 px icon in both keys, and still no content-script css', () => {
+    // `t11-01` AC6 replaces ruling `t9-02b` R3's absence pin with a presence pin. The
+    // extension now ships an icon, so the two keys the reference check resolves must name
+    // it and the file must really be there; the sentence in the spec that rested on the
+    // absence is narrowed to `content_scripts[0].css`, which is the one key this manifest
+    // still does not declare — and that half stays pinned so the sentence cannot rot.
     const manifest = readManifest();
-    expect(manifest.icons).toBeUndefined();
-    expect(manifest.action?.default_icon).toBeUndefined();
+    expect(manifest.icons).toEqual({ '128': 'icons/icon-128.png' });
+    expect(manifest.action?.default_icon).toEqual({ '128': 'icons/icon-128.png' });
+    // One size only, no `.ico`, no second key: the ruling is a single 128×128 PNG.
+    expect(Object.keys(manifest.icons ?? {})).toEqual(['128']);
+    expect(Object.keys(manifest.action?.default_icon ?? {})).toEqual(['128']);
+
+    // Present in the shipped folder at the path both keys name, and a real PNG of the
+    // size the manifest claims — the reference check proves the path, this proves the file.
+    const icon = resolve(projectRoot, 'dist', 'icons', 'icon-128.png');
+    expect(existsSync(icon)).toBe(true);
+    const bytes = readFileSync(icon);
+    expect(bytes.subarray(12, 16).toString('ascii')).toBe('IHDR');
+    expect(bytes.readUInt32BE(16)).toBe(128);
+    expect(bytes.readUInt32BE(20)).toBe(128);
+
     expect(manifest.content_scripts?.[0]?.css).toBeUndefined();
   });
 });

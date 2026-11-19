@@ -12,7 +12,15 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,6 +47,24 @@ function logStep(message) {
 function cleanDist() {
   rmSync(distDir, { recursive: true, force: true });
   logStep(`cleaned ${relative(projectRoot, distDir)}/`);
+}
+
+/**
+ * Copies a directory tree, creating the target directory and never a symlink.
+ * The icon copy below is the only use: one file, but a recursive helper keeps the
+ * "same shape as the options asset copy" honest if a second size ever ships.
+ */
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const source = join(from, entry.name);
+    const target = join(to, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(source, target);
+    } else {
+      copyFileSync(source, target);
+    }
+  }
 }
 
 function runAngularBuild(project) {
@@ -75,6 +101,18 @@ async function buildContentBundle() {
 function copyManifest() {
   copyFileSync(join(projectRoot, 'src', 'manifest.json'), join(distDir, 'manifest.json'));
   logStep('copied src/manifest.json -> dist/manifest.json');
+}
+
+/**
+ * The declared icon is a file of the extension, not an Angular application asset, so
+ * it is copied the way the manifest is — straight from `src/` — and not through
+ * `angular.json`. The manifest names it, so `verifyManifestReferences` would already
+ * fail a build that left it out; this step is what makes that check pass, and it runs
+ * before the check does.
+ */
+function copyIcons() {
+  copyDir(join(projectRoot, 'src', 'icons'), join(distDir, 'icons'));
+  logStep('copied src/icons -> dist/icons');
 }
 
 function readDistManifest() {
@@ -186,6 +224,7 @@ async function main() {
   await buildContentBundle();
   logStep('built dist/content.js with esbuild');
   copyManifest();
+  copyIcons();
   const manifest = readDistManifest();
   verifyManifestReferences(manifest);
   verifyContentBundleHasNoAngular();

@@ -41,9 +41,19 @@ import {
 
 const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-/** Ruling `A126`: the SHA-256 and the byte size of the owner's own `128.png`. */
-const ASSET_SHA256 = 'a899a9106d0ebefc978e493db61663917703803ebb5f9c703d9e67bb00d446b4';
-const ASSET_BYTES = 27414;
+/**
+ * The shipped mascot's SHA-256 and byte size (`t11-01` AC1; ruling `A130` supersedes
+ * `A126`'s byte-identity clause). The file is a full-grid 1254 → 128 downscale of the
+ * owner's `cat-mascot_new.png` — the 1 306 640-byte original is never committed, so its
+ * hash lives in the report rather than here. Both numbers are **measured**, not invented.
+ */
+const ASSET_SHA256 = 'c26769caa24310bb4c9f54d34436b1a2d091fb3f5ca2e408a23627e2e3af475e';
+const ASSET_BYTES = 20009;
+
+/** Ruling `A131`: the extension's own icon — one 128 PNG at a top-level `src/icons/`. */
+const SRC_ICON = join('src', 'icons', 'icon-128.png');
+const DIST_ICON = join('dist', 'icons', 'icon-128.png');
+const ICON_REFERENCE = 'icons/icon-128.png';
 
 /** Where the asset lives in the source tree and in the built folder (AC1). */
 const SRC_ASSET = join('src', 'options', 'assets', 'cat-mascot.png');
@@ -608,12 +618,12 @@ interface ManifestShape {
 }
 
 describe('the settings mascot ships as a file (t9-02 AC1, rulings A123 + A126)', () => {
-  it('holds the owner asset byte-for-byte in src/options/assets', () => {
+  it('holds the converted artwork at the hash and size the report states', () => {
     expect(sha256(SRC_ASSET)).toBe(ASSET_SHA256);
     expect(statSync(join(projectRoot, SRC_ASSET)).size).toBe(ASSET_BYTES);
   });
 
-  it('never re-encodes, resizes or crops the PNG', () => {
+  it('ships a fresh 128×128 PNG, never a re-crop of the owner source', () => {
     const bytes = readFileSync(join(projectRoot, SRC_ASSET));
     // The PNG signature, then the IHDR chunk: width, height, bit depth, color type.
     // 6 is RGBA, 8 is the bit depth the source ships with, so a re-encode or a crop
@@ -637,6 +647,7 @@ describe('the settings mascot ships as a file (t9-02 AC1, rulings A123 + A126)',
   it('reaches the mascot through a relative URL, and nothing else', () => {
     const template = componentTemplate(join('src', 'options', 'options.component.ts'));
     expect(template).toContain(`src="${MASCOT_URL}"`);
+    expect(template).not.toContain('cat-mascot_new');
 
     const shippedCode = ['src/options/options.component.ts', 'src/options/main.ts', 'src/options/index.html']
       .map((path) => codeOnly(readSource(path)))
@@ -761,8 +772,19 @@ describe('the header (t9-02 AC3, ruling A124)', () => {
     expect(mascot).toMatch(/width: 80px/);
     expect(mascot).toMatch(/height: 80px/);
     expect(mascot).toMatch(/border-radius: 50%/);
-    expect(mascot).toMatch(/object-fit: cover/);
+    // `t11-01` AC2: the art is fitted by the asset (a full-grid 1254 → 128 downscale
+    // puts the farthest painted pixel at radius 64.10 of the inscribed 64), so the rule
+    // states `contain` — the honest word for a source that is exactly the box — and
+    // carries no scale of its own. `cover` on a square source was a no-op crop; the
+    // shrink the PM first briefed is deliberately **not** here, because it would draw
+    // the already-fitted art at a sixth of the box.
+    expect(mascot).toMatch(/object-fit: contain/);
     expect(mascot).toMatch(/object-position: center/);
+    expect(mascot).not.toMatch(/object-fit: cover/);
+    // No second framing mechanism: the conversion is what fits the circle, and a
+    // `transform`/`scale`/`zoom` would move the art off the 80 px box the `A127`/`A129`
+    // reading and the `t9-02b` pixel pin both rest on.
+    expect(mascot).not.toMatch(/\btransform\b|\bscale\b|\bzoom\b/);
     expect(mascot).toContain(`border: 2px solid ${PALETTE.decorative}`);
     // Ruling `A127` reads the 80 px as the **image box** and the 2 px frame as painted
     // outside it, so the footprint is 84 px; ruling `A129` gives the mechanism — `box-sizing`
@@ -989,7 +1011,7 @@ describe('no shipped rule can move the mascot frame (t10-01 D2, widened by t10-0
   });
 });
 
-describe('the artwork survives the circular frame the CSS puts it in (t9-02b AC5; blocking finding 1 of t9-02)', () => {
+describe('the artwork survives the circular frame the CSS puts it in (t9-02b AC5, recalculated by t11-01 AC3)', () => {
   const frame = decodeMascotFrame();
 
   it('decodes the shipped PNG to the grid it declares, painted over the whole square', () => {
@@ -997,8 +1019,10 @@ describe('the artwork survives the circular frame the CSS puts it in (t9-02b AC5
     expect(frame.height).toBe(128);
     // The painted area is a fingerprint of the file the hash pin already locks. If the
     // two ever disagree, the decoder is reading something other than the shipped art.
-    expect(frame.paintedPixels).toBe(13_054);
-    expect(frame.bounds).toEqual({ minX: 0, maxX: 127, minY: 0, maxY: 127 });
+    // It was 13 054 for the artwork ruling `A126` shipped; the owner's replacement art
+    // paints 12 619 of the same 16 384 pixels.
+    expect(frame.paintedPixels).toBe(12_619);
+    expect(frame.bounds).toEqual({ minX: 0, maxX: 127, minY: 0, maxY: 124 });
   });
 
   it('holds no drawn artwork outside the circle border-radius: 50% clips to', () => {
@@ -1011,10 +1035,92 @@ describe('the artwork survives the circular frame the CSS puts it in (t9-02b AC5
 
     // And the clip really does reach the artwork, so `outsideOpaque === 0` is a fact
     // about the art rather than an image that never leaves the circle. What sits outside
-    // is the anti-aliased edge: a few hundred pixels, not tens of thousands.
+    // is the anti-aliased edge: a few dozen pixels, not tens of thousands. Measured: 58,
+    // highest alpha 108, farthest painted center 64.55.
     expect(frame.farthestPaintedRadius).toBeGreaterThan(64);
     expect(frame.outsidePainted).toBeGreaterThan(0);
     expect(frame.outsidePainted).toBeLessThan(1_000);
+  });
+
+  /**
+   * The assertion `t11-01` AC3 is really about, restated so the file's own bytes carry it:
+   * a full-grid downscale of the owner's artwork puts the **farthest painted source pixel**
+   * — radius 628.00 of the 1254 grid, measured from the image center `object-fit` and
+   * `border-radius` both work from — at 628.00 × 128/1254 = 64.10 of the 128 px file, inside
+   * the inscribed circle of radius 64. `decodeMascotFrame` already reads the far end of that
+   * (64.55 > 64, from the anti-aliased edge), and this case pins the margin instead of the
+   * direction: what survives the clip is an edge a fraction of a pixel deep, so a future
+   * re-crop that pushes drawn content past the circle lands well outside this bound.
+   */
+  it('keeps the painted content within half a pixel of the circle it is clipped by', () => {
+    expect(frame.farthestPaintedRadius - 64).toBeLessThan(1);
+    // And the fit is not achieved by an image that never reaches the circle: the painted
+    // bounding box does cross it on the rows where the art is widest.
+    expect(frame.bounds.minY).toBe(0);
+  });
+});
+
+describe('the extension declares one 128 px icon (t11-01 AC4, AC5; rulings A130, A131)', () => {
+  it('ships the icon as a real 128×128 PNG next to the mascot it shares bytes with', () => {
+    expect(existsSync(join(projectRoot, SRC_ICON))).toBe(true);
+    // One converted file per use site (`A130`, `A131`): the icon is the same artwork at the
+    // same size, so it is the same bytes rather than a second conversion of the same source.
+    expect(sha256(SRC_ICON)).toBe(ASSET_SHA256);
+    const bytes = readFileSync(join(projectRoot, SRC_ICON));
+    expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(bytes.subarray(12, 16).toString('ascii')).toBe('IHDR');
+    expect(bytes.readUInt32BE(16)).toBe(128);
+    expect(bytes.readUInt32BE(20)).toBe(128);
+    expect(bytes[24]).toBe(8);
+    expect(bytes[25]).toBe(6);
+  });
+
+  it('declares both manifest keys, both naming the one file', () => {
+    const manifest = JSON.parse(readSource(join('src', 'manifest.json'))) as {
+      icons?: Record<string, string>;
+      action?: { default_icon?: Record<string, string> };
+    };
+    expect(manifest.icons).toEqual({ '128': ICON_REFERENCE });
+    expect(manifest.action?.default_icon).toEqual({ '128': ICON_REFERENCE });
+    // No second size, no `.ico`, and nothing the extension page would have to be granted.
+    expect(Object.keys(manifest.icons ?? {})).toEqual(['128']);
+    expect(Object.keys(manifest.action?.default_icon ?? {})).toEqual(['128']);
+    expect(JSON.stringify(manifest)).not.toMatch(/\.ico/);
+    expect(
+      (manifest as { web_accessible_resources?: unknown }).web_accessible_resources,
+    ).toBeUndefined();
+  });
+
+  it('copies the icon into dist/ at the path the manifest names', () => {
+    // The manifest reference check resolves `icons` and `action.default_icon`, so a `dist/`
+    // without this file is a **failed build**; this case is the shipped-folder half of that
+    // claim, and the next one runs the guard itself.
+    expect(existsSync(join(projectRoot, DIST_ICON))).toBe(true);
+    expect(sha256(DIST_ICON)).toBe(ASSET_SHA256);
+  });
+
+  it('makes an absent copied icon a build failure, not a broken toolbar button', () => {
+    // The shipped reference check, lifted out of the script and run against a `dist/` that
+    // lacks the icon and against the one the build really produced.
+    const absent = loadBuildGuard('verifyManifestReferences', {
+      distDir: DIST_ROOT,
+      existsSync: (path: string) =>
+        path.endsWith(join('icons', 'icon-128.png')) ? false : existsSync(path),
+    });
+    expect(() =>
+      absent({ manifest_version: 3, content_scripts: [], icons: { '128': ICON_REFERENCE } }),
+    ).toThrow(/manifest reference "icons\/icon-128\.png" does not exist inside dist\//);
+
+    const present = loadBuildGuard('verifyManifestReferences', { distDir: DIST_ROOT, existsSync });
+    expect(() =>
+      present({
+        manifest_version: 3,
+        content_scripts: [{ js: ['content.js'] }],
+        icons: { '128': ICON_REFERENCE },
+        action: { default_popup: 'popup/index.html', default_icon: { '128': ICON_REFERENCE } },
+        options_ui: { page: 'options/index.html' },
+      }),
+    ).not.toThrow();
   });
 });
 
