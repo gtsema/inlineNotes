@@ -286,8 +286,8 @@ export class PopupComponent implements OnInit {
   readonly deleteLabel: string = POPUP_STRINGS.delete;
 
   /**
-   * The delete glyph's box, as an attribute: `POPUP_DELETE_ICON_PX` in px. The number is
-   * `24` and the box is `16`, so this is the smaller of the two.
+   * The delete glyph's box, as an attribute: `POPUP_DELETE_ICON_PX` in px. The glyph is
+   * `16` and the hit box is `24`, so this is the smaller of the two.
    */
   readonly deleteIconPx: string = String(POPUP_DELETE_ICON_PX);
 
