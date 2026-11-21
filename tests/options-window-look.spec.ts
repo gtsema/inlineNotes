@@ -1760,8 +1760,6 @@ describe('the stylesheet is read verbatim for absences and stripped for presence
  * constant that owns it.
  */
 describe('the checkbox row gap grows four times (A175, t17-04 AC13)', () => {
-  const styles = componentStyles(join('src', 'options', 'options.component.ts'));
-
   it('declares margin: 48px 0 0 on .toggle-line', () => {
     // The stripped read, so a commented-out declaration cannot satisfy the pin: the
     // geometry cases above taught that lesson.
@@ -1786,11 +1784,18 @@ describe('the checkbox row gap grows four times (A175, t17-04 AC13)', () => {
     expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
   });
 
-  it('leaves the save button’s own margin alone while the row moves', () => {
-    // The save button carries no margin declaration of its own in the shipped stylesheet;
-    // the row's margin is the only gap that grew. A margin added to `.save` would move the
-    // message line as well and is not part of this ruling.
-    expect(styles).not.toMatch(/\.save\s*\{[^}]*margin:/);
+  it('pushes the sync row away from the save button with the save button’s own bottom margin', () => {
+    // The user asked for the gap **between** the save button and the sync checkbox to grow
+    // four times (12px -> 48px). The row's `margin: 48px 0 0` separates it from the message
+    // line above; the gap below the button is the button's own bottom margin, because the
+    // checkbox row's top margin already has a neighbour of its own. One margin, one gap, no
+    // doubled spacing: the row keeps its top margin and the button gains exactly one.
+    const code = componentCodeStyles(join('src', 'options', 'options.component.ts'));
+    expect(ruleBody(code, '.save')).toMatch(/margin:\s*0 0 48px;/);
+    expect(ruleBody(code, '.toggle-line')).toMatch(/margin:\s*48px 0 0;/);
+    // Nothing else on the button moved: the padding and the palette role are untouched.
+    expect(ruleBody(code, '.save')).toMatch(/padding:\s*6px 14px;/);
+    expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
   });
 });
 

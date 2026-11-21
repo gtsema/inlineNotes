@@ -280,6 +280,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .save {
+      margin: 0 0 48px;
       padding: 6px 14px;
       color: #ffffff;
       background: #b8480d;
