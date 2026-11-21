@@ -98,3 +98,36 @@ the reader's own.
 
 The withdrawn brief stays in the repository as the record of the plan that was not taken. Its
 rulings are marked superseded by `A173`.
+
+---
+
+## Addendum 1 — two small UI changes, same slice
+
+The user asked for two more things while `t17-04` runs. Both belong to the same commit.
+
+### A175 — the vertical gap between the save button and the synchronization checkbox grows four times
+
+Measured: `.toggle-line { margin: 12px 0 0 }` is the gap between the checkbox row and the save
+button's block. Four times that is **48px**, so `.toggle-line` becomes `margin: 48px 0 0`.
+
+Only that one value changes. The checkbox's own size, the row's `gap: 6px`, the save button's padding
+and the message's `margin: 12px 0 0` stay as they are. The `A125` palette is untouched.
+
+### A176 — the confirmation says «Сохранено», not «Имя сохранено»
+
+`src/options/text.ts:49` holds `saved: 'Имя сохранено'`. The save now writes the server address and
+the synchronization switch as well as the name, so the message must not claim it saved only a name.
+
+The new wording is **«Сохранено»**. The code stays `saved` — only the Russian string changes, so no
+handler, no message code and no test selector moves. The `sweep_failed` wording («Имя сохранено, но
+часть заметок с прежним именем удалить не удалось») is **not** changed by this addendum: it names the
+name on purpose, because it reports a rename that failed to finish. If the user wants that one
+changed too, that is a separate ruling.
+
+### Acceptance criteria added to this task
+
+13. `.toggle-line` declares `margin: 48px 0 0`, and the value is pinned by a test that reads the
+    declaration, so a later edit cannot quietly shrink it back.
+14. `OPTIONS_STRINGS.saved` is exactly `Сохранено`, and the options page renders that string after a
+    successful save. The `sweep_failed` wording is unchanged.
+15. Both changes are in the same commit as the rename rule, and the four gates stay green.
