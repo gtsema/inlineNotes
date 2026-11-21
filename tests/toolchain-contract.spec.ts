@@ -172,22 +172,48 @@ describe('manifest contract', () => {
     expect(spec).toContain('`https://*/*`');
   });
 
-  it('declares no host_permissions and no permission beyond storage and tabs (ruling A49)', () => {
+  it('declares storage and tabs as permissions, and the two sync hosts as host_permissions (Stage 17)', () => {
     const manifest = readManifest();
-    // The set is pinned exactly, so no later task can widen it silently: `tabs` is
-    // here because ruling `A49` chose the active-tab read over a service-worker
-    // mapping, and it is the only permission beyond `storage` this extension asks
-    // for. The pair must also be stated in the spec, in the same commit as the code.
+    // The permission strings are pinned exactly, so no later task can widen them
+    // silently: `tabs` is here because ruling `A49` chose the active-tab read over a
+    // service-worker mapping. Both halves must also be stated in the specs, in the same
+    // commit as the code.
     expect(manifest.permissions ?? []).toEqual(['storage', 'tabs']);
-    expect(manifest.host_permissions).toBeUndefined();
+
+    // Stage 17 (the brief's answer 8, ruling `A166`): the sync server's address is an
+    // arbitrary `host:port` read from the reader's settings, so no narrower pattern can
+    // name it. The pair is pinned as **two exact strings**, in that order, and the
+    // addresses are the content script's own registration — one set of origins for the
+    // notes and the requests that carry them.
+    expect(manifest.host_permissions ?? []).toEqual(['http://*/*', 'https://*/*']);
     expect(manifest.optional_permissions).toBeUndefined();
 
-    const spec = readFileSync(
+    // And nothing else: MV3 would grant a service worker's `scripting` or an `activeTab`
+    // without a line here, which is exactly how a permission set widens unnoticed.
+    expect(Object.keys(manifest as unknown as Record<string, unknown>).sort()).toEqual([
+      'action',
+      'content_scripts',
+      'description',
+      'host_permissions',
+      'icons',
+      'manifest_version',
+      'name',
+      'options_ui',
+      'permissions',
+      'version',
+    ]);
+
+    const overlaySpec = readFileSync(
       join(projectRoot, 'docs', 'specs', 'content-overlay-ui.md'),
       'utf8',
     );
-    expect(spec).toContain('- Permissions:');
-    expect(spec).toContain('`storage` and `tabs`');
+    expect(overlaySpec).toContain('- Permissions:');
+    expect(overlaySpec).toContain('`storage` and `tabs`');
+    expect(overlaySpec).toContain('`http://*/*`');
+
+    const syncSpec = readFileSync(join(projectRoot, 'docs', 'specs', 'sync-integration.md'), 'utf8');
+    expect(syncSpec).toContain('`host_permissions`');
+    expect(syncSpec).toContain('`https://*/*`');
   });
 });
 
@@ -1562,13 +1588,27 @@ describe('no network in shipped source', () => {
    * reaches a socket is still a failing test.
    */
   const NETWORK_TRANSPORT = 'src/content/sync/fetch-transport.ts';
+  /** The popup bundle's own five-line adapter (a second bundle cannot import the first). */
+  const POPUP_TRANSPORT = 'src/popup/sync-transport.ts';
 
-  it('src names a network API in exactly one module, the sync transport', () => {
+  it('src names a network API in exactly two modules: one transport per bundle', () => {
+    // The popup and the content script are **separate bundles** of an MV3 extension, so
+    // they cannot share a module: each half ships its own five-line `fetch` adapter
+    // (`src/content/sync/fetch-transport.ts`, `src/popup/sync-transport.ts`) and the
+    // shared wire logic sits in core, where both can import it. Two files, one call.
     const pattern = NETWORK_SHAPE;
     const offenders = sourceFiles('src')
       .filter((file) => pattern.test(codeOnly(file.text)))
       .map((file) => file.path);
-    expect(offenders).toEqual([NETWORK_TRANSPORT]);
+    expect(offenders).toEqual([
+      'src/content/sync/fetch-transport.ts',
+      'src/popup/sync-transport.ts',
+    ]);
+    // Neither half reaches the other half's adapter: the popup bundle must not import a
+    // content-script module (the layer boundary below pins the same thing for Angular).
+    for (const file of sourceFiles('src/popup')) {
+      expect(codeOnly(file.text), file.path).not.toContain('src/content/sync/fetch-transport');
+    }
   });
 
   it('the one request goes to the address core built from settings, and the transport holds no URL of its own', () => {
@@ -1579,6 +1619,13 @@ describe('no network in shipped source', () => {
     expect(transport).not.toMatch(/https?:\/\//);
     expect(transport).not.toMatch(/notes\/page/);
     expect(transport).not.toMatch(/localhost|127\.0\.0\.1/);
+
+    // The popup's adapter is held to the same rule, for the same reason (`A165`: no
+    // address but the one in settings).
+    const popupTransport = codeOnly(readFileSync(join(projectRoot, POPUP_TRANSPORT), 'utf8'));
+    expect(popupTransport).not.toMatch(/https?:\/\//);
+    expect(popupTransport).not.toMatch(/notes\/page/);
+    expect(popupTransport).not.toMatch(/localhost|127\.0\.0\.1/);
 
     // Core owns the route and never calls the network itself, which is what makes the
     // core test environment (plain Node, no jsdom) able to run every sync rule.

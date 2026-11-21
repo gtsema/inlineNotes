@@ -4,6 +4,9 @@ import { createChromeLocalStoragePort } from '../content/store/chrome-storage-po
 import { activeTabUrl } from './active-tab';
 import type { AuthorRowView, PageEntriesSource, PageEntriesView, PopupNoticeCode } from './page-entries-service';
 import { PageEntriesService, rowClass } from './page-entries-service';
+import type { SyncPressSource } from './sync-button-service';
+import { PopupSyncPress } from './sync-button-service';
+import { createPopupSyncTransport } from './sync-transport';
 import { POPUP_STRINGS, authorRowLabel, popupNoticeText } from './text';
 
 /**
@@ -29,6 +32,34 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
     }),
   },
 );
+
+/**
+ * Where the sync button of the current author's row gets its port, its address read and
+ * its `fetch` (Stage 17, `t17-01`). A token with a root factory, like
+ * `PAGE_ENTRIES_SOURCE`, so the shipped page needs no wiring step and a test can
+ * replace the whole source (`tests/popup-sync-button.spec.ts`).
+ */
+export const SYNC_PRESS_SOURCE = new InjectionToken<SyncPressSource>('inlinenotes:sync-press', {
+  providedIn: 'root',
+  factory: (): SyncPressSource => ({
+    port: createChromeLocalStoragePort(),
+    pageUrl: async (): Promise<string | null> => await activeTabUrl(),
+    transport: createPopupSyncTransport(),
+  }),
+});
+
+/**
+ * The three states of the sync button (ruling `A162`). The value becomes a CSS class
+ * and nothing else: the state is colour and motion, never text.
+ */
+export type SyncButtonState = 'idle' | 'running' | 'error';
+
+/**
+ * The sync glyph's box, in CSS pixels — the delete button's `24px` because `A162` asks
+ * for the same size — and the `16px` glyph drawn inside it.
+ */
+export const POPUP_SYNC_HIT_BOX_PX = 24;
+export const POPUP_SYNC_ICON_PX = 16;
 
 /**
  * The hit box of the row's delete button, in CSS pixels (task `t14-01`, answer `Q5`,
@@ -179,6 +210,35 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
                 />
                 <span class="author">{{ labelOf(row) }}</span>
               </label>
+              @if (showsSyncButton(row)) {
+                <button
+                  class="sync"
+                  type="button"
+                  [class]="syncButtonClass()"
+                  [disabled]="syncState() === 'running'"
+                  [attr.aria-label]="syncLabel"
+                  [attr.title]="syncLabel"
+                  (click)="onSync(row.authorName)"
+                >
+                  <svg
+                    [attr.width]="syncIconPx"
+                    [attr.height]="syncIconPx"
+                    [attr.viewBox]="syncIconViewBox"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M20 12 A8 8 0 1 1 17.66 6.34" />
+                    <path d="M20 4 L20 8 L16 8" />
+                    <path d="M4 12 A8 8 0 1 1 6.34 17.66" />
+                    <path d="M4 20 L4 16 L8 16" />
+                  </svg>
+                </button>
+              }
               <button
                 class="delete"
                 type="button"
@@ -321,6 +381,50 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
       stroke: currentColor;
     }
 
+    /* Stage 17 (A162): the same box as the delete control beside it; the three states
+       are colour and motion only, so no text and no size changes between them. */
+    .sync {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: #1e7b3c;
+      cursor: pointer;
+    }
+
+    .sync svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+    }
+
+    .sync--running svg {
+      animation: sync-spin 0.9s linear infinite;
+    }
+
+    .sync--error {
+      color: #b3261e;
+    }
+
+    @keyframes sync-spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     .empty {
       margin: 0;
       color: #7b6a55;
@@ -329,13 +433,31 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
 })
 export class PopupComponent implements OnInit {
   private readonly service = new PageEntriesService(inject(PAGE_ENTRIES_SOURCE));
+  private readonly sync = new PopupSyncPress(inject(SYNC_PRESS_SOURCE));
 
   /** The whole popup state, as the core reads answered for the active tab. */
-  readonly view = signal<PageEntriesView>({ rows: [], notices: [] });
+  readonly view = signal<PageEntriesView>({ rows: [], notices: [], syncEnabled: false });
 
   readonly title: string = POPUP_STRINGS.title;
   readonly emptyState: string = POPUP_STRINGS.emptyState;
   readonly deleteLabel: string = POPUP_STRINGS.delete;
+  /** Accessible name of the sync control: its `aria-label` and its `title` (`A162`). */
+  readonly syncLabel: string = POPUP_STRINGS.sync;
+
+  /**
+   * The state of the one sync button this popup can show (ruling `A162`).
+   *
+   * One signal, because `A161` allows at most one such button — the current author's
+   * row. `idle` is the static green arrows, `running` spins them while the request
+   * stands, and `error` is the same arrows in red, **driven by the answer of the
+   * request and by nothing else**. There is no timer in this component: a success sets
+   * `idle`, a failure sets `error`, and `error` stays until the next press.
+   */
+  readonly syncState = signal<SyncButtonState>('idle');
+
+  /** The glyph's box and coordinate space, as attributes (the delete glyph's idiom). */
+  readonly syncIconPx: string = String(POPUP_SYNC_ICON_PX);
+  readonly syncIconViewBox: string = POPUP_DELETE_ICON_VIEW_BOX;
 
   /**
    * The delete glyph's box, as an attribute: `POPUP_DELETE_ICON_PX` in px. The glyph is
@@ -369,6 +491,21 @@ export class PopupComponent implements OnInit {
   /** Wording of one notice line, from the single constants module. */
   noticeText(code: PopupNoticeCode): string {
     return popupNoticeText(code);
+  }
+
+  /**
+   * Whether one row carries the sync button: the page must have somewhere to call
+   * (`view().syncEnabled`, ruling `A166`) and the row must be the reader's own (ruling
+   * `A161`). A foreign row keeps only its delete control.
+   */
+  showsSyncButton(row: AuthorRowView): boolean {
+    return this.view().syncEnabled && row.isOwn;
+  }
+
+  /** The class of that button: its shape, plus one modifier for the state. */
+  syncButtonClass(): string {
+    const state = this.syncState();
+    return state === 'idle' ? 'sync' : `sync sync--${state}`;
   }
 
   /** The whole `author row` label: «Вы — 3», «Вася — 10» (rulings `A82`, `A108`). */
@@ -406,6 +543,28 @@ export class PopupComponent implements OnInit {
   /** Ruling `A83`: the name-required line is the navigation to the options page. */
   openSettings(): void {
     this.service.openSettings();
+  }
+
+  /**
+   * One press of the sync button (rulings `A161`, `A162`).
+   *
+   * `running` before the call, and the answer decides between `idle` and `error`. The
+   * call is the service's — one core POST carrying the current author's notes of this
+   * page — so this handler holds no network, no payload and no code-to-wording branch.
+   */
+  onSync(authorName: string): void {
+    if (this.syncState() === 'running') {
+      return;
+    }
+    this.syncState.set('running');
+    void this.press(authorName);
+  }
+
+  private async press(authorName: string): Promise<void> {
+    const result = await this.sync.press(authorName);
+    // `nothin_to_send` is a success with nothing to say: an author with no note of
+    // their own on this page has no failure to report, so the arrows go back to green.
+    this.syncState.set(result.ok || result.code === 'nothin_to_send' ? 'idle' : 'error');
   }
 
   /** One place moves the signal, so the list is always what the store just said. */

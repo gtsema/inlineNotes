@@ -3,7 +3,12 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { POPUP_DELETE_HIT_BOX_PX, POPUP_DELETE_ICON_PX } from '../src/popup/popup.component';
+import {
+  POPUP_DELETE_HIT_BOX_PX,
+  POPUP_DELETE_ICON_PX,
+  POPUP_SYNC_HIT_BOX_PX,
+  POPUP_SYNC_ICON_PX,
+} from '../src/popup/popup.component';
 import { POPUP_STRINGS } from '../src/popup/text';
 import { codeOnly } from './support/build-script-guards';
 
@@ -147,6 +152,19 @@ const PALETTE = {
 const PREEXISTING_REFUSAL = '#b3261e';
 
 /**
+ * The sync button's idle colour (Stage 17, `t17-01` AC6; ruling `A162`).
+ *
+ * `A162` names the state in words — "green circular arrows" — and `A125` has no green
+ * role, so Stage 17 adds exactly one literal to this surface, the way `#b3261e` was
+ * added before it: the smallest green that reads as a state against the cream card and
+ * stays legible as a 16 px stroke (5.6:1 against `#fdf7ee`). The `error` state reuses
+ * the refusal ink already on this surface, so the three states cost one literal, not
+ * two. Named here rather than restated in the component: the pin below is that this is
+ * the only green, and that it is not an `A125` role pretending to be one.
+ */
+const SYNC_GREEN = '#1e7b3c';
+
+/**
  * The three literals `A140` retires. They are the popup's own former palette, and the
  * whole point of the task is that no spelling of them survives: the row hairline, the
  * secondary ink and the body ink.
@@ -285,12 +303,30 @@ function documentStyles(relativePath: string): string {
  * The `<svg>` element of the shipped template, tag and children whole: from its opening
  * tag to its closing tag, attributes in whatever order they sit.
  */
-function deleteGlyph(): string {
-  const glyph = /<svg\b[\s\S]*?<\/svg>/.exec(componentTemplate());
+/**
+ * The glyph of one control, read out of its own `<button>`.
+ *
+ * Since Stage 17 the template renders **two** inline glyphs — the delete control and the
+ * sync control beside it — so "the first `<svg>` of the template" is no longer the delete
+ * drawing. The lookup is scoped to the button, so each pin reads the glyph it names.
+ */
+function glyphOf(buttonClass: string): string {
+  const button = new RegExp(
+    `<button\\b[^>]*class="${buttonClass}"[\\s\\S]*?<\\/button>`,
+  ).exec(componentTemplate());
+  if (button === null) {
+    throw new Error(`the popup template renders no ${buttonClass} button`);
+  }
+  const glyph = /<svg\b[\s\S]*?<\/svg>/.exec(button[0]);
   if (glyph === null) {
-    throw new Error('the popup template renders no inline glyph');
+    throw new Error(`the ${buttonClass} button renders no inline glyph`);
   }
   return glyph[0];
+}
+
+/** The delete control's drawing, path for path. */
+function deleteGlyph(): string {
+  return glyphOf('delete');
 }
 
 /** The delete button element of the shipped template, opening tag to closing tag. */
@@ -343,20 +379,50 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
     );
   });
 
-  it('declares no colour outside the five A125 roles and the kept refusal colour', () => {
+  it('declares no colour outside the A125 roles, the kept refusal colour and the one sync green', () => {
     // The set scan is an absence, so it reads the **verbatim** text: a commented-out
     // `#1f1f1f` is a retired role waiting to return and a reviewer has to name it. The
-    // pinned side is the **seven roles plus the refusal** — every colour `A125` names,
-    // whether this surface paints it or not — and the shipped set is a subset of them, so
-    // a new literal is red and a role the popup stops using is not.
+    // pinned side is the **seven roles plus the two named exceptions** — the refusal ink
+    // this surface shipped before the palette existed, and the sync green Stage 17 adds
+    // — and the shipped set is a subset of them, so a new literal is red and a role the
+    // popup stops using is not.
     const literals = [...styles.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) =>
       match[0].toLowerCase(),
     );
     expect(literals.length).toBeGreaterThan(0);
-    const allowed = [...new Set([...Object.values(PALETTE), PREEXISTING_REFUSAL])].sort();
+    const allowed = [
+      ...new Set([...Object.values(PALETTE), PREEXISTING_REFUSAL, SYNC_GREEN]),
+    ].sort();
     for (const literal of new Set(literals)) {
       expect(allowed, `${literal} is not an A125 role`).toContain(literal);
     }
+    // Exactly one green, and it is on the sync control only (`A162`).
+    expect(new Set(literals.filter((literal) => literal === SYNC_GREEN)).size).toBe(1);
+  });
+
+  it('gives the sync control the three A162 states as colour and motion, and nothing else', () => {
+    // Idle: the green arrows, static. Running: the same arrows spinning. Error: the same
+    // arrows in the refusal ink, and they stay that way until the next press — which is
+    // why no rule here is keyed to a time.
+    expect(ruleBody(stylesCode, '.sync')).toMatch(new RegExp(`color: ${SYNC_GREEN};`));
+    expect(ruleBody(stylesCode, '.sync--error')).toMatch(
+      new RegExp(`color: ${PREEXISTING_REFUSAL};`),
+    );
+    expect(ruleBody(stylesCode, '.sync--running svg')).toMatch(
+      /(?:^|;)\s*animation:\s*sync-spin [\d.]+s linear infinite;/,
+    );
+    // One keyframes block, and it only rotates: no colour and no size move with it.
+    const frames = /@keyframes sync-spin\s*\{([\s\S]*?)\n    \}/.exec(styles)?.[1] ?? '';
+    expect(frames).toContain('transform: rotate(0deg);');
+    expect(frames).toContain('transform: rotate(360deg);');
+    expect(frames).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    // The state is not a timer: nothing in this stylesheet or in the component names one.
+    expect(stylesCode).not.toMatch(/setTimeout|setInterval/);
+    // And the box is the delete control's, because `A162` asks for the same size.
+    expect(ruleBody(stylesCode, '.sync')).toContain(`width: ${HIT_BOX_PX};`);
+    expect(ruleBody(stylesCode, '.sync')).toContain(`height: ${HIT_BOX_PX};`);
+    expect(ruleBody(stylesCode, '.sync svg')).toContain(`width: ${ICON_PX};`);
+    expect(ruleBody(stylesCode, '.sync svg')).toContain(`height: ${ICON_PX};`);
   });
 
   it('retires the three literals of the popup’s own former palette', () => {
@@ -374,7 +440,9 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
       (match) => match[0].toLowerCase(),
     );
     expect(documentLiterals).toContain(PALETTE.page);
-    const allowed = [...new Set([...Object.values(PALETTE), PREEXISTING_REFUSAL])].sort();
+    const allowed = [
+      ...new Set([...Object.values(PALETTE), PREEXISTING_REFUSAL, SYNC_GREEN]),
+    ].sort();
     for (const literal of new Set(documentLiterals)) {
       expect(allowed, `${literal} is not an A125 role`).toContain(literal);
     }
@@ -617,17 +685,22 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     expect(template).not.toMatch(/<img/);
     expect(template).not.toMatch(/mascot/i);
     expect(template).not.toMatch(/cat-mascot/);
-    // No new Russian sentence: the title and the empty line are the shipped ones, and the
-    // only Russian word the template now carries is the delete label as an attribute.
+    // The strings the template carries are the shipped ones plus Stage 17's two
+    // (`A162`'s accessible name and `A164`'s one failure sentence); both are `aria-label`
+    // / `title` material and a notice, so the surface still draws no new visible word of
+    // its own and no new sentence per state.
     expect(Object.keys(POPUP_STRINGS).sort()).toEqual([
       'delete',
       'emptyState',
       'nameRequired',
       'notInjectable',
       'ownEntry',
+      'sync',
+      'syncFailed',
       'title',
     ]);
     expect(POPUP_STRINGS.delete).toBe('Удалить');
+    expect(POPUP_STRINGS.sync).toBe('Синхронизировать');
     // No URL, no data URI and no `@import` on this surface either.
     for (const text of [template, styles, componentTemplate()]) {
       expect(text).not.toMatch(/https?:\/\//i);
@@ -741,9 +814,19 @@ describe('the row delete control is icon-only (t14-01 AC4; ruling A143)', () => 
 
   it('declares the 24px box and the 16px glyph as named constants', () => {
     // The two numbers are read from the **module**, so a constant changed in `src/popup/`
-    // turns this red even if the stylesheet were edited to agree with it.
+    // turns this red even if the stylesheet were edited to agree with it. The sync
+    // control of Stage 17 declares the **same** pair (`A162`: "same size as delete"), and
+    // that is asserted here so neither control can grow a box of its own.
     expect(POPUP_DELETE_HIT_BOX_PX).toBe(24);
     expect(POPUP_DELETE_ICON_PX).toBe(16);
+    expect(POPUP_SYNC_HIT_BOX_PX).toBe(POPUP_DELETE_HIT_BOX_PX);
+    expect(POPUP_SYNC_ICON_PX).toBe(POPUP_DELETE_ICON_PX);
+    const syncButton = ruleBody(stylesCode, '.sync');
+    expect(syncButton).toMatch(new RegExp(`(?:^|;)\\s*width:\\s*${HIT_BOX_PX};`));
+    expect(syncButton).toMatch(new RegExp(`(?:^|;)\\s*height:\\s*${HIT_BOX_PX};`));
+    const syncGlyph = ruleBody(stylesCode, '.sync svg');
+    expect(syncGlyph).toMatch(new RegExp(`(?:^|;)\\s*width:\\s*${ICON_PX};`));
+    expect(syncGlyph).toMatch(new RegExp(`(?:^|;)\\s*height:\\s*${ICON_PX};`));
 
     const button = ruleBody(stylesCode, '.delete');
     expect(button).toMatch(new RegExp(`(?:^|;)\\s*width:\\s*${HIT_BOX_PX};`));
@@ -855,8 +938,13 @@ describe('the empty state and the notices take the A125 inks (t14-01 AC7; answer
     expect(ruleBody(stylesCode, '.notice')).toMatch(
       new RegExp(`color: ${PREEXISTING_REFUSAL};`),
     );
-    // Both notices share the one rule, so neither can drift to a colour of its own.
-    expect(stylesCode.match(/color:\s*#b3261e/g) ?? []).toHaveLength(1);
+    // The refusal ink is declared twice since Stage 17: once by the notice rule, and once
+    // by the sync button's `error` state (`A162`), which reuses this same ink rather than
+    // inventing a second red. No third declaration, and no notice rule of its own.
+    expect(stylesCode.match(/color:\s*#b3261e/g) ?? []).toHaveLength(2);
+    expect(ruleBody(stylesCode, '.sync--error')).toMatch(
+      new RegExp(`color: ${PREEXISTING_REFUSAL};`),
+    );
   });
 
   it('keeps the name-required notice a real underlined button that opens the options page', () => {

@@ -1,0 +1,192 @@
+# sync-integration
+
+## Purpose / Goal
+
+Connect the extension to the sync server of `docs/specs/sync-server.md`: a reader turns synchronization on in the options page, the page then shows the other readers' notes on the article it opens, and the popup pushes the reader's own notes of that page back to the server with one press of a button.
+
+## Scope
+
+In scope: the two settings fields that carry the feature, the server address rule, the popup's sync button and its three states, the automatic load on page open, the foreign notes as memory-only data, the local-only delete of a foreign row, and the failure behaviour of every network call.
+
+Out of scope: any change under `server/` (the server is frozen for this stage); editing or deleting a foreign note on the server; conflict resolution beyond the server's own upsert; a "my notes across pages" view (the server's `all-pages` endpoint is called by nothing yet); authentication of any kind; a periodic or background synchronization (there is none: a request happens on page open and on a press).
+
+## Terms / Aliases
+
+| Term (EN, grep anchor) | Russian UI wording | Meaning |
+|---|---|---|
+| `settings record` | «Настройки» | the `settings:v1` value: `{ name, serverUrl?, syncEnabled? }` (ruling `A160`) |
+| `server address` | «Адрес сервера» | `http://host[:port]` or `https://host[:port]`, stored in `serverUrl`, `''` meaning "not configured" |
+| `synchronization switch` | «Синхронизация» | the settings checkbox, stored as `syncEnabled`, **absent means off** |
+| `sync target` | — | the parsed address the extension may call, `null` when the switch is off or the address is unusable (`A166`) |
+| `sync button` | «Синхронизировать» (`aria-label` and `title`) | the icon-only control in the current author's popup row (`A161`, `A162`) |
+| `idle state` | — | the sync button's static green arrows |
+| `running state` | — | the same arrows spinning while the request stands |
+| `error state` | — | the same arrows in red, kept until the next press |
+| `sync press` | — | one `POST /notes/page/{page_id}` carrying the current author's notes (`A161`) |
+| `automatic load` | — | one `GET /notes/page/{page_id}` per page key per document, at page open (`A163`) |
+| `foreign note` | — | a note the server returned whose `authorName` is not the reader's; it lives in the document's memory only |
+| `own note` | «Вы» | a note whose author is the reader, by core `isSameAuthor` (`A99`) |
+| `memory only` | — | never written to `chrome.storage.local`, never sent in a payload, gone on reload (`A163`) |
+| `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
+| `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
+| `no request rule` | — | switch off **or** empty address means zero network calls and no sync button (`A166`) |
+
+## Flow / Sequence
+
+1. **Configure.** The reader opens the options window, types `http://192.168.0.10:8080` in the `server address` field, leaves it, and ticks `synchronization switch`. The address is validated first (`A165`); the record is written once per control, beside the name.
+2. **Open a page.** The content script paints the stored notes of the page exactly as before, and then, once, asks the server for the page's notes by the `page key` the paint pass resolved. With the switch off or no address, no request is made at all.
+3. **Show the answer.** The rows that come back are decoded into entries, the reader's own are dropped (the store already has them), and the rest are held in memory and painted by one more pass over the same page stream.
+4. **Press sync.** In the popup, the reader's own row carries the sync button beside the delete button. A press turns the arrows green-spinning, sends one `POST` with that author's notes of this page, and answers with green-static (success) or red (failure).
+5. **Read a foreign note.** Hovering a foreign note's highlight shows the usual tooltip, whose header prints the author's stored name **in that author's palette colour**, and whose body is the stored comment. Clicking it opens no editor: a foreign note is read-only.
+6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory); `Удалить` removes the author's rows from this page's view. Neither calls the server.
+7. **Reload.** The memory is gone, the request is made again, and the foreign notes come back as the server holds them.
+
+## Rules / Semantics
+
+### The settings record (ruling `A160`)
+
+- `settings:v1` is `{ name: string, serverUrl?: string, syncEnabled?: boolean }`.
+- Both new fields are **optional**. A record written by the previous version (`{ name }`) loads with `serverUrl: ''` and `syncEnabled: false`; the author name is never lost, and a name that the author-name rule refuses keeps its existing `name_required` code.
+- An unusable record (absent, `null`, an array, a primitive, a `name` that is not a string) is still `settings_malformed` with an empty name **and** the two defaults. A record whose name decodes but the rule refuses (`name_required`) keeps the two sync fields: a damaged name must not reset the reader's switch.
+- A value that is not exactly `true` for `syncEnabled` reads as `false`; a non-string `serverUrl` reads as `''`; a string is trimmed and stored trimmed.
+- A write omits a field that carries its default (`''`, `false`), so a record the reader never configured is byte-identical to what the previous version wrote.
+- `saveSettings` takes the two fields as **optional inputs**. A field the caller does not send keeps the stored value: saving a name from the options page cannot erase a configured server, and the switch cannot be flipped by a name save. When a field is carried, the save is preceded by one guarded read; a read that throws answers `unavailable` and writes nothing, because "I could not read the switch" is not "the switch is off".
+
+### The server address (ruling `A165`)
+
+- Accepted: `http://host[:port]` and `https://host[:port]`, after trimming. The stored form is `URL.origin` — no trailing slash, no default port spelled out twice.
+- Refused, each with its own machine code and its own Russian sentence at the options page (`server_invalid`, `server_scheme`, `server_shape`): a value that is not a URL; a scheme other than `http:`/`https:` (which is also what `localhost:8080` parses as, since `localhost:` is read as a scheme); a path, a query, a fragment, credentials, or no host.
+- A refused address is **not written**: the record stays byte-identical, the typed value stays in the field, and the message names what to change.
+- An empty or whitespace-only value is **valid** and means "not configured": clearing the field is how the reader turns synchronization off without touching the switch.
+
+### The no-request rule (ruling `A166`)
+
+- Synchronization is on exactly when `syncEnabled` is `true` **and** the address parses to a non-empty origin. That answer is core `syncTargetOf`, and it is the only answer either half consults.
+- With synchronization off: no automatic load, no request from a press, and **no sync button rendered at all** — the feature reads as absent, not as broken.
+- The two halves ask the same function, so "the button is visible but does nothing" and "the page loads while the button is hidden" cannot both be true.
+
+### What a press sends (ruling `A161`)
+
+- The button exists only in the row whose `authorName` equals the reader's (`isSameAuthor`), and only when the target is not `null`. A foreign row keeps only its delete control.
+- One press is one `POST /notes/page/{page_id}` with body `{ "author_id": <the settings name>, "notes": [...] }`.
+- `notes` holds **only** the current author's entries on this page, filtered by core `isSameAuthor` and ordered by `sortByCreatedAtAsc`. Foreign notes already in memory are never part of a payload, and an author with no own note on the page sends nothing at all (the button returns to idle without a request).
+- The notes are read from the store at the moment of the press, not from the popup's rendered view: a press sends what the store holds now.
+- Nothing is written to `chrome.storage.local` by a press, and no message is sent to the page (`A50` keeps the storage write the only notification channel).
+
+### The three states (ruling `A162`)
+
+| State | Appearance |
+|---|---|
+| `idle` | green circular arrows (`#1e7b3c`), static |
+| `running` | the same arrows spinning (`@keyframes sync-spin`, `0.9s linear infinite`), the control disabled while it stands |
+| `error` | the same arrows in the surface's refusal ink (`#b3261e`) |
+
+- The glyph is an inline `<svg>` with `stroke="currentColor"`, `16px` inside a `24px` box — the delete button's own numbers, because `A162` asks for the same size.
+- The button carries **no visible text**; its `aria-label` and `title` are «Синхронизировать», and they do not change with the state (the state is visual only).
+- The state follows the **answer of the request** and nothing else: success sets `idle`, a failure sets `error`, and `error` stays until the next press. There is no timer, no auto-reset and no `setTimeout` anywhere in the popup.
+- A press with nothing to send (`nothin_to_send`) and a press whose switch has been turned off in the meantime (`sync_off`) both return the arrows to `idle`: neither is a server failure the reader has to fix.
+
+### The automatic load (ruling `A163`, `A164`)
+
+- One request per `page key` per document, made **after** the first paint pass has resolved that key, so the stored notes are on screen whether or not the server answers.
+- The key asked for is the key the paint pass resolved — the same one the stored notes live under, `origin + pathname` fallback included.
+- A same-document navigation (`A59`) or a storage write (the settings key included) re-runs the pass and then the question; a key already asked about starts no second request.
+- The response is `{ "notes": [...] }`. Each row is mapped at this boundary (`src/core/sync-client.ts`) into the stored entry shape; a row whose fields are not all readable as an entry is **skipped**, never guessed at.
+- The reader's own notes in the answer are dropped before memory: they are already in the store, and painting them twice would register two highlight names over one span.
+- An unreadable body, a non-2xx status, a refused connection, a missing transport or no target are all `{ ok: false, code }` — the loader never rejects.
+
+### Where the notes live (ruling `A163`)
+
+- The foreign notes are held in a closure inside the content script, for the lifetime of the document. They disappear on reload.
+- They are **never** written to `chrome.storage.local`, never appear in a payload, and never reach the page index: the content layer's settings import list grows by one module and its write imports by none (`tests/content-create-card-boundaries.spec.ts` pins both).
+- They are painted by the existing paint pass, in the same pass as the stored notes and against the same page stream (`A29`), with the same anchor resolution, the same `paint name` scheme and the same palette slot per `authorName`.
+- A foreign note is therefore **not editable**: the editor opens only from `onEntryClick` of a paint-pass entry whose author is the reader's (`A96`), and a foreign entry is refused there by the existing rule, not by a new one.
+
+### Author colour and the tooltip (answer 4)
+
+- The highlight of a foreign note wears the palette slot of its author's name (`A94`, `A102`), like any entry.
+- The tooltip's `ownership header` prints the author's stored name (§ "Own entries and foreign entries … only in the tooltip header" of `content-overlay-ui.md`) and, for a foreign note, prints it **in that author's palette colour**, as an inline style on one span inside the shadow root. The reader's own header keeps the stylesheet's ink.
+- The colour is read from the same palette literal the highlight rule writes (`paintColourOfSlot`), so the underline on the page and the name in the tooltip cannot disagree. A slot with no fill answers the empty string, and the header keeps the stylesheet's ink rather than rendering an invalid colour.
+
+### Hiding and deleting a foreign row (answer 5)
+
+- The popup's checkbox of a foreign author hides that author's highlights on this page: the flag lives in the same memory, because a foreign note has no stored `visible` field. A switched-off foreign note is still painted — with its underline and without its fill — so switching it back on is one more pass and no request.
+- `Удалить` on a foreign row removes that author's notes from this page's **view**: the memory drops them, the page repaints, and the server is not called. The rows come back on the next page load.
+- Neither control writes to `chrome.storage.local`.
+
+### A failed load never blocks the page (ruling `A164`)
+
+- The automatic load is fire-and-forget: no `await` holds the paint, no `catch` is needed at the call site, and a failure returns silently.
+- No retry loop, no modal, no line on the article.
+- The popup states the failure as the non-blocking notice «Не удалось связаться с сервером синхронизации»: above the list, never replacing it (`A83`), and the rows stay exactly as they are.
+
+### One address, and no other network
+
+- The only network API in the shipped source is `fetch`, in exactly two five-line adapters — `src/content/sync/fetch-transport.ts` for the page and `src/popup/sync-transport.ts` for the popup, because an MV3 popup and a content script are separate bundles. `tests/toolchain-contract.spec.ts` pins that file set.
+- Neither adapter builds a URL. The address comes from `settings:v1` through core `syncTargetOf`, and the route from core `NOTES_PAGE_PATH`; a request to any other address is not constructible from the shipped code.
+- `host_permissions` is the two exact strings `http://*/*` and `https://*/*`, in that order (the brief's answer 8): the server is an arbitrary `host:port` from the reader's settings, so no narrower pattern can name it.
+
+### Wire shape
+
+A stored entry is mapped at the boundary, not in the domain:
+
+| Stored entry | Server note |
+|---|---|
+| `id` | `id` |
+| `pageKey` | `page_id` |
+| `authorName` | `author_id` |
+| `text` | `text` |
+| `comment` | `comment` |
+| `anchor` | `anchor` (opaque JSON in both directions, `A154` of the server spec) |
+| `createdAt` | `created_at` |
+| `updatedAt` | `updated_at` |
+| `visible` | **not sent** — it is the reader's display flag and the server has no column for it; a note that arrives is visible (`A1`) |
+
+## Edge Cases
+
+- **Server unreachable at page open.** The stored notes are painted, no notice appears on the article, the popup shows the failure line, and the sync button's press is the reader's retry.
+- **Server down at a press.** The arrows turn red and stay red until the next press.
+- **Empty response.** `{"notes": []}` is a success; the page paints only its stored notes.
+- **A row this extension cannot read.** Skipped: no row, no highlight, no error state.
+- **Two authors, one note id.** Both are kept: the memory keys rows by author **and** id (`sync-server.md` -> the upsert triple).
+- **The reader's name changes while the page stands.** The settings write repaints the page and re-asks the question; a note that just became the reader's own stops being foreign, and a note that stopped being theirs arrives as foreign on the next load.
+- **The switch is turned off while the page stands.** The settings write is the trigger: the page drops its foreign notes and repaints, and the popup's next open renders no sync button.
+- **The address is cleared while the popup stands.** A press answers `sync_off` and returns to `idle`; nothing was called.
+- **A note the reader deleted locally but the server still holds.** The next load returns it as foreign if its author differs from the reader's; the reader's own deleted note comes back in the server's answer only as an own note, which memory drops.
+- **A page with no store.** No `pageKey`, so no request: the automatic load is skipped rather than sent with an empty key.
+- **A foreign note whose text the page has moved.** It is resolved like any entry: unpainted this pass, still in memory, still listed, gone on reload.
+
+## Acceptance Criteria
+
+1. `settings:v1` decodes an old `{ name }` record without loss and yields `syncEnabled: false` and `serverUrl: ''`.
+2. A record with a `name` the rule refuses keeps its two sync fields; an undecodable record answers the two defaults.
+3. A write omits both fields at their defaults, so the shipped record shape did not grow.
+4. `saveSettings` keeps a stored sync field the caller did not send, and reports a guarded read that throws as `unavailable` without writing.
+5. `parseServerAddress` accepts `http`/`https` origin-only addresses and refuses every other shape with its own code; an empty value is valid and reads as "not configured".
+6. `syncTargetOf` answers `null` when the switch is off, the address is empty, or the address does not parse.
+7. The options page renders a server address field and a «Синхронизация» checkbox, both persisted in `settings:v1`, with every Russian string in `src/options/text.ts`.
+8. A refused address is not saved, its message is shown, and the stored record is unchanged.
+9. The popup renders the sync button in the row of the current author only, and not at all when synchronization is off or the address is empty.
+10. The sync button sends `POST /notes/page/{page_id}` with only the current author's entries and `author_id` equal to the settings name.
+11. The three states are driven by the request outcome: `running` while it stands, `idle` on success, `error` on failure, with no timer anywhere.
+12. On page open, with synchronization on and a valid address, the content script calls `GET /notes/page/{page_id}` once per page key and paints the returned foreign notes beside the stored ones.
+13. Foreign notes are never written to `chrome.storage.local` and never appear in a payload.
+14. A foreign note is not editable, wears its author's palette colour, and its tooltip names the author in that colour.
+15. A foreign row's `Удалить` removes it from view locally without a request; its checkbox hides it in memory.
+16. A failed automatic load leaves the page working and states the failure with the non-blocking popup notice.
+17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]`, and `fetch` appears in exactly the two transport adapters.
+18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
+
+### Test mapping
+
+| AC | Test |
+|---|---|
+| 1, 2, 3, 4 | `tests/core-settings-store.spec.ts` -> the Stage 17 describe; `tests/options-sync-settings.spec.ts` |
+| 5, 6 | `tests/core-sync-client.spec.ts` -> "server address", "synchronization needs a switch" |
+| 7, 8 | `tests/options-sync-settings.spec.ts`; `tests/options-window-look.spec.ts` |
+| 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
+| 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
+| 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
+| 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
+| 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
+| 18 | the gate commands, quoted in `docs/state/t17-01-engineer.md` |

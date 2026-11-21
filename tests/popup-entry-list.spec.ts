@@ -338,7 +338,7 @@ describe('AC1 the popup lists the current page through core', () => {
       // rows did not (ruling `A49` is what keeps them reachable here).
       expect(view.rows).toHaveLength(state.withEntry ? 1 : 0);
       // The shape itself: the view is rows plus notices, with no address field to read.
-      expect(Object.keys(view).sort()).toEqual(['notices', 'rows']);
+      expect(Object.keys(view).sort()).toEqual(['notices', 'rows', 'syncEnabled']);
       const rendered = JSON.stringify(view);
       for (const fragment of state.forbidden) {
         expect(rendered).not.toContain(fragment);
@@ -501,7 +501,11 @@ describe('AC2 the aggregate checkbox writes the visibility of a whole author gro
     expect(view.rows.map((row) => row.allVisible)).toEqual([true, true]);
     expect(storedRecords(f.port).map((record) => record['visible'])).toEqual([true, true, true]);
     expect(view.notices).toEqual([]);
-    expect(Object.keys(view).sort()).toEqual(['notices', 'rows']);
+    // Stage 17 adds the third field of the view: `syncEnabled` is the ruling `A166`
+    // answer the row's sync button is gated by. It is not a row and not a notice, and it
+    // is the whole of what the popup knows about the sync configuration.
+    expect(Object.keys(view).sort()).toEqual(['notices', 'rows', 'syncEnabled']);
+    expect(view.syncEnabled).toBe(false);
   });
 });
 
@@ -700,7 +704,13 @@ describe('AC4 the states that are not a list', () => {
   });
 
   it('the notice map is total over the notice codes', async () => {
-    expect(Object.keys(POPUP_NOTICE_TEXT).sort()).toEqual(['name_required', 'page_not_injectable']);
+    // Stage 17 adds the ruling `A164` line, which the automatic load's failure is stated
+    // with. It is one sentence, non-blocking, and it never replaces a row.
+    expect(Object.keys(POPUP_NOTICE_TEXT).sort()).toEqual([
+      'name_required',
+      'page_not_injectable',
+      'sync_failed',
+    ]);
   });
 
   it('the injectable schemes are the ones the manifest registers the content script for', () => {

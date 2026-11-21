@@ -53,6 +53,20 @@ export const POPUP_STRINGS = {
    * (ruling `A143`) the button prints no word: this string is its `aria-label` **and**
    * its `title`, which is the accessible name of an icon-only control. */
   delete: 'Удалить',
+  /**
+   * Sync control of the reader's own row (Stage 17, ruling `A162`). Like `Удалить` it is
+   * icon-only, so the word is its `aria-label` **and** its `title`; the three states are
+   * visual (`A162` says so), and the accessible name therefore stays one phrase while
+   * the arrows spin or turn red.
+   */
+  sync: 'Синхронизировать',
+  /**
+   * The non-blocking line a failed automatic load or a failed press leaves (ruling
+   * `A164`). One sentence for every failure the code union can name: the reader's next
+   * step is the same in all of them — check the server address in the settings — and a
+   * second variant per code would be wording this feature has no ruling for.
+   */
+  syncFailed: 'Не удалось связаться с сервером синхронизации',
 } as const;
 
 /**
@@ -68,6 +82,9 @@ export const AUTHOR_ROW_COUNT_SEPARATOR = ' — ';
 export const POPUP_NOTICE_TEXT: Readonly<Record<PopupNoticeCode, string>> = {
   name_required: POPUP_STRINGS.nameRequired,
   page_not_injectable: POPUP_STRINGS.notInjectable,
+  // `A164`: one sentence for every sync failure, and it is the same string the sync
+  // button's error state owns — one state, one wording.
+  sync_failed: POPUP_STRINGS.syncFailed,
 };
 
 /** The Russian wording of one notice code, from the single map. */

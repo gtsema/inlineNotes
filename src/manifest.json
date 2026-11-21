@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Личные заметки прямо на странице статьи.",
   "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "icons": {
     "128": "icons/icon-128.png"
   },

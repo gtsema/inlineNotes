@@ -56,6 +56,7 @@ import { deleteEntriesOfAuthor, setVisibleForAuthor } from '../core/entry-store-
 import { pageKeyFromUrl } from '../core/page-key';
 import { loadSettings } from '../core/settings-store';
 import type { StoragePort } from '../core/storage-port';
+import { syncTargetOf } from '../core/sync-settings';
 
 /**
  * Schemes the content script is registered for (`src/manifest.json` ->
@@ -68,11 +69,15 @@ import type { StoragePort } from '../core/storage-port';
 export const INJECTABLE_SCHEMES: readonly string[] = ['http:', 'https:'];
 
 /**
- * A state the popup states in words instead of rows (rulings `A81`, `A83`). The set
- * is exactly the two the overlay spec fixes wording for; a third one needs a
- * ruling, not a string written here.
+ * A state the popup states in words instead of rows (rulings `A81`, `A83`, and Stage 17
+ * `A164` for the third).
+ *
+ * `sync_failed` is the ruling `A164` line: the automatic load on page open, or a press
+ * of the sync button, did not reach the server. It is **non-blocking** — the rows stay
+ * exactly as they are — and it never replaces a row or hides the list, which is what
+ * `A83` already requires of every notice on this surface.
  */
-export type PopupNoticeCode = 'name_required' | 'page_not_injectable';
+export type PopupNoticeCode = 'name_required' | 'page_not_injectable' | 'sync_failed';
 
 /**
  * One popup row: one author of this page (`author row`, rulings `A95`, `A108`).
@@ -85,7 +90,13 @@ export type PopupNoticeCode = 'name_required' | 'page_not_injectable';
  * as `"Я "` is reached by the row of a reader named `"Я"`.
  */
 export interface AuthorRowView {
-  /** Stored `authorName` of the group, verbatim from its earliest entry. */
+  /**
+   * Stored `authorName` of the group, verbatim from its earliest entry.
+   *
+   * Since Stage 17 (`t17-01`, ruling `A161`) this is also the address of the sync
+   * button's one call: the button exists only on the row whose `isOwn` is `true`, and
+   * the payload is that author's notes — never the page's.
+   */
   authorName: string;
   /**
    * How many entries of this page belong to this author, `stale entry` records
@@ -116,6 +127,15 @@ export interface PageEntriesView {
   rows: readonly AuthorRowView[];
   /** Notice lines above the list, in this fixed order (ruling `A83`). */
   notices: readonly PopupNoticeCode[];
+  /**
+   * Whether this page's rows may carry a sync button at all (Stage 17, `A166`).
+   *
+   * It is `true` only when the record says synchronization is on **and** the address is
+   * usable, and the *row* half of the same rule (`A161`, only the current author's row)
+   * is `AuthorRowView.isOwn`. Two answers, one rule, and no other place in the popup
+   * decides either of them: with `false` the feature is absent rather than broken.
+   */
+  syncEnabled: boolean;
 }
 
 /** What the service needs from its caller: the seam, the address, the options page. */
@@ -286,6 +306,11 @@ export class PageEntriesService {
       notices.push('page_not_injectable');
     }
 
-    return { rows, notices };
+    // Stage 17 (`A166`): the button exists only when there is somewhere to call. The
+    // decision is core's, and it is the same call the content script makes before its
+    // automatic load, so the two halves cannot disagree.
+    const syncEnabled = syncTargetOf(settings) !== null;
+
+    return { rows, notices, syncEnabled };
   }
 }
