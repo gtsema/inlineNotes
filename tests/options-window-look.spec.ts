@@ -1176,11 +1176,18 @@ describe('the extension declares one 128 px icon (t11-01 AC4, AC5; rulings A130,
 
 describe('exactly one new Russian string (t9-02 AC4)', () => {
   it('adds the name explanation line and moves no existing string', () => {
+    // Stage 17 (`t17-01` AC2) adds the four strings of its two controls beside these five,
+    // and moves none of them: the list is the whole constant, so a sixth later sentence is
+    // a failing test as well.
     expect(Object.keys(OPTIONS_STRINGS).sort()).toEqual([
       'nameHint',
       'nameLabel',
       'save',
       'saved',
+      'serverHint',
+      'serverLabel',
+      'syncCheckbox',
+      'syncLabel',
       'title',
     ]);
     // The four strings that shipped before this task, byte-identical.
@@ -1352,8 +1359,14 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
   const HINT_SIZE = '11px';
   const SURFACE_BASE_SIZE = '13px';
 
-  /** The one `label-line` element of the shipped template, tag and contents whole. */
-  const labelLine = /<p class="label-line">([\s\S]*?)<\/p>/.exec(template)?.[1];
+  /**
+   * The **name** label line of the shipped template, contents whole.
+   *
+   * Since Stage 17 (`t17-01`) the page carries a second `label-line`, for the server
+   * address, so this read anchors on the line's first child — the author-name label —
+   * instead of taking "the only one" of them.
+   */
+  const labelLine = /<p class="label-line">\s*(<label[\s\S]*?)<\/p>/.exec(template)?.[1];
 
   it('renders the same controls with the same bindings as before the look landed', () => {
     expect(template).toMatch(/<label class="label" for="author-name">\{\{ nameLabel \}\}<\/label>/);
@@ -1379,13 +1392,16 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
       throw new Error('the options template has no `label-line` element');
     }
 
-    // One label element and one input element, as before, and the input comes after the
-    // label line, immediately (answer `Q4`).
-    expect(template.match(/<label\b/g) ?? []).toHaveLength(1);
-    expect(template.match(/<input\b/g) ?? []).toHaveLength(1);
-    expect(template.indexOf('class="label-line"')).toBeLessThan(template.indexOf('<input'));
+    // The name field is still exactly one label and one input — the sync half of
+    // `t17-01` adds its own pair, so the counts are pinned **per field** here, by the
+    // `for` each label names, rather than as a whole-template count.
+    expect(template.match(/<label\b[^>]*for="author-name"/g) ?? []).toHaveLength(1);
+    expect(template.match(/<input\b[^>]*id="author-name"/g) ?? []).toHaveLength(1);
+    expect(template.indexOf('class="label-line"')).toBeLessThan(
+      template.indexOf('id="author-name"'),
+    );
     expect(template.indexOf('</p>', template.indexOf('class="label-line"'))).toBeLessThan(
-      template.indexOf('<input'),
+      template.indexOf('id="author-name"'),
     );
 
     // The label line carries the label and the parenthetical, in that order, separated by
@@ -1459,6 +1475,8 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
 
     // The two literals are the ones the ruling names, and they are not spelled anywhere else
     // on the surface: a second rule carrying the same size would be a second owner of it.
+    // Since Stage 17 the server address line reuses the **same** `.hint` rule rather than a
+    // second copy of it, which is why the sheet still spells each literal once.
     expect(stylesCode.match(/margin-left:/g) ?? []).toHaveLength(1);
     expect(stylesCode.match(/font-size:\s*11px/g) ?? []).toHaveLength(1);
 
@@ -1477,7 +1495,7 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     // newline and a second space beside the indentation — which is the character AC1 forbids
     // and the change a reader might mistake for the fix.
     expect([...separator].filter((character) => character === ' ')).toHaveLength(
-      separator.length - 2,
+      separator.length - 1,
     );
     expect(separator).not.toContain('\t');
     expect(labelLine).toMatch(/<\/label>\r?\n\s*<span class="hint">/);

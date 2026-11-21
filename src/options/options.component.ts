@@ -1,9 +1,14 @@
 import { ChangeDetectionStrategy, Component, InjectionToken, OnInit, inject, signal } from '@angular/core';
 
 import { createChromeLocalStoragePort } from '../content/store/chrome-storage-port';
-import type { AuthorNameDraft, AuthorNameServiceSource, AuthorNameView } from './author-name-service';
+import type {
+  AuthorNameDraft,
+  AuthorNameServiceSource,
+  AuthorNameView,
+  SyncSettingsView,
+} from './author-name-service';
 import { AuthorNameService } from './author-name-service';
-import { OPTIONS_STRINGS, nameCounterText, optionsMessageText } from './text';
+import { OPTIONS_STRINGS, nameCounterText, optionsMessageText, serverAddressText } from './text';
 
 /**
  * What the page runs on: the storage seam and the randomness. A token with a root
@@ -100,6 +105,35 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         (input)="onInput($event)"
       />
       <p class="counter">{{ counter() }}</p>
+
+      <p class="label-line sync-line">
+        <label class="label" for="server-url">{{ serverLabel }}</label>
+        <span class="hint">({{ serverHint }})</span>
+      </p>
+      <input
+        class="input"
+        id="server-url"
+        type="text"
+        autocomplete="off"
+        [value]="serverDraft()"
+        (input)="onServerInput($event)"
+        (change)="onServerCommit()"
+      />
+
+      <p class="toggle-line">
+        <input
+          class="sync-toggle"
+          id="sync-enabled"
+          type="checkbox"
+          [checked]="sync().syncEnabled"
+          (change)="onSyncToggle($event)"
+        />
+        <label class="label" for="sync-enabled">{{ syncLabel }}</label>
+      </p>
+
+      @if (serverMessage() !== null) {
+        <p class="message message--refusal">{{ serverMessage() }}</p>
+      }
 
       <button class="save" type="button" [disabled]="!draft().canSave" (click)="onSave()">
         {{ save }}
@@ -200,6 +234,25 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       color: #7b6a55;
     }
 
+    .sync-line {
+      margin: 0 0 4px;
+    }
+
+    .toggle-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 12px 0 0;
+    }
+
+    .sync-toggle {
+      flex: none;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: #b8480d;
+    }
+
     .save {
       padding: 6px 14px;
       color: #ffffff;
@@ -241,10 +294,21 @@ export class OptionsComponent implements OnInit {
   /** What the field holds right now and what `Сохранить` would send. */
   readonly draft = signal<AuthorNameDraft>(emptyDraft());
 
+  /**
+   * The sync half as the store reports it (Stage 17, `t17-01` AC2, AC3). `sync()` is
+   * what the two controls render; `serverDraft()` is the address field's own text, so a
+   * refused value stays in front of the reader while the stored one stays untouched.
+   */
+  readonly sync = signal<SyncSettingsView>({ serverUrl: '', syncEnabled: false, serverRefusal: null });
+  readonly serverDraft = signal<string>('');
+
   readonly title: string = OPTIONS_STRINGS.title;
   readonly nameLabel: string = OPTIONS_STRINGS.nameLabel;
   readonly save: string = OPTIONS_STRINGS.save;
   readonly nameHint: string = OPTIONS_STRINGS.nameHint;
+  readonly serverLabel: string = OPTIONS_STRINGS.serverLabel;
+  readonly serverHint: string = OPTIONS_STRINGS.serverHint;
+  readonly syncLabel: string = OPTIONS_STRINGS.syncLabel;
 
   ngOnInit(): void {
     void this.open();
@@ -259,6 +323,12 @@ export class OptionsComponent implements OnInit {
   message(): string {
     const code = this.view().message;
     return code === null ? '' : optionsMessageText(code);
+  }
+
+  /** Russian wording of the address refusal, from the single map (ruling `A33`). */
+  serverMessage(): string | null {
+    const code = this.sync().serverRefusal;
+    return code === null ? null : serverAddressText(code);
   }
 
   /**
@@ -288,14 +358,62 @@ export class OptionsComponent implements OnInit {
     void this.saveDraft();
   }
 
+  /** One typed character of the address field: a draft only, nothing is written yet. */
+  onServerInput(event: Event): void {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement)) {
+      return;
+    }
+    this.serverDraft.set(field.value);
+    if (this.sync().serverRefusal !== null) {
+      this.sync.set({ ...this.sync(), serverRefusal: null });
+    }
+  }
+
+  /**
+   * The address field lost focus or the reader pressed `Enter`: the value is offered
+   * to the rule (`A165`). Nothing here decides whether it is an address — the service
+   * and core do, and this handler only shows what they answered.
+   */
+  onServerCommit(): void {
+    void this.commitServerUrl();
+  }
+
+  /** The synchronization switch (`A166`): written the moment it is pressed. */
+  onSyncToggle(event: Event): void {
+    const box = event.target;
+    if (!(box instanceof HTMLInputElement)) {
+      return;
+    }
+    void this.applySync(this.service.setSyncEnabled(box.checked));
+  }
+
+  private async commitServerUrl(): Promise<void> {
+    this.applySync(this.service.saveServerUrl(this.serverDraft()));
+  }
+
+  /** One place puts the stored sync half back on the page, field included. */
+  private applySync(next: Promise<SyncSettingsView>): void {
+    void next.then((view: SyncSettingsView) => {
+      this.sync.set(view);
+      if (view.serverRefusal === null) {
+        this.serverDraft.set(view.serverUrl);
+      }
+    });
+  }
+
   private async saveDraft(): Promise<void> {
     this.apply(await this.service.save(this.draft().value));
   }
 
   private async open(): Promise<void> {
     this.apply(await this.service.open());
+    // The stored sync half is read by the same call the name comes from, so the two
+    // controls start on what the record really holds.
+    const sync = this.service.syncView();
+    this.sync.set(sync);
+    this.serverDraft.set(sync.serverUrl);
   }
-
   /**
    * One place moves both signals, so the field can never show a value the store
    * does not hold: after a refused save this puts the stored name back.

@@ -25,6 +25,7 @@
 
 import type { OptionsMessageCode } from './author-name-service';
 import { MAX_AUTHOR_NAME_CODE_POINTS } from '../core/entry-rules';
+import type { ServerAddressCode } from '../core/sync-settings';
 
 export const OPTIONS_STRINGS = {
   title: 'Настройки inlineNotes',
@@ -46,6 +47,17 @@ export const OPTIONS_STRINGS = {
    * stored is still the name the store holds.
    */
   saved: 'Имя сохранено',
+  /**
+   * Label of the server address field (Stage 17, `t17-01` AC2). The parenthetical
+   * under it says the two shapes the rule accepts, so the reader reads the
+   * requirement before meeting the refusal (`A165`).
+   */
+  serverLabel: 'Адрес сервера',
+  serverHint: 'http:// или https://, порт через двоеточие',
+  /** Label of the synchronization switch; the only control that turns sync on. */
+  syncLabel: 'Синхронизация',
+  /** The word the checkbox shows beside itself. It is the label word, not a second one. */
+  syncCheckbox: 'Включить',
 } as const;
 
 /**
@@ -72,6 +84,28 @@ export const OPTIONS_MESSAGE_TEXT: Readonly<Record<OptionsMessageCode, string>> 
 /** The Russian message of one code, from the single map. */
 export function optionsMessageText(code: OptionsMessageCode): string {
   return OPTIONS_MESSAGE_TEXT[code];
+}
+
+/**
+ * Why the address the reader typed was refused (Stage 17, ruling `A165`). Machine
+ * codes come from `src/core/sync-settings.ts`; the wording is this layer's, as
+ * everywhere else.
+ */
+export type ServerAddressText = Readonly<Record<ServerAddressCode, string>>;
+
+/**
+ * One sentence per refusal, each naming what to change: a reader who typed an `ftp`
+ * address and one who typed a path get different answers, because the fixes differ.
+ */
+export const SERVER_ADDRESS_TEXT: ServerAddressText = {
+  server_invalid: 'Это не похоже на адрес: нужен вид http://192.168.0.10:8080',
+  server_scheme: 'Адрес должен начинаться с http:// или https://',
+  server_shape: 'В адресе нужны только хост и порт, без пути и параметров',
+};
+
+/** The Russian wording of one address refusal. */
+export function serverAddressText(code: ServerAddressCode): string {
+  return SERVER_ADDRESS_TEXT[code];
 }
 
 /**

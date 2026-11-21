@@ -47,6 +47,8 @@ import {
 import type { SettingsWriteCode } from '../core/settings-store';
 import { loadSettings, saveSettings } from '../core/settings-store';
 import type { StoragePort } from '../core/storage-port';
+import type { ServerAddressCode } from '../core/sync-settings';
+import { parseServerAddress } from '../core/sync-settings';
 import { sliceCodePoints } from '../core/text-normalize';
 
 /**
@@ -65,6 +67,20 @@ export interface AuthorNameView {
   name: string;
   /** Message line, `null` when the page has nothing to report. */
   message: OptionsMessageCode | null;
+}
+
+/**
+ * The sync half of the page (Stage 17, `t17-01` AC2, AC3): the address that is
+ * **stored**, the switch that is stored, and the refusal of a typed value that never
+ * reached the store.
+ */
+export interface SyncSettingsView {
+  /** Stored address as core normalized it; `''` means "not configured". */
+  serverUrl: string;
+  /** Stored switch. */
+  syncEnabled: boolean;
+  /** Why the last typed address was refused, `null` when it was accepted. */
+  serverRefusal: ServerAddressCode | null;
 }
 
 /** What the input handler decided about one typed value. */
@@ -97,6 +113,13 @@ export class AuthorNameService {
   /** Name the store holds, as the last core read or write reported it. */
   private storedName = '';
 
+  /**
+   * The sync half of the page (Stage 17). Kept beside the name because both live in
+   * the **one** `settings:v1` record: two services writing it would race, and the
+   * last write would erase the other half's field.
+   */
+  private sync: SyncSettingsView = { serverUrl: '', syncEnabled: false, serverRefusal: null };
+
   constructor(source: AuthorNameServiceSource) {
     this.port = source.port;
     this.rng = source.rng;
@@ -111,6 +134,7 @@ export class AuthorNameService {
    */
   async open(): Promise<AuthorNameView> {
     const settings = await loadSettings(this.port);
+    this.sync = { serverUrl: settings.serverUrl, syncEnabled: settings.syncEnabled, serverRefusal: null };
     const stored = validateAuthorName(settings.name);
     if (stored.ok) {
       this.storedName = stored.normalized;
@@ -168,5 +192,49 @@ export class AuthorNameService {
     }
     this.storedName = write.name;
     return { name: this.storedName, message: 'saved' };
+  }
+
+  /** The sync half as it stands, for the first render of the page. */
+  syncView(): SyncSettingsView {
+    return { ...this.sync };
+  }
+
+  /**
+   * The address field, one typed value at a time (ruling `A165`).
+   *
+   * A value the rule accepts is written through core and the stored address comes
+   * back normalized; a value it refuses is **not** written, is **not** remembered and
+   * answers its refusal code, so the message names what to change while the stored
+   * record stays exactly as it was. The field itself keeps the typed text: it is the
+   * reader's own edit, and clearing it would delete what they are fixing.
+   */
+  async saveServerUrl(raw: string): Promise<SyncSettingsView> {
+    const parsed = parseServerAddress(raw);
+    if (!parsed.ok) {
+      this.sync = { ...this.sync, serverRefusal: parsed.code };
+      return this.syncView();
+    }
+
+    const write = await saveSettings(this.port, { name: this.storedName, serverUrl: parsed.serverUrl });
+    if (!write.ok) {
+      this.sync = { ...this.sync, serverRefusal: null };
+      return this.syncView();
+    }
+    this.sync = { serverUrl: write.serverUrl, syncEnabled: write.syncEnabled, serverRefusal: null };
+    return this.syncView();
+  }
+
+  /**
+   * The synchronization switch. `A166`: the switch is what makes the content script
+   * call the server at page open, so it is written the moment it is pressed and the
+   * view reports what the store really holds afterwards.
+   */
+  async setSyncEnabled(syncEnabled: boolean): Promise<SyncSettingsView> {
+    const write = await saveSettings(this.port, { name: this.storedName, syncEnabled });
+    if (!write.ok) {
+      return this.syncView();
+    }
+    this.sync = { serverUrl: write.serverUrl, syncEnabled: write.syncEnabled, serverRefusal: null };
+    return this.syncView();
   }
 }

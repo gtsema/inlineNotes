@@ -122,7 +122,11 @@ describe('AC2 — Сохранить calls the core save and nothing else', () =
     const view = await service.save('Боря');
 
     expect(view).toEqual({ name: 'Боря', message: 'saved' });
+    // Stage 17 (`A160`): the core save reads the record first, because the two sync
+    // fields the name does not mention keep what the store holds. The write itself is
+    // still exactly one `set` of the one settings key.
     expect(port.calls).toEqual([
+      { op: 'get', keys: [SETTINGS_KEY] },
       { op: 'get', keys: [SETTINGS_KEY] },
       { op: 'set', keys: [SETTINGS_KEY] },
     ]);
@@ -229,7 +233,12 @@ describe('AC3 — first run generates the name (A54)', () => {
     expect(view).toEqual({ name: GENERATED_NAME, message: null });
     expect(view.name).toMatch(/^[0-9a-z]+$/);
     expect([...view.name]).toHaveLength(GENERATED_AUTHOR_NAME_LENGTH);
-    expect(port.calls).toEqual([{ op: 'get', keys: [SETTINGS_KEY] }, { op: 'set', keys: [SETTINGS_KEY] }]);
+    // One read, then the core save — which reads the carried sync fields and writes once.
+    expect(port.calls).toEqual([
+      { op: 'get', keys: [SETTINGS_KEY] },
+      { op: 'get', keys: [SETTINGS_KEY] },
+      { op: 'set', keys: [SETTINGS_KEY] },
+    ]);
     expect(storedSettingsValue(port)).toEqual({ name: GENERATED_NAME });
 
     const reread = await loadSettings(port);
