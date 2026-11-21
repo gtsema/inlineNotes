@@ -4,6 +4,7 @@ import { createChromeLocalStoragePort } from '../content/store/chrome-storage-po
 import { activeTabUrl } from './active-tab';
 import type { AuthorRowView, PageEntriesSource, PageEntriesView, PopupNoticeCode } from './page-entries-service';
 import { PageEntriesService, rowClass } from './page-entries-service';
+import { createPageNotesChannelSource } from './page-notes-channel';
 import type { SyncPressSource } from './sync-button-service';
 import { PopupSyncPress } from './sync-button-service';
 import { createPopupSyncTransport } from './sync-transport';
@@ -29,6 +30,9 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       openOptions: (): void => {
         void chrome.runtime.openOptionsPage();
       },
+      // Stage 17 (`A167`, `A168`): the two controls a foreign row owns are messages to
+      // the page, never storage writes of this layer.
+      page: createPageNotesChannelSource(),
     }),
   },
 );
@@ -172,6 +176,25 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
  * the reader can no longer delete. The name-required notice is a real `<button>`: it is
  * the control that opens the options page, and it writes nothing.
  *
+ * **The list has two halves since `t17-02`** (rulings `A167`, `A168`). The stored
+ * `author row`s of `A95`/`A108` are still one row per stored author, and beside them
+ * stand one row per author **the page** answered with: the notes the sync server
+ * returned, which live in the content script's memory and never in
+ * `chrome.storage.local` (`A163`). The two halves are one list and one format — the same
+ * label, the same checkbox, the same icon-only `Удалить` — because the reader is looking
+ * at one page, and the difference between them is **where a control writes**, which is a
+ * decision of the service and not of this template. A foreign row's checkbox hides that
+ * author's highlights for this tab and its `Удалить` drops them from this page's view for
+ * this tab (`A168`); the server is not called by either. The template says none of that
+ * in words: a second Russian sentence for a foreign row is what `A82` forbids, so the row
+ * keeps the `FOREIGN_ROW_CLASS` marker it always carried.
+ *
+ * **The failure line of `A169` is rendered here and decided elsewhere.** The page owns
+ * the automatic load, so the popup learns the outcome from its answer and renders
+ * «Не удалось связаться с сервером синхронизации» above the list that still renders
+ * (`A164`, `A83`). That string shipped in `t17-01` and nothing read it until this task;
+ * the notice map of `src/popup/text.ts` is its one address.
+ *
  * Ruling `A98` (task `t5-05`) removed the page-address line that used to stand under the
  * title: it printed `new URL(tab.url).host`, which is punycode for an internationalized
  * page, and it answered no question the reader had. What did **not** go is the address
@@ -191,6 +214,8 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
           <button class="notice notice--name" type="button" (click)="openSettings()">
             {{ noticeText(notice) }}
           </button>
+        } @else if (notice === 'sync_failed') {
+          <p class="notice">{{ noticeText(notice) }}</p>
         } @else {
           <p class="notice notice--not-injectable">{{ noticeText(notice) }}</p>
         }
@@ -436,7 +461,12 @@ export class PopupComponent implements OnInit {
   private readonly sync = new PopupSyncPress(inject(SYNC_PRESS_SOURCE));
 
   /** The whole popup state, as the core reads answered for the active tab. */
-  readonly view = signal<PageEntriesView>({ rows: [], notices: [], syncEnabled: false });
+  readonly view = signal<PageEntriesView>({
+    rows: [],
+    notices: [],
+    syncEnabled: false,
+    syncFailed: false,
+  });
 
   readonly title: string = POPUP_STRINGS.title;
   readonly emptyState: string = POPUP_STRINGS.emptyState;
@@ -519,8 +549,10 @@ export class PopupComponent implements OnInit {
   }
 
   /**
-   * The aggregate checkbox: **one** core `setVisibleForAuthor` through the service for
-   * the whole row, then a fresh read (rulings `A1`, `A50`, `A108`).
+   * The aggregate checkbox: **one** call through the service for the whole row, then a
+   * fresh read (rulings `A1`, `A50`, `A108`). The call is the service's, and the service
+   * decides whether that call is the one core write or the one message to the page
+   * (`A168`): this handler passes the row's own `authorName` and holds no branch.
    */
   onToggle(authorName: string, event: Event): void {
     const box = event.target;
@@ -531,10 +563,11 @@ export class PopupComponent implements OnInit {
   }
 
   /**
-   * The delete control of a row: **one** core `deleteEntriesOfAuthor` through the
-   * service, for every entry of this author on this page, own or foreign (rulings `A25`,
-   * `A108`). Ruling `A143` moved the word `Удалить` from this control's visible text to
-   * its `aria-label` and `title`; the call below is exactly the one it made before.
+   * The delete control of a row: **one** call through the service, for every note of
+   * this author on this page, own, stored-foreign or page-foreign (rulings `A25`,
+   * `A108`, `A168`). Ruling `A143` moved the word `Удалить` from this control's visible
+   * text to its `aria-label` and `title`; the call below is exactly the one it made
+   * before, and which of the two destinations it reaches is the service's answer.
    */
   onRemove(authorName: string): void {
     void this.apply(this.service.removeAllOfAuthor(authorName));

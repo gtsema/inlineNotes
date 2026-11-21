@@ -49,6 +49,9 @@ import { attachUrlChangeWatch } from './refresh/url-change-watch';
 import { attachStorageChangeWatch } from './refresh/storage-change-watch';
 import { createForeignNotes } from './sync/foreign-notes';
 import { attachSyncNotes } from './sync/sync-notes';
+import { attachPageNotesChannel } from './sync/page-notes-channel';
+import type { ForeignLoadOutcome } from './sync/foreign-notes';
+import { loadIntoMemory } from './sync/foreign-notes';
 import { createSyncTransport } from './sync/fetch-transport';
 
 function boot(): void {
@@ -159,7 +162,60 @@ function boot(): void {
   // page's list already here, and am I allowed to ask?" (`A166` first, then one request
   // per page key). Nothing is fetched until the first pass has resolved the page key.
   const foreign = createForeignNotes();
-  const sync = attachSyncNotes({ painter, foreign, port, transport: createSyncTransport() });
+  const transport = createSyncTransport();
+  const sync = attachSyncNotes({
+    painter,
+    foreign,
+    port,
+    transport,
+  });
+
+  // The popup's question (`A167`, `A168`, `A169`), wired here and answered by
+  // `attachPageNotesChannel`.
+  //
+  // `loadForeignNotes` is the page's request in one line, and it is the **same** path
+  // `attachSyncNotes` walks: `A166` is decided first (a switch that is off or an address
+  // that is empty means no request at all), the key is the one the last paint pass
+  // resolved — never a key derived here, because the stored notes may live under the
+  // `origin + pathname` fallback — and the settings name keeps the reader's own notes out
+  // of memory (`A161`). What the automatic load adds on top of this line is its own
+  // "asked already?" bookkeeping, which must not stop a reader's press from trying again:
+  // re-reading the page is exactly what the reader asked for.
+  const loadPageNotes = async (): Promise<ForeignLoadOutcome> => {
+    const key = painter.pageKeyOfPass();
+    if (key === null) {
+      return { ok: false, code: 'sync_off' };
+    }
+    const { target, currentName } = await sync.loadTarget();
+    if (target === null) {
+      // `A166` again, at the door the reader knocked on: nothing is called.
+      return { ok: false, code: 'sync_off' };
+    }
+    return await loadIntoMemory(foreign, { transport, target, pageKey: key, currentName });
+  };
+
+  const notesChannel = attachPageNotesChannel({ foreign, painter, load: loadPageNotes });
+
+  // The one `chrome.runtime.onMessage` listener of this document (`A167`). It is the
+  // entry point's wiring and not the module's rule: the channel above is pure and runs in
+  // a unit test with a recorder, and the delivered listener is four lines over it — the
+  // message in, the answer out, `true` when the answer comes later.
+  //
+  // The one guard is the subscription itself, and it is the same `A75`/`A164` rule the
+  // load follows: a frame without the runtime API (a test document, an unusual frame) is
+  // a page that cannot be asked rather than a page that breaks, and the popup reads that
+  // as "no foreign rows". A listener that throws is the channel's own business: it
+  // answers codes and message shapes, and an unreadable answer is already `A166`'s empty
+  // state (`src/content/sync/page-notes-channel.ts`).
+  try {
+    chrome.runtime.onMessage.addListener((message, sender, respond) =>
+      notesChannel.onMessage(message, sender, respond),
+    );
+  } catch {
+    // Named, not driven by a throw: `chrome.runtime` is present in every injected frame
+    // of an MV3 extension, and this is what keeps a document without it silent rather
+    // than broken.
+  }
 
   // Task `t4-03` AC1 and AC2/AC3: the page keeps telling the truth about itself after
   // it changed under the notes. Both watches do one thing only — ask the same paint

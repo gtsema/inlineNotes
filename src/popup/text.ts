@@ -61,10 +61,16 @@ export const POPUP_STRINGS = {
    */
   sync: 'Синхронизировать',
   /**
-   * The non-blocking line a failed automatic load or a failed press leaves (ruling
-   * `A164`). One sentence for every failure the code union can name: the reader's next
-   * step is the same in all of them — check the server address in the settings — and a
-   * second variant per code would be wording this feature has no ruling for.
+   * The non-blocking line a failed automatic load leaves (rulings `A164`, `A169`). One
+   * sentence for every failure the page can report: the reader's next step is the same
+   * in all of them — check the server address in the settings — and a second variant per
+   * code would be wording this feature has no ruling for.
+   *
+   * Since `t17-02` the sentence is **reachable**: the page owns the automatic load and
+   * answers the popup's question with its outcome, so `sync_failed` is a notice code the
+   * service really produces (`src/popup/page-entries-service.ts`) and `POPUP_NOTICE_TEXT`
+   * below is the one address of the wording. Before that task this string shipped with no
+   * reader, which is the defect the review of `t17-01` named.
    */
   syncFailed: 'Не удалось связаться с сервером синхронизации',
 } as const;

@@ -18,7 +18,9 @@ import {
   isInjectableUrl,
   rowClass,
 } from '../src/popup/page-entries-service';
+import type { PageNotesQueryResult } from '../src/core/page-notes-query';
 import type { PageEntriesSource } from '../src/popup/page-entries-service';
+import type { PageNotesChannelSource } from '../src/popup/page-notes-channel';
 import {
   AUTHOR_ROW_COUNT_SEPARATOR,
   POPUP_NOTICE_TEXT,
@@ -87,6 +89,21 @@ interface Fixture {
   calls: PortCall[];
 }
 
+/**
+ * A page channel that never reaches a browser: every send is answered with the pinned
+ * `A167` result. The operations a foreign row would perform are answered with the same
+ * view, because a page that holds no rows has nothing to switch or to dismiss.
+ */
+function pageChannelOf(answer: Partial<PageNotesQueryResult> = {}): PageNotesChannelSource {
+  const resolved: PageNotesQueryResult = {
+    rows: answer.rows ?? [],
+    syncFailed: answer.syncFailed ?? false,
+  };
+  return {
+    sendMessage: async (): Promise<unknown> => resolved,
+  };
+}
+
 /** Seeds one page slot plus the settings name, and points the fake tab at `url`. */
 function fixture(options: {
   url?: string | null;
@@ -94,6 +111,8 @@ function fixture(options: {
   pageKey?: string;
   indexed?: readonly string[];
   name?: string | null;
+  /** What the fake page answers (`A167`); the default is a page that holds nothing. */
+  page?: Partial<PageNotesQueryResult>;
 }): Fixture {
   const port = new MemoryStoragePort();
   const pageKey = options.pageKey ?? PAGE_KEY;
@@ -115,6 +134,10 @@ function fixture(options: {
     port,
     pageUrl: async (): Promise<string | null> => url,
     openOptions,
+    // The page's half of the row list (`A167`): this suite is about the **stored** rows,
+    // so the fake answer is the empty one, which is also the observable state of ruling
+    // `A166`. The foreign half has its own cases in `tests/popup-foreign-rows.spec.ts`.
+    page: pageChannelOf(options.page),
   };
 
   return { port, service: new PageEntriesService(source), openOptions, calls: port.calls };
@@ -337,8 +360,14 @@ describe('AC1 the popup lists the current page through core', () => {
       // The list is still there in the states that have one: the address line went, the
       // rows did not (ruling `A49` is what keeps them reachable here).
       expect(view.rows).toHaveLength(state.withEntry ? 1 : 0);
-      // The shape itself: the view is rows plus notices, with no address field to read.
-      expect(Object.keys(view).sort()).toEqual(['notices', 'rows', 'syncEnabled']);
+      // The shape itself: the view is rows plus notices plus the two sync answers, with
+      // no address field to read.
+      expect(Object.keys(view).sort()).toEqual([
+        'notices',
+        'rows',
+        'syncEnabled',
+        'syncFailed',
+      ]);
       const rendered = JSON.stringify(view);
       for (const fragment of state.forbidden) {
         expect(rendered).not.toContain(fragment);
@@ -501,11 +530,20 @@ describe('AC2 the aggregate checkbox writes the visibility of a whole author gro
     expect(view.rows.map((row) => row.allVisible)).toEqual([true, true]);
     expect(storedRecords(f.port).map((record) => record['visible'])).toEqual([true, true, true]);
     expect(view.notices).toEqual([]);
-    // Stage 17 adds the third field of the view: `syncEnabled` is the ruling `A166`
-    // answer the row's sync button is gated by. It is not a row and not a notice, and it
-    // is the whole of what the popup knows about the sync configuration.
-    expect(Object.keys(view).sort()).toEqual(['notices', 'rows', 'syncEnabled']);
+    // Stage 17 adds the third and fourth fields of the view: `syncEnabled` is the
+    // ruling `A166` answer the row's sync button is gated by, and `syncFailed` is the
+    // ruling `A169` answer the failure notice is rendered from. Neither is a row and
+    // neither is a notice, and together they are the whole of what the popup knows about
+    // the sync configuration. Both are `false` here: this fixture seeds no settings at
+    // all, so there is nowhere to call and nothing failed.
+    expect(Object.keys(view).sort()).toEqual([
+      'notices',
+      'rows',
+      'syncEnabled',
+      'syncFailed',
+    ]);
     expect(view.syncEnabled).toBe(false);
+    expect(view.syncFailed).toBe(false);
   });
 });
 
@@ -560,7 +598,17 @@ describe('AC3 a foreign row is marked foreign and keeps its group delete', () =>
     });
 
     const rows = (await f.service.open()).rows;
-    expect(Object.keys(rows[0] ?? {}).sort()).toEqual(['allVisible', 'authorName', 'count', 'isOwn']);
+    // `isForeign` joined the field set in `t17-02` (ruling `A168`): it is the one bit
+    // that routes a row's two controls to the page instead of to storage, and `isOwn`
+    // and `isForeign` are deliberately **not** complements — a stored note of another
+    // author is neither own nor foreign.
+    expect(Object.keys(rows[0] ?? {}).sort()).toEqual([
+      'allVisible',
+      'authorName',
+      'count',
+      'isForeign',
+      'isOwn',
+    ]);
     const rendered = JSON.stringify(rows);
     expect(rendered).not.toContain('aaa1a1a1a1a1');
     expect(rendered).not.toContain('bbb2b2b2b2b2');
@@ -579,6 +627,7 @@ describe('AC3 a foreign row is marked foreign and keeps its group delete', () =>
       })(),
       pageUrl: async (): Promise<string | null> => PAGE_URL,
       openOptions: vi.fn(),
+      page: pageChannelOf(),
     });
     const own = new PageEntriesService({
       port: (() => {
@@ -590,6 +639,7 @@ describe('AC3 a foreign row is marked foreign and keeps its group delete', () =>
       })(),
       pageUrl: async (): Promise<string | null> => PAGE_URL,
       openOptions: vi.fn(),
+      page: pageChannelOf(),
     });
 
     expect((await foreign.open()).rows[0]?.isOwn).toBe(false);
@@ -873,6 +923,9 @@ describe('`A110` the empty-author record is pinned inert debt, not a reachable s
       count: 1,
       isOwn: false,
       allVisible: true,
+      // `t17-02` (`A168`): the routing bit. The record came from the store, so it is not
+      // a page row, and neither control of this row may become a message to the page.
+      isForeign: false,
     });
     // The row is not hidden or filtered: it is a real line whose label has an empty name
     // half, and the reader can neither claim it nor reach it.

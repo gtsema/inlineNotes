@@ -35,7 +35,7 @@ import type { StoragePort } from '../../core/storage-port';
 import type { SyncTransport } from '../../core/sync-client';
 import { syncTargetOf } from '../../core/sync-settings';
 import type { ExtraEntry } from '../paint/paint-plan';
-import type { ForeignNotes } from './foreign-notes';
+import type { ForeignLoadOutcome, ForeignNotes } from './foreign-notes';
 import { loadIntoMemory } from './foreign-notes';
 
 /** What the page-side sync wiring talks to: the two page handles and two seams. */
@@ -55,6 +55,17 @@ export interface SyncNotesWiring {
   readonly transport?: SyncTransport;
   /** The settings read; the shipped value is core `loadSettings` over the port. */
   readonly settings?: (port: StoragePort) => Promise<SettingsReadResult>;
+  /**
+   * Called after every automatic load this wiring runs, with its outcome (Stage 17,
+   * task `t17-02`, ruling `A169`).
+   *
+   * It exists so the module that **owns** the request is also the module that publishes
+   * its result: the popup cannot see a failure of a request it never made, and \`A169\`
+   * forbids the popup from making its own. The hook is pure observation and this module
+   * acts on the value in no way — a failed load still paints nothing, retries nothing
+   * and states nothing on the article (`A164`).
+   */
+  readonly onLoad?: (outcome: ForeignLoadOutcome) => void;
 }
 
 /** The two entry points the page calls. */
@@ -69,6 +80,16 @@ export interface SyncNotes {
   afterPaint(): Promise<void>;
   /** The page key the last request asked for, `null` before the first one. */
   askedKey(): string | null;
+  /**
+   * The target the automatic load would use, read from the settings in this module.
+   *
+   * Ruling `A166` makes "is synchronization usable?" one question with one reader, and
+   * the reader is this module: the settings read lives here (`A31`), so the page's own
+   * channel asks this module instead of importing `loadSettings` a third time — the
+   * content layer reads the record in exactly two modules and that pin stays true.
+   * `null` means "do not call", exactly as it does for the load.
+   */
+  loadTarget(): Promise<{ target: ReturnType<typeof syncTargetOf>; currentName: string }>;
 }
 
 /**
@@ -105,22 +126,45 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
     }
 
     askedKey = key;
-    const outcome = await loadIntoMemory(wiring.foreign, {
-      transport: wiring.transport ?? missingTransport,
-      target,
-      pageKey: key,
-      // The foreign list holds only other readers' notes (`A161`): the reader's own
-      // notes come from the store, and a second copy of them would register two paint
-      // names over one span.
-      currentName: settings.name === '' ? null : settings.name,
-    });
-
+    const outcome = await askServer(key, target, settings.name);
     if (!outcome.ok) {
       // `A164`: no retry, no modal, no line on the article. The stored notes are on
-      // screen already; the popup is what states that the load failed.
+      // screen already; the popup is what states that the load failed, with the outcome
+      // `onLoad` just published (`A169`).
       return;
     }
     paint();
+  }
+
+  /**
+   * One request for one page key, published to whoever observes the outcome (`A169`).
+   *
+   * The hook is called **after** the answer and never instead of it: a hook that throws
+   * would be a throw out of the page's own boot path, so it is guarded here — the load's
+   * answer is the same either way, and no observer can turn a failed request into a
+   * broken page.
+   */
+  async function askServer(
+    pageKey: string,
+    target: NonNullable<ReturnType<typeof syncTargetOf>>,
+    name: string,
+  ): Promise<ForeignLoadOutcome> {
+    const outcome = await loadIntoMemory(wiring.foreign, {
+      transport: wiring.transport ?? missingTransport,
+      target,
+      pageKey,
+      // The foreign list holds only other readers' notes (`A161`): the reader's own
+      // notes come from the store, and a second copy of them would register two paint
+      // names over one span.
+      currentName: name === '' ? null : name,
+    });
+    try {
+      wiring.onLoad?.(outcome);
+    } catch {
+      // An observer is not the page's business (`A164`): the load answered, and the
+      // paint below is what the reader sees.
+    }
+    return outcome;
   }
 
   /** Hands the current memory to the pass and repaints once. */
@@ -148,6 +192,10 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
     afterPaint,
     askedKey(): string | null {
       return askedKey;
+    },
+    async loadTarget() {
+      const settings = await readSettings(wiring.port);
+      return { target: syncTargetOf(settings), currentName: settings.name };
     },
   };
 }

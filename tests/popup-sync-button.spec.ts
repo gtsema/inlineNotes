@@ -100,6 +100,12 @@ function entriesSourceOf(port: MemoryStoragePort): PageEntriesSource {
     port,
     pageUrl: async (): Promise<string | null> => PAGE_URL,
     openOptions: (): void => undefined,
+    // `A167`: this suite is about the sync **button**, so the page is asked and answers
+    // that it holds no foreign rows and that its automatic load did not fail. The foreign
+    // half of the row list lives in `tests/popup-foreign-rows.spec.ts`.
+    page: {
+      sendMessage: async (): Promise<unknown> => ({ rows: [], syncFailed: false }),
+    },
   };
 }
 
@@ -214,6 +220,11 @@ describe('AC4 the button exists only when synchronization can be used (A166, A16
     // And the rows are the same in all three: the button is a rendering decision, not a
     // change to the list (`A95`, `A108`).
     expect(on.rows.map((row) => row.authorName)).toEqual(off.rows.map((row) => row.authorName));
+    // Nor does `A166` reach the failure line: with synchronization off nothing was asked
+    // of the server, so there is nothing to state (`A169`).
+    expect(on.syncFailed).toBe(false);
+    expect(off.syncFailed).toBe(false);
+    expect(noUrl.syncFailed).toBe(false);
   });
 
   it('answers `sync_off` from a press when the switch moved under the popup, and calls nothing', async () => {

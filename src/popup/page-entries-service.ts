@@ -37,8 +37,17 @@
  *   popup has no comment write of its own: `updateEntryComment` is not imported
  *   here, which is what "a row offers no edit path" means on this surface.
  * - `A50` **the checkbox writes storage and messages nobody.** No `chrome.runtime`
- *   or `chrome.tabs` message leaves this layer; the page repaints from
+ *   or `chrome.tabs` message is sent by a stored write; the page repaints from
  *   `storage.onChanged`, which is task `t4-03`.
+ * - `A167`/`A168` **a foreign row is asked for, never read.** Since task `t17-02` the popup
+ *   also renders the notes the **page** holds and the reader's own storage knows nothing
+ *   about: those rows arrive from the content script's memory through the injected
+ *   `PageNotesChannel` (`src/popup/page-notes-channel.ts`), carry no entry id, and are
+ *   switched or removed **on the page** — one message each, no storage write and no
+ *   second `fetch`. The two halves of the row list are merged here by one projection and
+ *   never by a second list: a name the page holds is a foreign row even if a stale record
+ *   of the same author sits in the store, because a note this reader wrote is in the store
+ *   only (`A163`).
  *
  * What a refused write does is deliberately not invented here: the view is always
  * rebuilt from what the store answers after the write, so the list shows the truth
@@ -51,12 +60,16 @@
 
 import type { Entry } from '../core/entry';
 import { canEdit, isSameAuthor, sortByCreatedAtAsc, validateAuthorName } from '../core/entry-rules';
+import type { ForeignAuthorView, PageNotesQueryResult } from '../core/page-notes-query';
+import { EMPTY_PAGE_NOTES_QUERY_RESULT } from '../core/page-notes-query';
 import { loadEntries } from '../core/entry-store-read';
 import { deleteEntriesOfAuthor, setVisibleForAuthor } from '../core/entry-store-write';
 import { pageKeyFromUrl } from '../core/page-key';
 import { loadSettings } from '../core/settings-store';
 import type { StoragePort } from '../core/storage-port';
 import { syncTargetOf } from '../core/sync-settings';
+import type { PageNotesChannelSource } from './page-notes-channel';
+import { askPage, dismissPageAuthor, switchPageAuthor } from './page-notes-channel';
 
 /**
  * Schemes the content script is registered for (`src/manifest.json` ->
@@ -72,8 +85,10 @@ export const INJECTABLE_SCHEMES: readonly string[] = ['http:', 'https:'];
  * A state the popup states in words instead of rows (rulings `A81`, `A83`, and Stage 17
  * `A164` for the third).
  *
- * `sync_failed` is the ruling `A164` line: the automatic load on page open, or a press
- * of the sync button, did not reach the server. It is **non-blocking** — the rows stay
+ * `sync_failed` is the ruling `A164`/`A169` line: the automatic load of the page did not
+ * reach the server. Since `t17-02` it is decided by the **page's** answer and not by a
+ * request of this layer: the content script owns the load and publishes its outcome
+ * (`A169`), and this layer only renders it. It is **non-blocking** — the rows stay
  * exactly as they are — and it never replaces a row or hides the list, which is what
  * `A83` already requires of every notice on this surface.
  */
@@ -112,6 +127,18 @@ export interface AuthorRowView {
    * next press makes the whole group visible (ruling `A108`).
    */
   allVisible: boolean;
+  /**
+   * Whether this row is the **page's**: a note the server returned and this document
+   * holds in memory only (`A163`, task `t17-02`).
+   *
+   * It is the one bit that routes the two row controls: a foreign row's checkbox and
+   * `Удалить` message the page (`A168`), a stored row's write `chrome.storage.local`
+   * through the one core call per press (`A108`). `isOwn` and `isForeign` are **not**
+   * complements: a stored row of another author is `isOwn: false` and `isForeign:
+   * false`, which is exactly the defect the ruling names — a stored foreign record may
+   * be deleted locally, a page row may not.
+   */
+  isForeign: boolean;
 }
 
 /**
@@ -136,9 +163,25 @@ export interface PageEntriesView {
    * decides either of them: with `false` the feature is absent rather than broken.
    */
   syncEnabled: boolean;
+  /**
+   * Whether the page's automatic load failed (rulings `A164`, `A169`, task `t17-02`).
+   *
+   * It is the page's own answer, read through `PageNotesChannel` and merged into the
+   * notices as `sync_failed`, which is why the notice line renders **above** a list that
+   * still renders (`A83`) and never replaces a row.
+   *
+   * `false` is the answer of every state the notice has nothing to say about: a page
+   * whose load succeeded, a page that never asked (`A166`: the switch is off, the address
+   * is empty, or the content script does not run there), and a page that could not be
+   * asked at all. Only a `true` answer from the page produces the sentence.
+   */
+  syncFailed: boolean;
 }
 
-/** What the service needs from its caller: the seam, the address, the options page. */
+/**
+ * What the service needs from its caller: the port, the address, the options page and
+ * the page question (rulings `A49`, `A83`, `A167`).
+ */
 export interface PageEntriesSource {
   /** The one port adapter (`createChromeLocalStoragePort()`), never a storage API. */
   port: StoragePort;
@@ -146,6 +189,15 @@ export interface PageEntriesSource {
   pageUrl(): Promise<string | null>;
   /** Opens the options page (ruling `A83`); the name-required line is the control. */
   openOptions(): void;
+  /**
+   * The page's answer to `A167`'s question, and the address of `A168`'s two operations.
+   *
+   * It is the content script's memory seen from the popup: the rows it holds and the
+   * outcome of its automatic load, plus the two messages that switch or drop an author's
+   * highlights for this tab. **No storage of this layer is touched by any of them** —
+   * which is the whole reason the channel exists (`A163`).
+   */
+  page: PageNotesChannelSource;
 }
 
 /**
@@ -184,6 +236,10 @@ export function groupsOf(ordered: readonly Entry[], currentName: string): Author
         count: 1,
         isOwn: canEdit(entry, currentName),
         allVisible: entry.visible,
+        // A record that reached the store is never a page row: the memory holds the
+        // server's notes and the store holds the reader's, and the two lists are joined
+        // by name and by nothing else (`A163`, `A167`).
+        isForeign: false,
       });
       continue;
     }
@@ -194,6 +250,65 @@ export function groupsOf(ordered: readonly Entry[], currentName: string): Author
     group.allVisible = group.allVisible && entry.visible;
   }
 
+  return rows;
+}
+
+/**
+ * The page's half of the row list (rulings `A167`, `A168`): one row per foreign author
+ * the content script answered with, and none of them own.
+ *
+ * `isOwn` is `false` at every row by construction — the page's memory holds no note of
+ * the reader (`replace` drops them, `A163`) — and `isForeign` is `true` at every row,
+ * which is what routes both controls of the row to the page instead of to storage.
+ */
+export function foreignGroupsOf(rows: readonly ForeignAuthorView[]): AuthorRowView[] {
+  return rows.map((row) => ({
+    authorName: row.authorName,
+    count: row.count,
+    isOwn: false,
+    allVisible: row.allVisible,
+    isForeign: true,
+  }));
+}
+
+/**
+ * `true` when this name is one the page holds a foreign note from, and therefore one
+ * whose row controls belong to the page (`A168`).
+ *
+ * The comparison is core `isSameAuthor` (`A99`), the same answer the grouping, the edit
+ * gate and the sync payload use: the page recoloured nothing and renamed nothing when it
+ * answered, so the name it sent is the name the row addresses — through the same rule
+ * the two spellings of one author are already compared with.
+ */
+export function isForeignAuthor(
+  rows: readonly AuthorRowView[],
+  authorName: string,
+): boolean {
+  return rows.some(
+    (row) => row.isForeign && isSameAuthor(row.authorName, authorName),
+  );
+}
+
+/**
+ * The two lists as one: the stored groups first, then the page's own.
+ *
+ * A name that appears in both is **one row**, and it is the stored one: a record in
+ * `chrome.storage.local` is a note this reader wrote (`A163` drops the reader's own
+ * notes from the page's memory before it is answered with them), so the page's row for
+ * that same name would be an echo of it, and rendering both would show the reader two
+ * rows whose controls write to two different places.
+ */
+export function mergeAuthorRows(
+  stored: readonly AuthorRowView[],
+  page: readonly AuthorRowView[],
+): AuthorRowView[] {
+  const rows: AuthorRowView[] = [...stored];
+  for (const row of page) {
+    if (rows.some((candidate) => isSameAuthor(candidate.authorName, row.authorName))) {
+      continue;
+    }
+    rows.push(row);
+  }
   return rows;
 }
 
@@ -245,14 +360,25 @@ export class PageEntriesService {
   }
 
   /**
-   * The aggregate checkbox (rulings `A1`, `A50`, `A108`): **one** core
-   * `setVisibleForAuthor` for that author on that page, never one `setVisible` per
-   * entry — N calls would mean N `pages:v1` rewrites and a page left half-applied.
-   * No message is sent to the page, and the row keeps its position and its count,
-   * because neither the write nor the re-read touches `createdAt`.
+   * The aggregate checkbox of one row (rulings `A1`, `A50`, `A108`, `A168`).
+   *
+   * A **stored** row: **one** core `setVisibleForAuthor` for that author on that page,
+   * never one `setVisible` per entry — N calls would mean N `pages:v1` rewrites and a
+   * page left half-applied. No message is sent for such a row, and the row keeps its
+   * position and its count, because neither the write nor the re-read touches
+   * `createdAt`.
+   *
+   * A **foreign** row (`A168`): the press is one message to the page, which switches that
+   * author's highlights in its own memory and answers the fresh state. Storage is not
+   * written — a foreign note has no stored `visible` field — the server is not called,
+   * and the row list that comes back is the page's own answer.
    */
   async setVisibilityForAuthor(authorName: string, visible: boolean): Promise<PageEntriesView> {
     const url = await this.addressOf();
+    if (await this.routesToPage(authorName, url)) {
+      await switchPageAuthor(this.source.page, authorName, visible);
+      return await this.viewOf(url);
+    }
     if (url !== null) {
       await setVisibleForAuthor(this.port, { url, authorName, visible });
     }
@@ -260,17 +386,57 @@ export class PageEntriesService {
   }
 
   /**
-   * `Удалить` of a row (rulings `A25`, `A108`): **one** core `deleteEntriesOfAuthor`,
-   * which removes every entry of that author on this page and asks no author question,
-   * so a foreign or stale group is never undeletable. Taking the last row of a page
-   * drops the slot, which is what makes the empty-state line appear.
+   * `Удалить` of one row (rulings `A25`, `A108`, `A168`).
+   *
+   * A **stored** row: **one** core `deleteEntriesOfAuthor`, which removes every entry of
+   * that author on this page and asks no author question, so a foreign or stale group is
+   * never undeletable. Taking the last row of a page drops the slot, which is what makes
+   * the empty-state line appear.
+   *
+   * A **foreign** row (`A168`): one message that drops that author's notes from this
+   * page's view for this tab — locally only, the server is never called — and the page
+   * answers with the state it has left. The rows come back on the next page load, which
+   * is what `A163`'s "memory only" means in the spec's own words.
    */
   async removeAllOfAuthor(authorName: string): Promise<PageEntriesView> {
     const url = await this.addressOf();
+    if (await this.routesToPage(authorName, url)) {
+      await dismissPageAuthor(this.source.page, authorName);
+      return await this.viewOf(url);
+    }
     if (url !== null) {
       await deleteEntriesOfAuthor(this.port, { url, authorName });
     }
     return await this.viewOf(url);
+  }
+
+  /**
+   * Whether this author's row is the page's (`A168`).
+   *
+   * The question is asked of the **last answer the page gave**, not of a fresh message:
+   * a press must not need two round trips, and the rows the user is looking at are the
+   * rows this popup is rendering — the same rule the sync press follows when it reads the
+   * store "at the moment of the press, not from the popup's rendered view" (`A161`). A
+   * page that has answered no rows has no foreign row to press. A page that cannot be
+   * asked at all answers the empty result, so there is nothing to press either.
+   */
+  private async routesToPage(authorName: string, url: string | null): Promise<boolean> {
+    if (url !== null && !isInjectableUrl(url)) {
+      return false;
+    }
+    const asked = await this.pageState();
+    return isForeignAuthor(foreignGroupsOf(asked.rows), authorName);
+  }
+
+  /**
+   * The page's current answer (`A167`, `A169`), asked once per view build.
+   *
+   * The channel answers data and never throws, so this method needs no guard: a popup on
+   * a page the content script was never injected into, on a `chrome://` page or on a page
+   * that has not booted yet is answered with no rows and no failure — `A166`'s state.
+   */
+  private async pageState(): Promise<PageNotesQueryResult> {
+    return await askPage(this.source.page);
   }
 
   /**
@@ -294,9 +460,17 @@ export class PageEntriesService {
 
     const page = await loadEntries(this.port, url ?? '');
 
-    // One pass over the core order, and the popup has its rows: the grouping is a
+    // One pass over the core order, and the popup has its stored rows: the grouping is a
     // projection over the stored records, not a stored thing (`A108`).
-    const rows: AuthorRowView[] = groupsOf(sortByCreatedAtAsc(page.entries), currentName);
+    const stored = groupsOf(sortByCreatedAtAsc(page.entries), currentName);
+
+    // Stage 17 (`A166` first): a page nobody may ask holds no rows of the server's and
+    // no failure to state, so the question is not put at all — the popup behaves as it
+    // did before the feature existed, and the page is sent no message.
+    const enabled = syncTargetOf(settings) !== null;
+    const asked: PageNotesQueryResult =
+      enabled && isInjectableUrl(url) ? await this.pageState() : EMPTY_PAGE_NOTES_QUERY_RESULT;
+    const rows = mergeAuthorRows(stored, foreignGroupsOf(asked.rows));
 
     const notices: PopupNoticeCode[] = [];
     if (!author.ok) {
@@ -305,12 +479,15 @@ export class PageEntriesService {
     if (!isInjectableUrl(url)) {
       notices.push('page_not_injectable');
     }
+    // `A169`: the page owns the load, so the page's answer is the only thing that can
+    // produce this line. It stands above the list, which still renders (`A83`).
+    if (asked.syncFailed) {
+      notices.push('sync_failed');
+    }
 
     // Stage 17 (`A166`): the button exists only when there is somewhere to call. The
     // decision is core's, and it is the same call the content script makes before its
     // automatic load, so the two halves cannot disagree.
-    const syncEnabled = syncTargetOf(settings) !== null;
-
-    return { rows, notices, syncEnabled };
+    return { rows, notices, syncEnabled: enabled, syncFailed: asked.syncFailed };
   }
 }

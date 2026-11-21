@@ -1276,14 +1276,39 @@ describe('layer boundaries', () => {
       expect(factories).toEqual(['src/popup/popup.component.ts']);
     });
 
-    it('sends no message to the page from the checkbox (ruling A50)', () => {
-      // The checkbox writes storage; the page repaints from the `storage watch` of
-      // `t4-03`, whose subscription lives in the one storage adapter. A second,
-      // popup-initiated channel would be a third moving part and the pair would
+    it('sends no message to the page from the checkbox, and reaches the page from one file (rulings A50, A167)', () => {
+      // The checkbox of a **stored** row writes storage; the page repaints from the
+      // `storage watch` of `t4-03`, whose subscription lives in the one storage adapter.
+      // A popup-initiated repaint channel would be a third moving part, and the pair would
       // disagree about which one repaints.
-      expect(popupCode()).not.toMatch(/\bsendMessage\b/);
+      //
+      // `t17-02` (`A167`) narrows this pin instead of deleting it: the popup gained exactly
+      // **one** file that sends a message — `src/popup/page-notes-channel.ts` — and the
+      // message there is the **question** about the page's foreign rows plus that row's two
+      // operations, which no other door can carry because those notes live in the page's
+      // memory and never in storage (`A163`). The checkbox path still messages nobody, and
+      // the two other channels (`connect`, a second `onChanged` subscriber) stay absent.
+      const senders = popupFiles()
+        .filter((file) => /\bsendMessage\b/.test(codeOnly(file.text)))
+        .map((file) => file.path);
+      expect(senders).toEqual(['src/popup/page-notes-channel.ts']);
+      // And the one `chrome.runtime` call in that file is the send: no port, no second
+      // channel of its own.
+      const channel = codeOnly(
+        readFileSync(join(projectRoot, 'src', 'popup', 'page-notes-channel.ts'), 'utf8'),
+      );
+      expect(channel).toMatch(/chrome\.runtime\.sendMessage/);
+      expect(channel).not.toMatch(/\bconnect(\s*\(|\.Port)/);
       expect(popupCode()).not.toMatch(/\bconnect(\s*\(|\.Port)/);
       expect(popupCode()).not.toMatch(/\bchrome\.storage\.onChanged\b/);
+      // The entry service — the file the two row handlers go through — sends nothing: a
+      // stored row's controls stay exactly the one core call each, and the routing of
+      // `A168` is a call to the channel and not a message written here.
+      const service = codeOnly(
+        readFileSync(join(projectRoot, 'src', 'popup', 'page-entries-service.ts'), 'utf8'),
+      );
+      expect(service).not.toMatch(/\bsendMessage\b/);
+      expect(service).not.toMatch(/chrome\.runtime/);
     });
 
     it('keeps the repaint channel on the page side: one `onChanged` subscriber in `src` (t4-03 AC2, A50)', () => {

@@ -110,12 +110,22 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
   });
 
-  it('is exactly the pinned set of fifteen sites, so a new catch breaks the build', () => {
+  it('is exactly the pinned set of seventeen sites, so a new catch breaks the build', () => {
     // Stage 17 (`t17-01`) adds the fifteenth: `sync/foreign-notes.ts` answers a
     // transport that throws as the same code a rejected transport produces, which is
     // what makes `A164` ("a failed load never blocks the page") unconditional.
+    //
+    // `t17-02` adds the sixteenth: `sync/sync-notes.ts` guards the `onLoad` hook it
+    // publishes the load's outcome to (an observer of the load is not the page's
+    // business, `A169`), which is the same rule as `A164`: nothing an unrelated
+    // collaborator does may reach the reader's page. `src/content/main.ts` needed no new
+    // `catch` for the channel, because the delivered listener is four lines over a
+    // function that answers codes.
     const pinned: Record<string, number> = {
       'create/create-note.ts': 1,
+      // `t17-02`: the entry point subscribes the popup's question listener (`A167`) inside
+      // one guard, so a frame without `chrome.runtime` answers nothing instead of breaking.
+      'main.ts': 1,
       'editor/edit-entry.ts': 1,
       'overlay/create-card-controller.tsx': 2,
       'overlay/editor-controller.tsx': 1,
@@ -125,6 +135,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
       'paint/paint-style.ts': 2,
       'store/chrome-storage-port.ts': 1,
       'sync/foreign-notes.ts': 1,
+      'sync/sync-notes.ts': 1,
     };
     const sites = shippedCatchSites();
     const actual: Record<string, number> = {};
@@ -133,7 +144,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(15);
+    expect(total).toBe(17);
   });
 });
 
