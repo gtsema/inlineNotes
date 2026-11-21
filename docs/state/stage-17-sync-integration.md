@@ -148,3 +148,53 @@ load on page open, and the red state against a stopped server. The PM cannot dri
 - Editing or deleting foreign notes on the server.
 - Conflict resolution beyond the server's upsert.
 - Any server change; the server is accepted and frozen for this stage.
+
+---
+
+## PM verification of `t17-01`
+
+Measured by the PM on the real stack. Six commits (`32da617`, `94276c2`, `c3ad2e8`, `4c3784a`, `4035418`, `4ec7a7d`) — the brief asked for one, and the engineer split it. The PM accepts the split because every commit is a self-contained slice with its own gate run, and the last one removes a temporary edit script the engineer committed by mistake (`scripts/.tmp-fixwire.py`, 122 lines, never referenced). Recorded as a process deviation, not a defect.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `npm run build` | 0, `dist/` 12 files |
+| `npm test` | 0 — **1165 / 52** (was 1060 / 47) |
+| `npm run typecheck` | 0 |
+| `node scripts/check-agent-config.mjs` | 0 — 203 info |
+
+### One gate file changed, and why it is legitimate
+
+`scripts/check-agent-config.mjs` moved the spec-file ceiling from 2–4 to 2–5. The new
+`docs/specs/sync-integration.md` is the fifth spec. The change widens a limit that the new artifact
+made wrong; it does not weaken a check. The PM accepts it and notes it here so a later reader does
+not mistake it for a bypass.
+
+### Invariants confirmed in code
+
+| Invariant | Where |
+|---|---|
+| `A161` — the payload carries only the current author's entries | `syncPayloadOf` filters with core `isSameAuthor` (`src/core/sync-client.ts:204`) |
+| `A163` — foreign entries never reach storage | `src/content/sync/foreign-notes.ts` has no storage write; the module's own comment states the rule |
+| `A166` — no request when sync is off | `syncTargetOf(settings) !== null` gates both the popup button and the content sync |
+
+### Live protocol walk-through against the running server
+
+The extension itself cannot be driven from this session's Chrome, so the PM exercised the protocol
+the extension uses, with the exact payload shape `syncPayloadOf` builds:
+
+| Step | Result |
+|---|---|
+| `POST` two notes as «Аня» on a page key with UTM and a fragment | `200` |
+| `POST` one note as «Боря» on the same key, same note `id` `n1` | `200` |
+| `GET` the page | `200`, **3 notes**, both authors, the `n1` collision intact |
+| Split own / foreign | own 2, foreign 1 |
+| Payload the sync button would send | 2 notes, foreign excluded |
+
+The test server was stopped and its volume removed after the walk-through.
+
+### What the PM cannot verify
+
+The visual side — the three-state button, the spin animation, the red failure state, the automatic
+load in a real page — needs a real Chrome with the extension loaded. That is the user's Run.
