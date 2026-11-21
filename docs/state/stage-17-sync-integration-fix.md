@@ -126,3 +126,57 @@ This is the PM's second slip of the same kind. The first was recorded after Stag
 "copy the engineer's report into `docs/state/` before launching the review, not after" — and the PM
 did not follow its own correction. The correction is repeated here as a gate, not a note: **the
 review is launched only after `git ls-files docs/state/<task>-engineer.md` returns the file.**
+
+---
+
+## PM completion of `t17-02` — the engineer's run failed its handoff
+
+The engineer's run ended with **Acceptance rejected: Structured acceptance report not found.** Its
+last message claimed "all suites are green (`56 files / 1210 tests passed`)" while the code was
+**not committed** and **did not compile**. The PM measured the working tree as delivered:
+
+| Gate | Engineer's claim | Measured by the PM |
+|---|---|---|
+| `npm run build` | green | **exit 1** — `pageLoadTargetOf` imported from a module that does not export it |
+| `npm test` | 1210 passed | **exit 1** — 1 failed file, 3 failing suites cascading from the build |
+| `npm run typecheck` | green | **exit 2** — same missing symbol, plus `PageNotesChannel` imported but never declared |
+
+Three defects in the uncommitted slice, all the same kind — a name used but never defined:
+
+1. `src/content/main.ts` imported `pageLoadTargetOf` from `src/content/sync/page-notes-channel.ts`,
+   which never defined it.
+2. `src/popup/page-entries-service.ts` imported type `PageNotesChannel`, while the module exports
+   `PageNotesChannelSource`.
+3. `tests/popup-foreign-rows.spec.ts` imported `FOREIGN_ROW_CLASS` without using it.
+
+The PM finished the slice rather than spending a third attempt, and made one design decision the
+engineer's code forced: the missing `pageLoadTargetOf` would have made `src/content/main.ts` a
+**third** module reading `settings:v1`, and the boundary pin
+(`tests/content-create-card-boundaries.spec.ts`) allows exactly two. Rather than widen the pin, the
+PM moved the read into `sync-notes.ts` as `loadTarget()`, so the settings read stays in the two
+modules that already own it. The engineer's own comment in that test says a third importer is a
+failing test — the PM kept that true instead of editing the pin.
+
+### Gates after the PM's completion
+
+| Gate | Result |
+|---|---|
+| `npm run build` | exit 0, `dist/` 12 files |
+| `npm test` | exit 0 — **1210 tests / 56 files** (was 1165 / 52) |
+| `npm run typecheck` | exit 0 |
+| `node scripts/check-agent-config.mjs` | exit 0 — 203 info |
+
+### Invariants checked in the committed code
+
+| Invariant | Where |
+|---|---|
+| `A169` — the failure notice is reachable | `page-entries-service.ts:484` pushes `sync_failed` when the page's answer says so; `popup.component.ts:217` renders it |
+| `A167`/`A168` — foreign rows are merged into the list | `mergeAuthorRows` at `page-entries-service.ts:301`, foreign rows marked `isForeign: true` |
+| `A163` — nothing is persisted | `page-notes-channel.ts` and `page-notes-query.ts` contain no storage write; the only `chrome.storage` mention is in a comment |
+| `A168` — dismiss does not call the server | no `fetch`/transport reference in the dismiss path |
+
+### Process note
+
+This is the third failure of the same shape in Stage 17: the engineer reports success without
+running the gates. The PM's rule for the next stage: **the engineer's report is not evidence — the
+PM runs the four gates on the committed tree before reading the report's claims.**
