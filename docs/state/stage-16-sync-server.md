@@ -234,3 +234,50 @@ correction (Q3), per-note upsert (Q4), defaults for gates (Q5).
 
 If a new observable-behavior decision appears during implementation, the engineer stops and asks
 the PM; the PM asks the user. The PM does not invent a default for it.
+
+---
+
+## PM verification of `t16-01` (commit `32c3428`)
+
+Measured by the PM on the real stack, not taken from the engineer's report.
+
+### Gates — all green
+
+| Gate | Command | Result |
+|---|---|---|
+| extension build | `npm run build` | exit 0, `dist/` 12 files |
+| extension tests | `npm test` | exit 0, **1060 / 47** (unchanged) |
+| typecheck | `npm run typecheck` | exit 0 |
+| harness checker | `node scripts/check-agent-config.mjs` | exit 0, 181 info (was 176, +5 from the new spec) |
+| server image | `docker build -t inlinenotes-server ./server` | exit 0, **31.8 MB** |
+| server vet | `go vet ./...` in `golang:1.25-alpine` | clean |
+| compose up | `docker compose up -d --build` | exit 0, `db:healthy`, `server:healthy` |
+| health | `curl /health` | **200** `{"status":"ok"}` |
+
+### Live API walk-through (valid UTF-8, driven from Python to avoid shell encoding)
+
+| Check | Result |
+|---|---|
+| `POST` Анна 2 notes | `200 {"saved":2}` |
+| `POST` Борис, same `id` `n1` | `200 {"saved":1}` |
+| `GET /notes/page/{page}` | **3 rows**, both authors, `n1` not overwritten (`A155`) |
+| `GET /notes/author/Борис/all-pages` | `200`, 1 note (`A157`) |
+| `DELETE .../author/Анна` | `200 {"deleted":2}`, only Борис left (`A156`) |
+| `page_id` with `/ ? & #` | survived the path segment (`A153`) |
+| `comment` 257 chars | `400` |
+| empty `author_id` | `400` |
+
+### Defects found by the PM — both about invalid UTF-8, neither blocks the shipped behaviour
+
+1. **Invalid UTF-8 in a path segment answers `500 storage failure`.** `GET /notes/author/%C0%ED%ED%E0/all-pages` → **500**. A malformed client input must be `400`, not a storage failure. Root cause: the handler passes the raw segment to PostgreSQL, and the driver's error surfaces as a storage error.
+2. **Invalid UTF-8 in a JSON body is silently accepted and stored as `U+FFFD`.** A `POST` with `author_id` sent as Windows-1251 bytes (`\xc0\xed\xed\xe0`) returned `200 {"saved":1}` and wrote `efbfbd` × 4. The server neither rejects the request nor warns; the row is unrecoverable garbage.
+
+Both are recorded as debt in the ledger (`S16-1`, `S16-2`). The first is a status-code correctness issue; the second is data integrity. Neither is in the brief's AC list, so neither fails `t16-01` — but both are real and the PM names them rather than hiding them.
+
+### Structural finding
+
+`server/migrations/0001_init.sql` and `server/internal/store/migrations/0001_init.sql` are **byte-identical**, and only the second is embedded (`//go:embed migrations/*.sql` in `internal/store/store.go:30`). The top-level copy is read by nothing and will drift on the first schema change. Ledgered as `S16-3`.
+
+### Note on the shell
+
+The PM's first API walk-through used `curl` from Git Bash, which encoded Cyrillic as Windows-1251 and produced the `U+FFFD` rows. That was the PM's tooling, not the server — proven by re-running the same scenario from Python with explicit UTF-8, where every operation behaved correctly. The server still should have rejected the bytes; that is defect 2 above.
