@@ -151,3 +151,28 @@ so the guard cannot silently rot.
 
 The `storage failure` branch still returns `500` (three sites in `server.go`), and two tests assert
 `StatusInternalServerError` for injected store errors.
+
+---
+
+## Review outcome — `t16-02` accepted
+
+`code-reviewer` verdict on `68074bc`: **accepted**, 14 / 14 AC pass, no blocking finding. The review
+is in the repo at `docs/state/t16-02-review.md`.
+
+The reviewer confirmed the mechanisms the PM measured, and named the specific tests that keep each
+one honest: the raw-body refusal happens before the store and is proven by asserting the store
+recorded zero calls; the four `500` branches are unchanged and covered by an injected-error test;
+the validators are reached for every request-derived string.
+
+### Stage 16 final state
+
+| | |
+|---|---|
+| Server | Go, PostgreSQL, Docker, in `server/` |
+| Endpoints | `GET /notes/page/{page_id}`, `POST /notes/page/{page_id}`, `DELETE /notes/page/{page_id}/author/{author_id}`, `GET /notes/author/{author_id}/all-pages`, `GET /health` |
+| Identity | the triple `(page_id, author_id, note_id)` — a same-id collision across authors cannot overwrite |
+| Extension gates | green and unchanged: 1060 tests / 47 files, checker 181 info |
+| Server gates | image 31.8 MB, `go vet` clean, compose healthy, `/health` 200 |
+| Defects found and fixed | the two UTF-8 defects (`S16-1`, `S16-2`) |
+| Debt left | `S16-3` — the duplicate migration file |
+| Extension integration | **not started**, by the user's instruction |
