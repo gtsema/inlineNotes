@@ -22,6 +22,7 @@ Out of scope: any change to the extension (`src/`, `tests/`, `src/manifest.json`
 | `upsert triple` | — | the identity of a note: `(page_id, author_id, id)`; the primary key (ruling `A155`) |
 | `all-pages hook` | — | `GET /notes/author/{author_id}/all-pages`, implemented and tested for a future "my notes" view (ruling `A157`) |
 | `no authentication` | — | the server accepts every request; a ruling, not an oversight (ruling `A156`, `A158`) |
+| `valid UTF-8` | — | every request-derived string is well-formed UTF-8; enforced once by `model.RequireValidUTF8` (ruling `A159`) |
 
 The Russian column is empty for the server itself: the server renders no UI, so it ships no user-visible strings. The Russian wordings above are the extension's, quoted so the same concept is greppable in both layers.
 
@@ -76,6 +77,7 @@ The Russian column is empty for the server itself: the server renders no UI, so 
 
 The server refuses a body that could corrupt the table, with `400` and `{"error": "..."}`, and writes nothing:
 
+- every request-derived string is **valid UTF-8** (ruling `A159`): the path segments `page_id` and `author_id`, the note fields `id`, `text` and `comment`, and the whole request body before it is decoded;
 - `author_id` non-empty after trimming, at most 64 code points;
 - `id` non-empty after trimming, at most 64 code points;
 - `comment` at most 256 code points (code points, not bytes: 256 Cyrillic characters are 512 bytes);
@@ -85,6 +87,16 @@ The server refuses a body that could corrupt the table, with `400` and `{"error"
 - `page_id` non-empty and at most 2048 code points.
 
 An unknown JSON field, an empty body, a non-object body and a body over 1 MiB are also `400`.
+
+#### UTF-8 rule (ruling `A159`) and the `400`-before-store guarantee (ruling `A160`)
+
+- **PostgreSQL's `TEXT` columns are UTF-8.** A non-UTF-8 string therefore has only two possible fates: PostgreSQL rejects the statement (`500`, SQLSTATE 22021) or `encoding/json` has already repaired the bytes and the table silently stores `U+FFFD`. Both are refused by validation instead.
+- **One decision, one function.** `model.RequireValidUTF8(field, value []byte) error` is the single owner of "is this valid UTF-8" (it calls `utf8.Valid`). Every validator calls it; there is no second copy of the rule. It takes bytes so that a body can be judged before it is decoded.
+- **The body is judged before it is decoded.** `encoding/json` replaces an invalid byte inside a JSON string with `U+FFFD` instead of failing, so a check that runs after `Decode` can never see the client's mistake. `api.decodeJSON` reads the raw body, calls `model.RequireValidUTF8("body", raw)` and only then decodes. A body with invalid bytes anywhere (including in a field the server does not know) is `400` with the field `body`.
+- **Path segments are judged where they arrive.** `model.ValidatePageID` and `model.ValidateAuthorID` call the same helper, so an invalid page or author in the path is `400` naming `page_id` / `author_id`, never the `500` of a PostgreSQL encoding error.
+- **Note fields name themselves.** `model.ValidateSaveRequest` calls the same helper per note field, so a directly-constructed request with an invalid `id`, `text` or `comment` is `400` with the field `notes[i].<field>`. On the HTTP path the raw-body check above answers first with `body`; both levels are the same rule.
+- **The rejection happens before the store is called (ruling `A160`).** A POST that fails validation writes **zero** rows - not "the valid notes of the batch". The write path stays all-or-nothing.
+- **`500` stays for genuine storage failures (ruling `A161`).** The `{"error": "storage failure"}` branch is narrowed, not removed: a database outage, a lost connection or a broken statement is still a `500`, and only validation answers `400`.
 
 ### Security posture
 
@@ -154,7 +166,10 @@ One note as stored and returned:
 - **`anchor: null`.** Refused with `400`, unlike any other valid JSON scalar: the brief makes `anchor` required and a `null` anchor cannot re-anchor.
 - **`limit` beyond the row count.** An empty array, not an error: `offset` past the end is a valid, empty page.
 - **`comment` of exactly 256 code points.** Accepted; 257 is refused. The cap counts code points, matching the extension.
-- **Non-UTF-8-safe body.** A body that is not valid JSON is `400` before any rule runs, so a broken client cannot reach the table.
+- **Invalid UTF-8 in a path segment.** `400` naming `page_id` or `author_id`, never the `500` of a PostgreSQL `22021` encoding error (`A159`). Reproduced live with `GET /notes/author/%C0%ED%ED%E0/all-pages`, which used to answer `{"error":"storage failure"}` with status `500`.
+- **Invalid UTF-8 in a JSON body.** `400` with the field `body` and **zero rows written** (`A160`), never `200` with the row stored as `U+FFFD`. Reproduced live with a POST whose `author_id`, `text`, `comment` or `id` carried Windows-1251 bytes: `encoding/json` repairs them to `U+FFFD`, so the check must run on the raw bytes before decoding.
+- **Database reachable but refusing a statement.** Still a `500` with `{"error":"storage failure"}` (`A161`): the fix narrows when that branch is reached, it does not remove it.
+- **Non-UTF-8-safe body.** A body that is not valid JSON is `400` before any rule runs, so a broken client cannot reach the table. A body that is valid JSON but not valid UTF-8 is also `400` (the raw-bytes check above), which is the stricter of the two.
 
 ## Acceptance Criteria
 
@@ -185,6 +200,20 @@ One note as stored and returned:
 | 9 | `store.TestNotesForAuthorAllPagesNewestFirstWithLimitAndOffset`, `api.TestAllPagesHonoursLimitAndOffset`, `api.TestAllPagesDefaultsLimitAndRejectsBadPaging` |
 | 10 | `api.TestValidationRejectsBadBodies`, `api.TestValidationAcceptsExactlyTheCaps`, `model.TestValidateSaveRequest*` |
 | 11 | `api.TestPageIDWithReservedCharactersSurvivesThePath`, `api.TestPageIDIsNotNormalized`, `store.TestPageIDSurvivesVerbatimThroughTheStore` |
-| 12 | `docker compose run --rm test` → `go test ./...`, 39 tests, 0 skips |
+| 12 | `docker compose run --rm test` → `go test ./...`, 56 tests, 0 skips |
+
+### Test mapping — the UTF-8 rule (`A159`-`A161`, brief `t16-02`)
+
+| Rule | Test |
+|---|---|
+| the helper is `utf8.Valid` and the fixture really is invalid | `model.TestNotUTF8FixtureIsReallyInvalidUTF8`, `api.TestRawBodyFixtureCarriesTheInvalidBytesVerbatim` |
+| an invalid `page_id` in a path is `400` naming `page_id` | `api.TestGetPageNotesRejectsInvalidUTF8InThePath`, `api.TestGetPageNotesRejectsRawInvalidUTF8InThePath` |
+| an invalid `author_id` in a path is `400` naming `author_id` | `api.TestAllPagesRejectsInvalidUTF8Author`, `api.TestDeleteRejectsInvalidUTF8Author` |
+| every note string is checked and names `notes[i].<field>` | `model.TestValidateSaveRequestRejectsInvalidUTF8InEveryNoteField`, `model.TestValidateSaveRequestNamesTheOffendingNoteIndex`, `model.TestValidateSaveRequestRejectsInvalidUTF8Author` |
+| an invalid body is `400` and writes zero rows (`A160`) | `api.TestSaveRejectsInvalidUTF8BeforeTheStore`, `api.TestSaveRejectsInvalidUTF8InTextBeforeTheStore` |
+| the Cyrillic happy path keeps working | `model.TestValidateSaveRequestAcceptsCyrillicEverywhere`, `api.TestPostAcceptsCyrillicBodyAndPath` |
+| a genuine storage failure is still `500` (`A161`) | `api.TestGenuineStorageFailuresStillAnswerFiveHundred` |
+
+The store suite runs against a real PostgreSQL; the validator and handler suites are pure and run everywhere.
 
 The store tests skip when `TEST_DATABASE_URL` is empty, so `go test ./...` also builds and runs on a machine with no database. AC 12 is claimed only from the run where the variable is set.

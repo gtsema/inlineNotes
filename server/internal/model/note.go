@@ -89,12 +89,15 @@ func AsValidationError(err error) (*ValidationError, bool) {
 	return nil, false
 }
 
-// ValidatePageID checks a path page id. Empty and absurdly long ids are refused;
-// the value is otherwise opaque (ruling A153) and is never normalized, trimmed,
-// lowercased or stripped.
+// ValidatePageID checks a path page id. Empty, absurdly long and non-UTF-8 ids
+// are refused; the value is otherwise opaque (ruling A153) and is never
+// normalized, trimmed, lowercased or stripped.
 func ValidatePageID(pageID string) error {
 	if strings.TrimSpace(pageID) == "" {
 		return &ValidationError{Field: "page_id", Reason: "must not be empty"}
+	}
+	if err := RequireValidUTF8("page_id", []byte(pageID)); err != nil {
+		return err
 	}
 	if utf8.RuneCountInString(pageID) > 2048 {
 		return &ValidationError{Field: "page_id", Reason: "must be at most 2048 characters"}
@@ -107,6 +110,9 @@ func ValidateAuthorID(authorID string) error {
 	trimmed := strings.TrimSpace(authorID)
 	if trimmed == "" {
 		return &ValidationError{Field: "author_id", Reason: "must not be empty"}
+	}
+	if err := RequireValidUTF8("author_id", []byte(trimmed)); err != nil {
+		return err
 	}
 	if utf8.RuneCountInString(trimmed) > MaxAuthorIDRunes {
 		return &ValidationError{
@@ -156,6 +162,15 @@ func validateNoteInput(note *NoteInput) error {
 	if strings.TrimSpace(note.Text) == "" {
 		return &ValidationError{Field: "text", Reason: "must not be empty"}
 	}
+	// A body is not a path: `encoding/json` silently replaces an invalid byte with
+	// U+FFFD, so without this check a Windows-1251 comment would be stored as
+	// garbage with a `200` (defect S16-2).
+	if err := RequireValidUTF8("text", []byte(note.Text)); err != nil {
+		return err
+	}
+	if err := RequireValidUTF8("comment", []byte(note.Comment)); err != nil {
+		return err
+	}
 	if utf8.RuneCountInString(note.Comment) > MaxCommentRunes {
 		return &ValidationError{
 			Field:  "comment",
@@ -196,10 +211,39 @@ func validateRequiredRunes(field, value string, max int) error {
 	if trimmed == "" {
 		return &ValidationError{Field: field, Reason: "must not be empty"}
 	}
+	if err := RequireValidUTF8(field, []byte(trimmed)); err != nil {
+		return err
+	}
 	if utf8.RuneCountInString(trimmed) > max {
 		return &ValidationError{Field: field, Reason: fmt.Sprintf("must be at most %d characters", max)}
 	}
 	return nil
+}
+
+// RequireValidUTF8 is the single owner of the "is this valid UTF-8" rule of this
+// package (ruling A159, AC 11). Every request-derived string that can reach a
+// `TEXT` column goes through it: the path segments `page_id` and `author_id`, the
+// note fields `id`, `text` and `comment`, and the raw JSON body before it is
+// decoded.
+//
+// It takes bytes on purpose: a body must be judged before `encoding/json` has had
+// the chance to replace an invalid byte with `U+FFFD`, and a Go string is exactly
+// a byte slice. There is one decision here and no second copy elsewhere in the
+// server.
+//
+// It exists because neither check below answers this question:
+// `utf8.RuneCountInString` counts an invalid byte as one `RuneError`, so a
+// Windows-1251 string passes a length cap; and `encoding/json` silently repairs
+// an invalid byte in a body. PostgreSQL's `TEXT` columns are UTF-8, so a
+// non-UTF-8 string means either a `500` (path) or silent corruption (body).
+func RequireValidUTF8(field string, value []byte) error {
+	if utf8.Valid(value) {
+		return nil
+	}
+	return &ValidationError{
+		Field:  field,
+		Reason: "must be valid UTF-8; the request body and path must be UTF-8 encoded",
+	}
 }
 
 // MatchesCommentCap reports whether a comment survives the same cap the extension

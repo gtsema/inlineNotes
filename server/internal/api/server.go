@@ -211,16 +211,32 @@ func intQueryParam(r *http.Request, name string, fallback int) (int, error) {
 
 // decodeJSON reads one JSON object from the body. `anchor` is kept as raw bytes
 // (ruling A154): the server never parses its shape.
+//
+// The body's bytes are checked for UTF-8 validity BEFORE they are decoded
+// (ruling A159). This order is the whole fix for defect S16-2: `encoding/json`
+// replaces an invalid byte in a string literal with `U+FFFD` instead of failing,
+// so a check that runs after `Decode` sees a well-formed (and already corrupted)
+// Go string, answers `200` and lets the store write `U+FFFD` to the table. The
+// raw bytes are the only place where the client's mistake is still visible, so
+// they are read once and judged before the decoder ever sees them.
 func decodeJSON(r *http.Request, target *model.SaveRequest) error {
 	body := http.MaxBytesReader(nil, r.Body, maxBodyBytes)
-	decoder := json.NewDecoder(body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(target); err != nil {
+	raw, err := io.ReadAll(body)
+	if err != nil {
 		var maxBytes *http.MaxBytesError
 		if errors.As(err, &maxBytes) {
 			return &model.ValidationError{Field: "body", Reason: "is too large"}
 		}
+		return &model.ValidationError{Field: "body", Reason: fmt.Sprintf("could not be read (%v)", err)}
+	}
+	if err := model.RequireValidUTF8("body", raw); err != nil {
+		return err
+	}
+
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(target); err != nil {
 		if errors.Is(err, io.EOF) {
 			return &model.ValidationError{Field: "body", Reason: "is empty"}
 		}
