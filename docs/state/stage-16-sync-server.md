@@ -281,3 +281,28 @@ Both are recorded as debt in the ledger (`S16-1`, `S16-2`). The first is a statu
 ### Note on the shell
 
 The PM's first API walk-through used `curl` from Git Bash, which encoded Cyrillic as Windows-1251 and produced the `U+FFFD` rows. That was the PM's tooling, not the server — proven by re-running the same scenario from Python with explicit UTF-8, where every operation behaved correctly. The server still should have rejected the bytes; that is defect 2 above.
+
+---
+
+## Review outcome — `t16-01` accepted
+
+`code-reviewer` verdict on `32c3428`: **accepted**, no AC failed, no ruling violated, no injection,
+no forbidden dependency, no extension file touched. The two UTF-8 defects and the duplicate
+migration are **deferred to the ledger, not blocking** — none is an AC of this brief.
+
+The reviewer raised one process remark (R0) that the PM owns: the engineer's report was not in the
+repository when the review ran. The brief asked for it and the PM copied it in only after the
+review. Fixed in the same commit as this note: `docs/state/t16-01-engineer.md` and
+`docs/state/t16-01-review.md` are now in the repo. Cause: the PM treated the subagent's output
+artifact as the delivered report and did not copy it into `docs/state/`. Standing correction for
+later stages: **copy the engineer's report into `docs/state/` before launching the review**, not
+after, so the reviewer reads the repo and not a promise.
+
+### Stage 16 status
+
+| | |
+|---|---|
+| Shipped | Go server in `server/`, PostgreSQL, Docker, four endpoints, spec, README |
+| Gates | four extension gates green (1060/47, checker 181); image 31.8 MB; compose healthy; `/health` 200 |
+| Accepted | yes, with three ledgered non-blocking items |
+| Open for the user | fix the two UTF-8 defects now, or leave them in the backlog |
