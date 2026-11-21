@@ -8,6 +8,7 @@ Owner = the role that must keep the spec current. Covered paths are the real dir
 | `docs/specs/inline-comment-model.md` | `extension-engineer` (rules drafted by `project-manager`) | `src/core/`, `src/content/anchor`, `src/content/capture`, `src/content/create`, `src/content/store`, `src/popup/`, `tests/` |
 | `docs/specs/content-overlay-ui.md` | `extension-engineer` | `src/content/`, `src/content/capture`, `src/content/create`, `src/content/overlay`, `src/popup/`, `src/options/`, `src/manifest.json`, `tests/` |
 | `docs/specs/code-review-flow.md` | `project-manager` | `docs/state/`, `.pi/agents/code-reviewer.md`, `.pi/skills/code-review-checklist/SKILL.md`, `scripts/check-agent-config.mjs` |
+| `docs/specs/sync-server.md` | `extension-engineer` | `server/` |
 
 Rules:
 - A code change that alters specified behavior edits its spec in the same commit; the owner role makes the edit.

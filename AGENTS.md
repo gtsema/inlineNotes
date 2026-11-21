@@ -42,6 +42,7 @@ src/content/           content script: selection capture, Preact overlay, CSS Hi
 src/popup/             Angular popup: page entry list, per-entry checkbox, filters
 src/options/           Angular options: author name (mandatory), defaults
 tests/                 Vitest unit tests over src/core (100% green mandatory)
+server/                Go + PostgreSQL sync server (own Docker gate; see docs/specs/sync-server.md)
 docs/specs/            durable decisions (see Documentation Expectations)
 docs/project-profile.md  source of truth: stack, gates, limits, runtime model
 docs/state/            per-task state files written by the PM
@@ -100,7 +101,7 @@ Domain standards:
 
 ## Documentation Expectations
 
-- Durable decisions go to specs, never only to chat: `docs/specs/inline-comment-model.md` (data model, storage, keys, caps, authorship, anchoring), `docs/specs/content-overlay-ui.md` (selection card, highlight painting, tooltip/editor, popup contract), `docs/specs/code-review-flow.md` (mandatory review path). All are listed in `docs/specs/INDEX.md`.
+- Durable decisions go to specs, never only to chat: `docs/specs/inline-comment-model.md` (data model, storage, keys, caps, authorship, anchoring), `docs/specs/content-overlay-ui.md` (selection card, highlight painting, tooltip/editor, popup contract), `docs/specs/code-review-flow.md` (mandatory review path), `docs/specs/sync-server.md` (the Go sync server: API contract, schema, upsert/delete semantics, validation, no-authentication posture). All are listed in `docs/specs/INDEX.md`.
 - Artifact language: English for specs, roles, skills, code identifiers, commands, section names. Russian for extension UI strings, README, and PM conversation with the user.
 - Grep anchors in English: every spec has a `Terms / Aliases` table pairing the English term with its Russian UI wording.
 - A code change that alters specified behavior edits the spec in the same commit; a spec-vs-code conflict is reported to the PM, never resolved silently.

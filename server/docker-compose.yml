@@ -1,0 +1,67 @@
+# Local run of the inlineNotes sync server: the server and one PostgreSQL 16.
+#
+#   docker compose up -d --build          # starts db + server
+#   curl http://localhost:8080/health     # {"status":"ok"}
+#   docker compose down -v                # stops and drops the volume
+#
+# The server waits for the database's healthcheck (`depends_on.condition`), and
+# it also retries internally, so a cold start never fails on a race.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: inlinenotes
+      POSTGRES_PASSWORD: inlinenotes
+      POSTGRES_DB: inlinenotes
+    volumes:
+      - inlinenotes-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inlinenotes -d inlinenotes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://inlinenotes:inlinenotes@db:5432/inlinenotes?sslmode=disable
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # `go test ./...` against the real PostgreSQL, on demand:
+  #   docker compose run --rm test
+  # The store suite reads TEST_DATABASE_URL; without the variable it skips, so the
+  # same `go test ./...` also runs on a machine with no database.
+  test:
+    image: golang:1.25-alpine
+    working_dir: /src
+    volumes:
+      - .:/src
+      - inlinenotes-gomod:/go/pkg/mod
+    environment:
+      TEST_DATABASE_URL: postgres://inlinenotes:inlinenotes@db:5432/inlinenotes?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["go", "test", "./..."]
+    profiles: ["test"]
+
+volumes:
+  inlinenotes-pgdata:
+  inlinenotes-gomod:
