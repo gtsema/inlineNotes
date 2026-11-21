@@ -155,10 +155,31 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
     ]);
   });
 
-  it('reads the settings through core in exactly one module', () => {
+  it('reads the settings through core in exactly two modules, one per flow that needs them', () => {
+    // Stage 17 (`t17-01`, ruling `A166`) widens this pin by one module, and by the same
+    // rule the write pin above uses: one module per flow. The sync wiring has to know
+    // **whether** synchronization is on and where the server is, and the only reader of
+    // `settings:v1` is core `loadSettings` (`A31`) — so the pin names it rather than
+    // letting the content layer decode the record a second time. A third importer is
+    // still a failing test, and neither module writes the record: `saveSettings` is not
+    // imported under `src/content/` at all, which the next case pins.
     expect(contentFilesImporting('src/core/settings-store.ts')).toEqual([
       'src/content/create/create-note.ts',
+      'src/content/sync/sync-notes.ts',
     ]);
+    // The address rule itself is core's and both modules of `src/content/sync/` read it:
+    // the wiring to decide whether to ask, and the memory to answer `A161` ("whose note
+    // is this?") for the rows the server returned. No third module names it.
+    expect(contentFilesImporting('src/core/sync-settings.ts')).toEqual([
+      'src/content/sync/foreign-notes.ts',
+      'src/content/sync/sync-notes.ts',
+    ]);
+  });
+
+  it('never imports the settings write, so the page cannot switch synchronization on itself', () => {
+    expect(
+      contentFilesMatching(/(saveSettings|settingsValueOf|settingsFromStorageValue)/),
+    ).toEqual([]);
   });
 
   it('builds an anchor in exactly one module, and only for a captured selection', () => {

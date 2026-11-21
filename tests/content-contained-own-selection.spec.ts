@@ -83,6 +83,10 @@ function paintedOf(
     entry: entryOf(id, authorName, text),
     name: `inlinenotes-${id}`,
     paintSlot,
+    // Stage 17 (`A163`): the paint plan states the display flag of a note that is not in
+    // the store, so the shape gained the field; the reader's own entries are never
+    // dimmed, and this helper builds nothing but those.
+    dimmed: false,
     fragments,
   };
 }

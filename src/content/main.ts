@@ -47,6 +47,9 @@ import { createEditorController } from './overlay/editor-controller';
 import { attachEditorEvents } from './overlay/editor-events';
 import { attachUrlChangeWatch } from './refresh/url-change-watch';
 import { attachStorageChangeWatch } from './refresh/storage-change-watch';
+import { createForeignNotes } from './sync/foreign-notes';
+import { attachSyncNotes } from './sync/sync-notes';
+import { createSyncTransport } from './sync/fetch-transport';
 
 function boot(): void {
   const overlay = ensureOverlayHost();
@@ -151,6 +154,13 @@ function boot(): void {
 
   attachTooltipEvents(tooltip, document, window, overlay.host);
 
+  // The sync server's notes are memory only (ruling `A163`): `foreign` is this
+  // document's whole copy of them, and `attachSyncNotes` owns the one question "is this
+  // page's list already here, and am I allowed to ask?" (`A166` first, then one request
+  // per page key). Nothing is fetched until the first pass has resolved the page key.
+  const foreign = createForeignNotes();
+  const sync = attachSyncNotes({ painter, foreign, port, transport: createSyncTransport() });
+
   // Task `t4-03` AC1 and AC2/AC3: the page keeps telling the truth about itself after
   // it changed under the notes. Both watches do one thing only — ask the same paint
   // pass to run again — so neither can disagree with what is on the screen: the pass
@@ -163,11 +173,20 @@ function boot(): void {
   // calling `history.pushState`, so the address is compared on an interval as well as
   // on `popstate`, `hashchange` and `visibilitychange`. One tick is one string compare,
   // and `URL_POLL_MS` is the constant the overlay spec names.
+  //
+  // Both watches go through `refreshThenSync` and through nothing else, so a
+  // same-document navigation (`A59`) or a settings write (`A50`, `A60`) asks the sync
+  // question after the repaint — and `afterPaint()` compares page keys, so a repaint of
+  // the same page starts no request. There is one `attachUrlChangeWatch` call and one
+  // `attachStorageChangeWatch` call in this file, each as a bare statement: `t4-03`'s
+  // rule that neither watch is ever torn down in a content script is unchanged.
+  const refreshThenSync = (): void => {
+    void painter.refresh().then(sync.afterPaint);
+  };
+
   attachUrlChangeWatch(window, document, {
     url: pageUrl,
-    onUrlChange: (): void => {
-      void painter.refresh();
-    },
+    onUrlChange: refreshThenSync,
   });
 
   // `A60`: a cross-tab write is a repaint, not a merge. The key decision is core's
@@ -179,12 +198,22 @@ function boot(): void {
   // of leaving the old author on screen (`A31`, `A25`).
   attachStorageChangeWatch(createChromeLocalStorageChangeSource(), {
     pageKey: painter.pageKeyOfPass,
-    onRepaint: (): void => {
-      void painter.refresh();
-    },
+    onRepaint: refreshThenSync,
   });
 
-  void painter.refresh();
+  // Flow / Sequence 6 again, with the sync server's half on top (Stage 17): the stored
+  // notes of this page are read, resolved and painted, and then — once, after the pass
+  // has resolved the page key this document's notes live under — the sync server is
+  // asked for the page's notes by that same key (`A163`). Painting first is what makes
+  // the order harmless: a server that never answers leaves the reader with exactly the
+  // page this extension shipped before this stage (`A164`).
+  //
+  // The foreign notes live in `foreign` and nowhere else: memory only, never
+  // `chrome.storage.local` (`A163`). The two watchers below are the ones that can change
+  // the question — a same-document navigation (`A59`) and a settings write, which is
+  // this extension's only notification channel (`A50`, `A60`) — and the page repaint
+  // those two already had stays exactly where it was.
+  void painter.refresh().then(sync.afterPaint);
 }
 
 boot();

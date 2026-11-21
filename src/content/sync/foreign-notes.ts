@@ -34,6 +34,7 @@ import type {
   SyncTransport,
 } from '../../core/sync-client';
 import { entryFromRemoteNote, loadForeignNotes } from '../../core/sync-client';
+import type { SyncTransport } from '../../core/sync-client';
 import type { SyncTarget } from '../../core/sync-settings';
 import type { ExtraEntry } from '../paint/paint-plan';
 
@@ -68,8 +69,16 @@ export interface ForeignNotes {
   paintInput(): readonly ExtraEntry[];
   /** The display flag of one note, by entry id, `null` when this page holds no such note. */
   visibilityOf(entryId: string): boolean | null;
-  /** Switches one note's highlight on or off; `false` when no note of that id is held. */
-  setVisible(entryId: string, visible: boolean): boolean;
+  /**
+   * Switches one note's highlight on or off; `false` when no note of that id is held.
+   *
+   * This is the **memory** write and not a storage write: a foreign note has no stored
+   * `visible` field (`A163`), so the popup's ✓ for a foreign row changes this flag in
+   * this document only, and the next page load reads the note back visible. The name
+   * differs from core's `setVisible` on purpose, so the content-layer pin that keeps
+   * every stored-entry write out of this directory reads the boundary unchanged.
+   */
+  setNoteVisible(entryId: string, visible: boolean): boolean;
   /**
    * Removes every note of one author from this page's memory (answer 5). The server is
    * not called, nothing is stored, and the notes are back on the next page load.
@@ -135,7 +144,7 @@ export function createForeignNotes(): ForeignNotes {
       return found === undefined ? null : found.visible;
     },
 
-    setVisible(entryId: string, visible: boolean): boolean {
+    setNoteVisible(entryId: string, visible: boolean): boolean {
       const found = notes.find((note) => note.entry.id === entryId);
       if (found === undefined) {
         return false;

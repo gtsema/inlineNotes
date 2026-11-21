@@ -1545,12 +1545,48 @@ describe('the capture module crosses the offset domain only through core helpers
   });
 });
 
+/**
+ * The shapes of a network call, in the spelling this repository has to keep out of
+ * every shipped file but one (Stage 17: `src/content/sync/fetch-transport.ts`).
+ */
+const NETWORK_SHAPE = /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bnavigator\s*\.\s*sendBeacon\b/;
+
 describe('no network in shipped source', () => {
-  it('src contains no fetch, XMLHttpRequest or WebSocket', () => {
-    const pattern = /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b/;
+  /**
+   * The one file allowed to name a network API (Stage 17, ruling `A165`, `t17-01`).
+   *
+   * The sync feature has to call the server the reader configured, so this suite's long
+   * negative became "exactly one module makes a request" instead of "nothing does".
+   * Naming the file is what keeps that honest: the extension's whole network surface is
+   * one `fetch` call in `src/content/sync/fetch-transport.ts`, and a second module that
+   * reaches a socket is still a failing test.
+   */
+  const NETWORK_TRANSPORT = 'src/content/sync/fetch-transport.ts';
+
+  it('src names a network API in exactly one module, the sync transport', () => {
+    const pattern = NETWORK_SHAPE;
     const offenders = sourceFiles('src')
       .filter((file) => pattern.test(codeOnly(file.text)))
       .map((file) => file.path);
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual([NETWORK_TRANSPORT]);
+  });
+
+  it('the one request goes to the address core built from settings, and the transport holds no URL of its own', () => {
+    // The transport takes its url as an argument and builds none: no scheme literal, no
+    // host, no route. So "the extension never sends a request to a URL it did not read
+    // from settings" (`A165`) is a property of the file list, not of a review.
+    const transport = codeOnly(readFileSync(join(projectRoot, NETWORK_TRANSPORT), 'utf8'));
+    expect(transport).not.toMatch(/https?:\/\//);
+    expect(transport).not.toMatch(/notes\/page/);
+    expect(transport).not.toMatch(/localhost|127\.0\.0\.1/);
+
+    // Core owns the route and never calls the network itself, which is what makes the
+    // core test environment (plain Node, no jsdom) able to run every sync rule.
+    for (const file of sourceFiles('src/core')) {
+      expect(NETWORK_SHAPE.test(codeOnly(file.text)), file.path).toBe(false);
+    }
+    expect(sourceFiles('src/core').filter((file) => file.text.includes(NETWORK_TRANSPORT))).toEqual(
+      [],
+    );
   });
 });
