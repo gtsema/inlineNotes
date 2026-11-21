@@ -101,7 +101,7 @@ Domain standards:
 
 ## Documentation Expectations
 
-- Durable decisions go to specs, never only to chat: `docs/specs/inline-comment-model.md` (data model, storage, keys, caps, authorship, anchoring), `docs/specs/content-overlay-ui.md` (selection card, highlight painting, tooltip/editor, popup contract), `docs/specs/code-review-flow.md` (mandatory review path), `docs/specs/sync-server.md` (the Go sync server: API contract, schema, upsert/delete semantics, validation, no-authentication posture). All are listed in `docs/specs/INDEX.md`.
+- Durable decisions go to specs, never only to chat: `docs/specs/inline-comment-model.md` (data model, storage, keys, caps, authorship, anchoring), `docs/specs/content-overlay-ui.md` (selection card, highlight painting, tooltip/editor, popup contract), `docs/specs/code-review-flow.md` (mandatory review path), `docs/specs/sync-server.md` (the Go sync server: API contract, schema, upsert/delete semantics, validation, no-authentication posture), `docs/specs/sync-integration.md` (the extension's half of it: the two settings fields, the server address rule, the sync button and its three states, the memory-only foreign notes, the failure behaviour). All are listed in `docs/specs/INDEX.md`.
 - Artifact language: English for specs, roles, skills, code identifiers, commands, section names. Russian for extension UI strings, README, and PM conversation with the user.
 - Grep anchors in English: every spec has a `Terms / Aliases` table pairing the English term with its Russian UI wording.
 - A code change that alters specified behavior edits the spec in the same commit; a spec-vs-code conflict is reported to the PM, never resolved silently.

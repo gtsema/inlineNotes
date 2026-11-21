@@ -183,32 +183,49 @@ describe('a POST carries one author and nothing else (A161)', () => {
 
   it('sends the server\'s field names and no display flag', () => {
     const [note] = syncPayloadOf([entry({ visible: false })], 'Анна').notes;
+    // The server's `model.NoteInput` and nothing more: the page is in the URL, the author
+    // in the body's `author_id`, the timestamps are the server's, and `visible` has no
+    // column at all. A fifth field is a `400` on a server that refuses unknown fields.
     expect(note).toEqual({
       id: 'a1b2c3d4e5f6',
-      page_id: 'https://example.com/a',
-      author_id: 'Анна',
       text: 'selected text',
       comment: 'my note',
       anchor: { text: 'selected text', prefix: '', suffix: '', fragmentCount: 1 },
-      created_at: '2026-01-02T03:04:05.006Z',
-      updated_at: '2026-01-02T03:04:05.006Z',
     });
-    expect(Object.keys(note ?? {}).sort()).toEqual([
-      'anchor',
-      'author_id',
-      'comment',
-      'created_at',
-      'id',
-      'page_id',
-      'text',
-      'updated_at',
-    ]);
+    expect(Object.keys(note ?? {}).sort()).toEqual(['anchor', 'comment', 'id', 'text']);
   });
 
-  it('maps one entry to one remote note and back, losing only the display flag', () => {
+  it('never sends the four fields the server owns, on any entry', () => {
+    // The whole body, spelled out: one `author_id` for the set, and four fields per note.
+    const body = syncPayloadOf([entry(), entry({ id: 'second0001' })], 'Анна');
+    const keys = new Set<string>();
+    for (const note of body.notes) {
+      for (const key of Object.keys(note)) {
+        keys.add(key);
+      }
+    }
+    expect([...keys].sort()).toEqual(['anchor', 'comment', 'id', 'text']);
+    expect(Object.keys(body).sort()).toEqual(['author_id', 'notes']);
+    // `author_id` appears once, at the top: it names the author of the whole set, and it
+    // is not repeated per note.
+    const serialized = JSON.stringify(body);
+    expect(serialized.match(/"author_id":/g) ?? []).toHaveLength(1);
+    expect(serialized.startsWith('{"author_id":')).toBe(true);
+    for (const forbidden of ['page_id', 'created_at', 'updated_at', 'visible']) {
+      expect(serialized).not.toContain(`"${forbidden}":`);
+    }
+  });
+
+  it('reads a returned row back as an entry, losing only the display flag', () => {
     const original = entry({ visible: false });
-    const roundTripped = entryFromRemoteNote(remoteNoteOf(original));
-    expect(roundTripped).toEqual({ ...original, visible: true });
+    const rounded: RemoteNote = {
+      ...remoteNoteOf(original),
+      page_id: original.pageKey,
+      author_id: original.authorName,
+      created_at: original.createdAt,
+      updated_at: original.updatedAt,
+    };
+    expect(entryFromRemoteNote(rounded)).toEqual({ ...original, visible: true });
   });
 });
 

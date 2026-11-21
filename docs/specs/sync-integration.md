@@ -68,7 +68,7 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 ### What a press sends (ruling `A161`)
 
 - The button exists only in the row whose `authorName` equals the reader's (`isSameAuthor`), and only when the target is not `null`. A foreign row keeps only its delete control.
-- One press is one `POST /notes/page/{page_id}` with body `{ "author_id": <the settings name>, "notes": [...] }`.
+- One press is one `POST /notes/page/{page_id}` with body `{ "author_id": <the settings name>, "notes": [...] }`, where each note is the server's four-field `NoteInput` (see "Wire shape").
 - `notes` holds **only** the current author's entries on this page, filtered by core `isSameAuthor` and ordered by `sortByCreatedAtAsc`. Foreign notes already in memory are never part of a payload, and an author with no own note on the page sends nothing at all (the button returns to idle without a request).
 - The notes are read from the store at the moment of the press, not from the popup's rendered view: a press sends what the store holds now.
 - Nothing is written to `chrome.storage.local` by a press, and no message is sent to the page (`A50` keeps the storage write the only notification channel).
@@ -128,19 +128,22 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 
 ### Wire shape
 
-A stored entry is mapped at the boundary, not in the domain:
+A stored entry is mapped at the boundary, not in the domain — and the two directions are **different shapes**, because a request and a response are different objects on this server (`sync-server.md` -> `model.NoteInput` versus `model.Note`).
 
-| Stored entry | Server note |
+**Sending** — one body per press, `{"author_id": ..., "notes": [...]}`. Each note carries exactly four fields, and the server refuses any other (`400` on an unknown JSON field):
+
+| Stored entry | Request note (`model.NoteInput`) |
 |---|---|
 | `id` | `id` |
-| `pageKey` | `page_id` |
-| `authorName` | `author_id` |
 | `text` | `text` |
 | `comment` | `comment` |
-| `anchor` | `anchor` (opaque JSON in both directions, `A154` of the server spec) |
-| `createdAt` | `created_at` |
-| `updatedAt` | `updated_at` |
-| `visible` | **not sent** — it is the reader's display flag and the server has no column for it; a note that arrives is visible (`A1`) |
+| `anchor` | `anchor` (opaque JSON, `A154` of the server spec) |
+| `pageKey` | **not sent** — it is the `page_id` of the path |
+| `authorName` | **not sent per note** — the body's `author_id` names the author once for the whole set |
+| `createdAt`, `updatedAt` | **not sent** — the server owns both (`created_at` preserved on update, `updated_at` moved forward) |
+| `visible` | **not sent** — the reader's display flag has no column |
+
+**Receiving** — a row of `{"notes": [...]}` carries all eight server fields (`id`, `page_id`, `author_id`, `text`, `comment`, `anchor`, `created_at`, `updated_at`), and the boundary builds an `Entry` from them. A row with a missing or mistyped field is skipped. A note that arrives is visible, because `visible` is the store's own flag and `A1`'s default is "shown".
 
 ## Edge Cases
 
@@ -189,4 +192,4 @@ A stored entry is mapped at the boundary, not in the domain:
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
 | 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
 | 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
-| 18 | the gate commands, quoted in `docs/state/t17-01-engineer.md` |
+| 18 | the gate commands, quoted in the task's engineer report under `docs/state/` |

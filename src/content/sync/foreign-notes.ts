@@ -34,7 +34,6 @@ import type {
   SyncTransport,
 } from '../../core/sync-client';
 import { entryFromRemoteNote, loadForeignNotes } from '../../core/sync-client';
-import type { SyncTransport } from '../../core/sync-client';
 import type { SyncTarget } from '../../core/sync-settings';
 import type { ExtraEntry } from '../paint/paint-plan';
 
