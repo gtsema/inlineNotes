@@ -108,3 +108,46 @@ Note for the shell: on this host Git Bash rewrites `/usr/src/app` to a Windows p
 - Rejecting other malformed inputs (wrong content types, oversized bodies, duplicate JSON keys).
 - The duplicate migration `S16-3` — a separate ledger item, not this task.
 - Authentication. The server stays open (`A158`).
+
+---
+
+## PM verification of `t16-02` (commit `68074bc`)
+
+Measured by the PM on the real stack.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `npm run build` | exit 0 |
+| `npm test` | exit 0 — **1060 / 47** (unchanged; the extension was not touched) |
+| `npm run typecheck` | exit 0 |
+| `node scripts/check-agent-config.mjs` | exit 0 — 181 info |
+| `go vet ./...` in `golang:1.25-alpine` | clean |
+| `docker compose up -d --build` | both services healthy, `/health` 200 |
+
+### Both defects closed, verified live
+
+| Case | Before | After |
+|---|---|---|
+| `GET /notes/page/<invalid utf8>` | `500 storage failure` | **`400`** `page_id: must be valid UTF-8…` |
+| `GET /notes/author/<invalid utf8>/all-pages` | `500` | **`400`** `author_id: …` |
+| `DELETE …/author/<invalid utf8>` | `500` | **`400`** `author_id: …` |
+| `POST` with invalid `author_id` | `200 {"saved":1}` + `U+FFFD` row | **`400`** `body: …` |
+| `POST` with invalid `text` | `200` | **`400`** `body: …` |
+| Rows written by a rejected POST | 1 garbage row | **zero** (`{"notes":[]}`) — `A160` |
+| Valid Cyrillic happy path | worked | still works (`saved:1`, `deleted:1`) |
+
+### Engineer finding beyond the brief
+
+The brief named the validators as the root cause. The engineer found a second mechanism for the
+**body** case: `encoding/json` replaces invalid bytes with `U+FFFD` **before** the model sees them, so
+a check placed after `Decode` can never fire. The fix therefore validates the **raw bytes before
+decoding** (`api.decodeJSON`) and keeps the validator check for the path. Two call sites, one helper.
+The engineer pinned the mechanism with a test asserting the decoder really produces four `U+FFFD`,
+so the guard cannot silently rot.
+
+### `A161` preserved
+
+The `storage failure` branch still returns `500` (three sites in `server.go`), and two tests assert
+`StatusInternalServerError` for injected store errors.
