@@ -6,7 +6,12 @@ import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import { OptionsComponent } from '../src/options/options.component';
-import { OPTIONS_MESSAGE_TEXT, OPTIONS_STRINGS, nameCounterText } from '../src/options/text';
+import {
+  OPTIONS_MESSAGE_TEXT,
+  OPTIONS_STRINGS,
+  RENAME_OUTCOME_TEXT,
+  nameCounterText,
+} from '../src/options/text';
 import {
   buildScriptMainBody,
   buildScriptSource,
@@ -95,6 +100,14 @@ const PREEXISTING_REFUSAL = '#b3261e';
  */
 const DISABLED_FILL = '#e3c3aa';
 
+/**
+ * The ink of the rename warning's sentence (`t17-04`, ruling `A173`). It is a darker
+ * shade of the kept refusal ink so the warning reads as a warning without sharing the
+ * message line's own colour — the pair table owns one ink per rule, and the message
+ * line already owns `#b3261e`.
+ */
+const RENAME_WARNING_INK = '#8a1a14';
+
 /** Every text pair the palette ships, with the background it is read on. */
 const TEXT_PAIRS: [string, string, string][] = [
   ['ink on the page background', PALETTE.ink, PALETTE.page],
@@ -108,6 +121,11 @@ const TEXT_PAIRS: [string, string, string][] = [
   ['refusal on the pale band', PREEXISTING_REFUSAL, PALETTE.accentBand],
   // `A153`'s pair: the disabled action's label on its own fill.
   ['disabled action label on the disabled fill', PALETTE.ink, DISABLED_FILL],
+  // `t17-04` (`A173`) added the rename warning and its two buttons. Each one carries
+  // text, so each one joins the pair list the recomputation reads.
+  ['rename warning on the pale band', RENAME_WARNING_INK, PALETTE.accentBand],
+  ['rename cancel label on the disabled fill', PALETTE.ink, DISABLED_FILL],
+  ['rename continue label on the action background', PALETTE.onAction, PALETTE.action],
 ];
 
 /**
@@ -139,6 +157,10 @@ const TEXT_ROLE_BACKGROUND: Record<string, string> = {
   '.save:disabled': '.save:disabled',
   '.message--saved': '.message',
   '.message--refusal': '.message',
+  // `t17-04` (`A173`): the rename warning and its two buttons are text roles too.
+  '.rename-warning': '.rename',
+  '.rename-cancel': '.rename-cancel',
+  '.rename-continue': '.rename-continue',
 };
 
 function readSource(relativePath: string): string {
@@ -1177,11 +1199,14 @@ describe('the extension declares one 128 px icon (t11-01 AC4, AC5; rulings A130,
 describe('exactly one new Russian string (t9-02 AC4)', () => {
   it('adds the name explanation line and moves no existing string', () => {
     // Stage 17 (`t17-01` AC2) adds the four strings of its two controls beside these five,
-    // and moves none of them: the list is the whole constant, so a sixth later sentence is
-    // a failing test as well.
+    // and `t17-04` (ruling `A173`) adds the three strings of the rename warning: the list
+    // is the whole constant, so a later sentence is a failing test as well.
     expect(Object.keys(OPTIONS_STRINGS).sort()).toEqual([
       'nameHint',
       'nameLabel',
+      'renameCancel',
+      'renameContinue',
+      'renameWarning',
       'save',
       'saved',
       'serverHint',
@@ -1190,11 +1215,12 @@ describe('exactly one new Russian string (t9-02 AC4)', () => {
       'syncLabel',
       'title',
     ]);
-    // The four strings that shipped before this task, byte-identical.
+    // The strings that shipped before this task, byte-identical except the confirmation,
+    // which ruling `A176` shortened to «Сохранено».
     expect(OPTIONS_STRINGS.title).toBe('Настройки inlineNotes');
     expect(OPTIONS_STRINGS.nameLabel).toBe('Имя');
     expect(OPTIONS_STRINGS.save).toBe('Сохранить');
-    expect(OPTIONS_STRINGS.saved).toBe('Имя сохранено');
+    expect(OPTIONS_STRINGS.saved).toBe('Сохранено');
     // The one new string.
     expect(OPTIONS_STRINGS.nameHint).toBe('Это имя подписывает каждую заметку');
   });
@@ -1246,7 +1272,12 @@ describe('the palette is literal and derived (t9-02 AC5, ruling A125)', () => {
     // `DISABLED_FILL` joins the pinned set by ruling `A153` (`t15-01`), not by an
     // invention of this test: it is the one value the `A125` palette did not have, and the
     // disabled row of the palette table files it beside the artwork-sampled roles.
-    const pinned = [...Object.values(PALETTE), PREEXISTING_REFUSAL, DISABLED_FILL].sort();
+    const pinned = [
+      ...Object.values(PALETTE),
+      PREEXISTING_REFUSAL,
+      DISABLED_FILL,
+      RENAME_WARNING_INK,
+    ].sort();
     expect([...new Set(literals)].sort()).toEqual(pinned);
   });
 
@@ -1618,6 +1649,10 @@ describe('the disabled Сохранить is colours, not an opacity (A153, t15-
         PALETTE.decorative,
         PREEXISTING_REFUSAL,
         DISABLED_FILL,
+        // `t17-04` (`A173`): the rename warning's own ink, a darker shade of the kept
+        // refusal colour so the warning reads as a warning without sharing the message
+        // line's ink — the pair table owns one ink per rule.
+        RENAME_WARNING_INK,
       ].sort(),
     );
   });
@@ -1711,5 +1746,65 @@ describe('the stylesheet is read verbatim for absences and stripped for presence
     // The rule still exists after stripping; only its declarations are gone. Without this, a
     // helper that deleted whole rules would satisfy the two assertions above.
     expect(stripped).toContain('.mascot {');
+  });
+});
+
+/**
+ * The two UI changes of `t17-04` Addendum 1 (rulings `A175`, `A176`), shipped in the
+ * same commit as the rename rule.
+ *
+ * Both are literal values a later edit can lose without noticing: a spacing value
+ * that reads "fine" at 12px and a confirmation sentence that reads "fine" while it
+ * claims more than the save does. Neither is visible in a diff review unless a test
+ * reads the shipped text, so each one is pinned against the declaration or the
+ * constant that owns it.
+ */
+describe('the checkbox row gap grows four times (A175, t17-04 AC13)', () => {
+  const styles = componentStyles(join('src', 'options', 'options.component.ts'));
+
+  it('declares margin: 48px 0 0 on .toggle-line', () => {
+    // The stripped read, so a commented-out declaration cannot satisfy the pin: the
+    // geometry cases above taught that lesson.
+    const body = ruleBody(componentCodeStyles(join('src', 'options', 'options.component.ts')), '.toggle-line');
+    expect(body).toMatch(/margin:\s*48px 0 0;/);
+    expect(body).not.toMatch(/margin:\s*12px 0 0;/);
+  });
+
+  it('moves nothing else on the row, the checkbox or the button', () => {
+    const code = componentCodeStyles(join('src', 'options', 'options.component.ts'));
+    // The row's own two other declarations are untouched.
+    expect(ruleBody(code, '.toggle-line')).toMatch(/gap:\s*6px;/);
+    expect(ruleBody(code, '.toggle-line')).toMatch(/display:\s*flex;/);
+    // The checkbox's size and accent are untouched.
+    expect(ruleBody(code, '.sync-toggle')).toMatch(/width:\s*14px;/);
+    expect(ruleBody(code, '.sync-toggle')).toMatch(/height:\s*14px;/);
+    // The save button's padding is untouched.
+    expect(ruleBody(code, '.save')).toMatch(/padding:\s*6px 14px;/);
+    // The message's margin is untouched: the confirmation does not move with the row.
+    expect(ruleBody(code, '.message')).toMatch(/margin:\s*12px 0 0;/);
+    // The `A125` palette is untouched: the action colour is still the shipped literal.
+    expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
+  });
+
+  it('leaves the save button’s own margin alone while the row moves', () => {
+    // The save button carries no margin declaration of its own in the shipped stylesheet;
+    // the row's margin is the only gap that grew. A margin added to `.save` would move the
+    // message line as well and is not part of this ruling.
+    expect(styles).not.toMatch(/\.save\s*\{[^}]*margin:/);
+  });
+});
+
+describe('the save confirmation reads «Сохранено» (A176, t17-04 AC14)', () => {
+  it('holds exactly Сохранено under the code name saved', () => {
+    expect(OPTIONS_STRINGS.saved).toBe('Сохранено');
+    // The message map answers the `saved` code with the same sentence: the options page
+    // renders the map, and the constant is where the wording lives.
+    expect(OPTIONS_MESSAGE_TEXT.saved).toBe('Сохранено');
+  });
+
+  it('leaves the sweep_failed wording naming the name on purpose', () => {
+    expect(RENAME_OUTCOME_TEXT.sweep_failed).toBe(
+      'Имя сохранено, но часть заметок с прежним именем удалить не удалось',
+    );
   });
 });

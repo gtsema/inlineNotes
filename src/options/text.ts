@@ -45,8 +45,14 @@ export const OPTIONS_STRINGS = {
    * Confirmation after a successful `Сохранить` (ruling `A56`). It is shown for an
    * unchanged value too: the save went through core, and a name that was already
    * stored is still the name the store holds.
+   *
+   * Ruling `A176` (`t17-04`): the save writes the server address and the switch beside
+   * the name, so the sentence must not claim it saved only a name. It reads
+   * «Сохранено» and the code name stays `saved`, so no handler, message code or test
+   * selector moves. The `sweep_failed` sentence below keeps its name on purpose: it
+   * reports a rename that could not finish.
    */
-  saved: 'Имя сохранено',
+  saved: 'Сохранено',
   /**
    * Label of the server address field (Stage 17, `t17-01` AC2). The parenthetical
    * under it says the two shapes the rule accepts, so the reader reads the
@@ -58,6 +64,18 @@ export const OPTIONS_STRINGS = {
   syncLabel: 'Синхронизация',
   /** The word the checkbox shows beside itself. It is the label word, not a second one. */
   syncCheckbox: 'Включить',
+  /**
+   * The rename warning of ruling `A173` (`t17-04`). `Сохранить` never deletes notes
+   * silently: when the typed name differs from the stored one and the store holds at
+   * least one note of the stored name, this sentence says what the next press does.
+   * The two buttons below are its answers, and the three strings are the only
+   * wording the confirmation owns.
+   */
+  renameWarning: 'Заметки с прежним именем будут удалены на этом устройстве',
+  /** The answer that writes nothing: the field keeps the typed value. */
+  renameCancel: 'Отмена',
+  /** The answer that saves the name and then deletes the previous name's notes. */
+  renameContinue: 'Продолжить',
 } as const;
 
 /**
@@ -84,6 +102,30 @@ export const OPTIONS_MESSAGE_TEXT: Readonly<Record<OptionsMessageCode, string>> 
 /** The Russian message of one code, from the single map. */
 export function optionsMessageText(code: OptionsMessageCode): string {
   return OPTIONS_MESSAGE_TEXT[code];
+}
+
+/**
+ * The two states a rename can leave the page in after the reader pressed
+ * `Продолжить` (ruling `A174`).
+ *
+ * `saved` is the ordinary confirmation: the name was written and the sweep found
+ * nothing to delete, or deleted everything it found. `sweep_failed` is the partial
+ * state the ruling forbids leaving silent: the name **is** saved and some notes of
+ * the previous name are still stored, because a page could not be read or written.
+ * The sentence does not claim which page or why — the reader's action is the same in
+ * every case: the name changed, and some old notes remain.
+ */
+export type RenameOutcomeCode = 'saved' | 'sweep_failed';
+
+/** The Russian wording of a rename's outcome, one sentence per state. */
+export const RENAME_OUTCOME_TEXT: Readonly<Record<RenameOutcomeCode, string>> = {
+  saved: OPTIONS_STRINGS.saved,
+  sweep_failed: 'Имя сохранено, но часть заметок с прежним именем удалить не удалось',
+};
+
+/** The Russian wording of one rename outcome. */
+export function renameOutcomeText(code: RenameOutcomeCode): string {
+  return RENAME_OUTCOME_TEXT[code];
 }
 
 /**

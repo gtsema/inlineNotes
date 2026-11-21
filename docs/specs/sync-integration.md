@@ -30,6 +30,8 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
 | `no request rule` | — | switch off **or** empty address means zero network calls and no sync button (`A166`) |
+| `rename sweep` | — | the local deletion of the previous name's notes on every page when the settings name changes (`A173`); it calls no server |
+
 
 ## Flow / Sequence
 
@@ -119,6 +121,15 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 - The automatic load is fire-and-forget: no `await` holds the paint, no `catch` is needed at the call site, and a failure returns silently.
 - No retry loop, no modal, no line on the article.
 - The popup states the failure as the non-blocking notice «Не удалось связаться с сервером синхронизации»: above the list, never replacing it (`A83`), and the rows stay exactly as they are.
+
+### A rename is local and calls no server (ruling `A173`)
+
+When the settings name changes, the previous name's notes are deleted from `chrome.storage.local` on every page (`inline-comment-model.md` -> "Rename sweep", `content-overlay-ui.md` -> "Options rename warning"). That deletion is **local only**: the extension sends no request while renaming, and the server keeps the notes it holds until the reader presses the popup's sync button. Two consequences the reader lives with:
+
+- **The server's copy survives the rename.** A later sync of the same page pushes the reader's new name's notes; the old name's notes remain the server's until the server's own retention removes them. Nothing in this extension deletes them.
+- **The memory-held foreign notes are dropped.** After a rename the page's foreign list is rebuilt from the next load, because the settings write is the storage change the page reacts to (`A163`).
+
+A transport that records calls sees **zero** calls during a rename: the sweep in `src/core/author-notes.ts` imports no transport and no sync module, and the options page calls neither.
 
 ### One address, and no other network
 

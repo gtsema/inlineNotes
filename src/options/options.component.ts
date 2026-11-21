@@ -5,10 +5,18 @@ import type {
   AuthorNameDraft,
   AuthorNameServiceSource,
   AuthorNameView,
+  RenameView,
+  SaveDecision,
   SyncSettingsView,
 } from './author-name-service';
 import { AuthorNameService } from './author-name-service';
-import { OPTIONS_STRINGS, nameCounterText, optionsMessageText, serverAddressText } from './text';
+import {
+  OPTIONS_STRINGS,
+  nameCounterText,
+  optionsMessageText,
+  renameOutcomeText,
+  serverAddressText,
+} from './text';
 
 /**
  * What the page runs on: the storage seam and the randomness. A token with a root
@@ -139,8 +147,26 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         {{ save }}
       </button>
 
+      @if (renameConfirm()) {
+        <div class="rename" role="alert">
+          <p class="rename-warning">{{ renameWarning }}</p>
+          <div class="rename-actions">
+            <button class="rename-cancel" type="button" (click)="onRenameCancel()">
+              {{ renameCancel }}
+            </button>
+            <button class="rename-continue" type="button" (click)="onRenameContinue()">
+              {{ renameContinue }}
+            </button>
+          </div>
+        </div>
+      }
+
       @if (view().message !== null) {
         <p class="message" [class]="messageClass()">{{ message() }}</p>
+      }
+
+      @if (renameOutcome() !== null) {
+        <p class="message" [class]="renameOutcomeClass()">{{ renameOutcomeMessage() }}</p>
       }
     </main>
   `,
@@ -242,7 +268,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 12px 0 0;
+      margin: 48px 0 0;
     }
 
     .sync-toggle {
@@ -283,6 +309,44 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     .message--refusal {
       color: #b3261e;
     }
+
+    .rename {
+      margin: 12px 0 0;
+      padding: 8px;
+      border: 1px solid #a6cbdc;
+      border-radius: 6px;
+      background: #eef4f7;
+    }
+
+    .rename-warning {
+      margin: 0 0 8px;
+      color: #8a1a14;
+    }
+
+    .rename-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .rename-cancel {
+      padding: 4px 12px;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      cursor: pointer;
+      color: #1b2a33;
+      background: #e3c3aa;
+    }
+
+    .rename-continue {
+      padding: 4px 12px;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      cursor: pointer;
+      color: #ffffff;
+      background: #b8480d;
+    }
   `,
 })
 export class OptionsComponent implements OnInit {
@@ -309,6 +373,19 @@ export class OptionsComponent implements OnInit {
   readonly serverLabel: string = OPTIONS_STRINGS.serverLabel;
   readonly serverHint: string = OPTIONS_STRINGS.serverHint;
   readonly syncLabel: string = OPTIONS_STRINGS.syncLabel;
+  readonly renameWarning: string = OPTIONS_STRINGS.renameWarning;
+  readonly renameCancel: string = OPTIONS_STRINGS.renameCancel;
+  readonly renameContinue: string = OPTIONS_STRINGS.renameContinue;
+
+  /**
+   * The rename warning of ruling `A173` (`t17-04`): shown by `Сохранить` when the typed
+   * name differs from the stored one and the store holds a note of the stored name.
+   * Nothing is written while it stands, and `Отмена` clears it without a write.
+   */
+  readonly renameConfirm = signal<boolean>(false);
+
+  /** How the last `Продолжить` ended, `null` until the reader answers the warning. */
+  readonly renameOutcome = signal<RenameView | null>(null);
 
   ngOnInit(): void {
     void this.open();
@@ -353,9 +430,44 @@ export class OptionsComponent implements OnInit {
     }
   }
 
-  /** `Сохранить`: the core save and nothing else (`A56`). */
+  /**
+   * `Сохранить`: the core save, routed through the rename rule when the typed name
+   * would delete the previous name's notes (`A173`). The page owns no rule here: the
+   * service decides `saved` / `confirm` / `refused`, and this handler only shows what
+   * it answered.
+   */
   onSave(): void {
     void this.saveDraft();
+  }
+
+  /**
+   * `Отмена` on the rename warning: nothing is written and the field keeps the typed
+   * value, so the reader can fix the name without losing their edit.
+   */
+  onRenameCancel(): void {
+    this.renameConfirm.set(false);
+  }
+
+  /**
+   * `Продолжить` on the rename warning: the name is saved first, then the previous
+   * name's notes are deleted on every page (`A174`). The service owns the order; this
+   * handler puts the outcome on the page.
+   */
+  onRenameContinue(): void {
+    void this.confirmRename();
+  }
+
+  /** Russian wording of the rename outcome, or `''` when there is none. */
+  renameOutcomeMessage(): string {
+    const outcome = this.renameOutcome()?.outcome;
+    return outcome === null || outcome === undefined ? '' : renameOutcomeText(outcome);
+  }
+
+  /** The partial-deletion state wears the refusal colour; a complete rename the saved one. */
+  renameOutcomeClass(): string {
+    return this.renameOutcome()?.outcome === 'sweep_failed'
+      ? 'message message--refusal'
+      : 'message message--saved';
   }
 
   /** One typed character of the address field: a draft only, nothing is written yet. */
@@ -403,7 +515,26 @@ export class OptionsComponent implements OnInit {
   }
 
   private async saveDraft(): Promise<void> {
-    this.apply(await this.service.save(this.draft().value));
+    const decision: SaveDecision = await this.service.saveName(this.draft().value);
+    this.renameOutcome.set(null);
+    this.renameConfirm.set(decision.kind === 'confirm');
+    if (decision.kind === 'confirm') {
+      // `A173`: the warning asks first and writes nothing. The field keeps the typed
+      // value so `Отмена` leaves the reader's edit in place, and applying the stored
+      // name here would erase what they typed.
+      return;
+    }
+    this.apply(decision.view);
+  }
+
+  private async confirmRename(): Promise<void> {
+    const view = await this.service.confirmRename(this.draft().value);
+    this.renameConfirm.set(false);
+    this.renameOutcome.set(view);
+    this.apply({
+      name: view.name,
+      message: view.refusal === null ? 'saved' : view.refusal,
+    });
   }
 
   private async open(): Promise<void> {
