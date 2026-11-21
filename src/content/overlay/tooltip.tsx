@@ -51,6 +51,17 @@ export interface TooltipProps {
   readonly isOwnEntry: boolean;
   /** The stored comment of the entry, verbatim. */
   readonly comment: string;
+  /**
+   * The author's own colour (`paint-palette.ts` -> `paintColourOfSlot`), used as the
+   * header's ink for a foreign note (Stage 17, `A163`, answer 4).
+   *
+   * It is an **inline style on one header span inside the shadow root**, never a class
+   * and never a page attribute: the six palette slots are a fixed set of literals, and
+   * generating a stylesheet class per slot would put the palette in two places. The
+   * empty string means "the palette has no fill for this slot", and the header then
+   * keeps the stylesheet's own ink — a note is never rendered with an invalid colour.
+   */
+  readonly headerColour: string;
 }
 
 /** The tooltip element tree, rendered into the shadow root by the controller. */
@@ -63,6 +74,7 @@ export function Tooltip(props: TooltipProps) {
     >
       <span
         class={classes(TOOLTIP_HEADER_CLASS, props.isOwnEntry ? null : TOOLTIP_FOREIGN_CLASS)}
+        style={headerStyleOf(props)}
       >
         {props.header}
       </span>
@@ -74,4 +86,16 @@ export function Tooltip(props: TooltipProps) {
 /** One class attribute from a name and one optional modifier. */
 function classes(base: string, modifier: string | null): string {
   return modifier === null ? base : `${base} ${modifier}`;
+}
+
+/**
+ * The inline colour of the header: the author's colour for a foreign note, and
+ * nothing at all for the reader's own — the own header keeps the stylesheet's ink, so
+ * "mine" looks the same on every page whatever colour the reader's name hashes to.
+ */
+function headerStyleOf(props: TooltipProps): { color: string } | undefined {
+  if (props.isOwnEntry || props.headerColour === '') {
+    return undefined;
+  }
+  return { color: props.headerColour };
 }

@@ -137,3 +137,27 @@ export function paintSlotOf(authorName: string): PaintSlot {
 export function paintDeclarationsOfSlot(slot: PaintSlot): readonly string[] {
   return PAINT_PALETTE[slot];
 }
+
+/**
+ * The colour of one slot as a CSS colour value: the `background-color` declaration
+ * with its property name removed.
+ *
+ * Stage 17 (`A163`, answer 4) needs the author colour in a second place — the
+ * `ownership header` of a foreign note's tooltip prints the author's name **in that
+ * author's colour**, so a reader with several foreign authors can tell them apart at
+ * a glance instead of reading a grey name against a grey name. This function is the
+ * only way that colour leaves the palette: it reads the same literal the highlight
+ * rule writes, so the name in the tooltip and the underline on the page can never
+ * disagree about which colour an author wears. A slot whose fill were ever removed
+ * would answer the empty string, which the caller renders as "no inline colour" rather
+ * than as an invalid declaration.
+ */
+export function paintColourOfSlot(slot: PaintSlot): string {
+  const fill = paintDeclarationsOfSlot(slot).find((declaration: string) =>
+    declaration.trimStart().startsWith('background-color:'),
+  );
+  if (fill === undefined) {
+    return '';
+  }
+  return fill.split(':').slice(1).join(':').trim().replace(/;$/, '');
+}

@@ -48,7 +48,13 @@ import type { RangeForFragment } from '../capture/fragment-rect';
 import { currentAuthorName } from '../create/create-note';
 import { isPaintHighlightName } from './highlight-name';
 import { buildPaintPlan } from './paint-plan';
-import type { PaintedEntry, PaintPlan, PaintSkipReason, SkippedEntry } from './paint-plan';
+import type {
+  ExtraEntry,
+  PaintedEntry,
+  PaintPlan,
+  PaintSkipReason,
+  SkippedEntry,
+} from './paint-plan';
 import { paintStyleOwnerOf } from './paint-style';
 import type { PaintStyleOwner, PaintStyleRule } from './paint-style';
 import { documentPaintSurface } from './paint-surface';
@@ -84,6 +90,27 @@ export interface PagePainter {
    * `A66`).
    */
   refresh(): Promise<PagePaintOutcome>;
+  /**
+   * Hands the pass the notes it must paint **beside** the stored ones (Stage 17,
+   * ruling `A163`).
+   *
+   * The notes arrive from the sync server and live in this document's memory only:
+   * they are never written to `chrome.storage.local` and this module writes them
+   * nowhere. The pass keeps a copy, so the next `refresh()` resolves and paints both
+   * lists against **one** page stream, which is what keeps a foreign note from being
+   * measured against a page state the stored notes did not see (ruling `A29`). `null`
+   * and `[]` are the same answer: nothing extra to paint.
+   *
+   * Each note carries the display flag this tab holds for it, because a foreign note
+   * has no stored `visible` field: a switched-off one is still painted, with the fill
+   * of its slot dropped, so switching it back on is one more pass and no storage write.
+   *
+   * Nothing else changes: the same anchors, the same `paint name`s, the same palette
+   * slot per `authorName`, the same per-entry failure answers. The paint path asks no
+   * ownership question at all (`A94`), so a foreign note is painted by the existing
+   * rules without one branch being added to them.
+   */
+  setExtraEntries(entries: readonly ExtraEntry[] | null): void;
   /**
    * Removes every highlight and rule this extension owns (ruling `A39`).
    *
@@ -179,6 +206,8 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
   let painted: PaintedEntry[] = [];
   let authorName: string | null = null;
   let passPageKey: string | null = null;
+  /** The notes the sync layer put in this document's memory (ruling `A163`). */
+  let extra: readonly ExtraEntry[] = [];
 
   async function refresh(): Promise<PagePaintOutcome> {
     // `t3-05` AC2, ruling `A75`: every stage of a pass touches something the page owns
@@ -239,7 +268,7 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       plan =
         root === null
           ? emptyPlan()
-          : buildPaintPlan({ entries: page.entries, root, rangeFor });
+          : buildPaintPlan({ entries: page.entries, extra, root, rangeFor });
       registerPlan(surface, style, plan);
     } catch {
       clearPaint();
@@ -278,6 +307,11 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
   return {
     refresh,
     clearPaint,
+    setExtraEntries(entries: readonly ExtraEntry[] | null): void {
+      // A copy, so a caller that keeps editing its own list cannot change what the
+      // next pass paints behind the pass's back.
+      extra = entries === null ? [] : [...entries];
+    },
     paintedEntries(): readonly PaintedEntry[] {
       return painted;
     },

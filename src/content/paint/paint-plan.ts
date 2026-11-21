@@ -98,6 +98,20 @@ export interface PaintedEntry {
    */
   readonly paintSlot: PaintSlot;
   /**
+   * `true` for a note whose entry record says `visible: false` (ruling `A40`) even
+   * though the pass painted it — a state only a foreign note can reach (Stage 17,
+   * ruling `A163`).
+   *
+   * A foreign note lives in this document's memory, so its display flag is that memory
+   * and not a stored field: the source hands the pass the record **and** the flag it
+   * now has, and this module paints it either way, because a switched-off foreign note
+   * still has to be paintable again once the reader switches it on — with no storage
+   * write and no re-read of the page. The one visible consequence is the declaration
+   * `paint-style.ts` drops for such a note; a stored entry is never dimmed, because a
+   * hidden stored entry is not painted at all (`A40`).
+   */
+  readonly dimmed: boolean;
+  /**
    * Every fragment of the span, in document order (ruling `A36`).
    *
    * The node and the two node-local offsets are what the `caret hit-test` of
@@ -144,6 +158,26 @@ export interface PaintPlanInput {
   readonly root: Node;
   /** The measurement seam of `fragment-rect.ts`; a test injects a recorder. */
   readonly rangeFor: RangeForFragment;
+  /**
+   * The notes that are **not** in the store: the sync server's notes for this page,
+   * which live in this document's memory only (Stage 17, rulings `A163`, `A161`), each
+   * with the display flag the reader gave it in this tab.
+   *
+   * They are resolved and measured exactly like a stored entry — one stream, one pass,
+   * one `paint name` scheme — and the one thing they carry beyond a record is that
+   * flag, because it is not a stored field. A switched-off foreign note is still
+   * painted, with the fill of its slot dropped: the reader sees that there is a note
+   * here and switched it off, and switching it back on is a re-run of this pass with
+   * no storage write at all.
+   */
+  readonly extra?: readonly ExtraEntry[];
+}
+
+/** One note from outside the store: its record and the flag this tab holds for it. */
+export interface ExtraEntry {
+  readonly entry: Entry;
+  /** The display flag of this tab; `false` paints the note without its fill. */
+  readonly visible: boolean;
 }
 
 /**
@@ -158,11 +192,21 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
   const stream = buildTextStream(input.root);
   const painted: PaintedEntry[] = [];
   const skipped: SkippedEntry[] = [];
+  // The flag of a note that is not in the store, by entry id. A `Map` and not a
+  // second loop: the two lists are resolved in one walk in the input's own order.
+  const extraVisible = new Map<string, boolean>();
+  for (const extra of input.extra ?? []) {
+    extraVisible.set(extra.entry.id, extra.visible);
+  }
 
-  for (const entry of input.entries) {
+  for (const entry of [...input.entries, ...(input.extra ?? []).map((extra) => extra.entry)]) {
     if (!entry.visible) {
       // Ruling `A40` and ruling `A1`: a hidden entry is simply absent from the page.
-      // It is not dimmed, not greyed, and it is still in the popup list.
+      // It is not dimmed, not greyed, and it is still in the popup list. The one note
+      // that reaches the page switched off is a foreign note whose flag travels beside
+      // its record (`PaintPlanInput.extra`), never through `visible` — so this branch
+      // keeps its meaning for every entry the store holds, and a `visible: false`
+      // record is skipped here whatever list it arrived in.
       skipped.push({ entryId: entry.id, reason: 'hidden' });
       continue;
     }
@@ -184,6 +228,7 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
       entry,
       name: highlightNameOf(entry.id),
       paintSlot: paintSlotOf(entry.authorName),
+      dimmed: extraVisible.has(entry.id) ? extraVisible.get(entry.id) !== true : false,
       fragments,
     });
   }
