@@ -158,9 +158,9 @@ curl "http://localhost:8080/notes/author/$(node -e "console.log(encodeURICompone
 ```
 cmd/server/main.go        точка входа: переменные окружения, пул, миграции, HTTP-сервер
 internal/api/             обработчики, маршруты, JSON, CORS
-internal/store/           доступ к PostgreSQL, миграции, запросы (+ тесты против настоящей базы)
+internal/store/           доступ к PostgreSQL, запросы (+ тесты против настоящей базы)
+internal/store/migrations/  .sql, вшитые в бинарник через //go:embed (единственная копия)
 internal/model/           Note, типы запросов/ответов, валидация (+ тесты)
-migrations/               .sql, вшитые в бинарник
 Dockerfile                многоступенчатая сборка: golang:1.25-alpine -> alpine
 docker-compose.yml        сервер + postgres:16-alpine, healthcheck, именованный том
 .env.example              DATABASE_URL, PORT

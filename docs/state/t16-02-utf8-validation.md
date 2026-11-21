@@ -176,3 +176,27 @@ the validators are reached for every request-derived string.
 | Defects found and fixed | the two UTF-8 defects (`S16-1`, `S16-2`) |
 | Debt left | `S16-3` — the duplicate migration file |
 | Extension integration | **not started**, by the user's instruction |
+
+---
+
+## `S16-3` closed — the duplicate migration is gone
+
+Ruling: the top-level `server/migrations/0001_init.sql` was a byte-identical copy of the embedded
+`server/internal/store/migrations/0001_init.sql`, read by nothing. `//go:embed migrations/*.sql` in
+`server/internal/store/store.go:30` points at the internal copy, and no other file referenced the
+top-level one. It was deleted rather than kept as a second source of truth, because a second copy of
+a schema drifts on the first change.
+
+`server/README.md` named the wrong path (`migrations/` at the server root). It now names
+`internal/store/migrations/` and says the copy is embedded and single.
+
+Verified after the change:
+
+| Check | Result |
+|---|---|
+| `docker build ./server` | exit 0 |
+| `go vet ./...` and `go build ./...` in the container | exit 0 |
+| `docker compose up` | both services healthy, `/health` 200 |
+| the `notes` table exists after start | 1 — created from the **embedded** copy, so the deleted file was genuinely unused |
+| live walk-through | two authors with the same note id → 2 rows; `DELETE` removed only the named author; invalid UTF-8 in the path → 400 |
+| four extension gates | build 0, test 0 (**1060** / 47), typecheck 0, checker 0 (181 info) |
