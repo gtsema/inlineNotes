@@ -40,15 +40,39 @@ import type { StorageFailureCode, StoragePort, StorageWriteResult } from './stor
 import { attemptWrite } from './storage-port';
 import { SETTINGS_KEY } from './storage-keys';
 
-/** Stored value of `settings:v1`: the author name and nothing else. */
+/**
+ * Stored value of `settings:v1`.
+ *
+ * Stage 17 (ruling `A160`) adds two **optional** fields so the sync feature can be
+ * switched on without breaking a record written by an older build:
+ *
+ * - `serverUrl` — `http://host:port` or `https://host:port`, `''` meaning "not
+ *   configured";
+ * - `syncEnabled` — the global switch, **absent means off**.
+ *
+ * Both are omitted from the stored object when they carry their default, so a
+ * record the reader never configured is byte-identical to what the previous version
+ * wrote. `tests/core-settings-store.spec.ts` pins that shape, and
+ * `tests/core-sync-settings.spec.ts` pins the decode.
+ */
 export interface SettingsValue {
   name: string;
+  serverUrl?: string;
+  syncEnabled?: boolean;
 }
 
 /** Input of `saveSettings`; the stored value is the normalized form of `name`. */
 export interface SaveSettingsInput {
   /** Raw author name as typed by the user. */
   name: string;
+  /**
+   * Server address to store beside the name (ruling `A165`). `undefined` keeps what
+   * the store already holds, which is what the name-only save of the options page
+   * does: saving a name must never erase a configured server.
+   */
+  serverUrl?: string;
+  /** Synchronization switch (ruling `A160`). `undefined` keeps the stored value. */
+  syncEnabled?: boolean;
 }
 
 /** Machine code explaining what the settings read found. */
@@ -70,20 +94,45 @@ export interface SettingsReadResult {
   name: string;
   /** Codes in the order the read produced them; empty for a valid stored name. */
   codes: readonly SettingsCode[];
+  /**
+   * Stored server address, `''` when the record carries none or an unusable value
+   * (ruling `A160`). A record written by the previous version reads `''` here.
+   */
+  serverUrl: string;
+  /** Stored switch, `false` when the record carries none or an unusable value. */
+  syncEnabled: boolean;
 }
 
 /** Why `saveSettings` refused: the author-name rule or a port failure. */
 export type SettingsWriteCode = 'name_required' | StorageFailureCode;
 
-/** Result of `saveSettings`; `name` is the value that was written. */
-export type SettingsWriteResult = { ok: true; name: string } | { ok: false; code: SettingsWriteCode };
+/** Result of `saveSettings`; the fields are the values that were written. */
+export type SettingsWriteResult =
+  | { ok: true; name: string; serverUrl: string; syncEnabled: boolean }
+  | { ok: false; code: SettingsWriteCode };
 
 /**
  * The stored shape, produced here so a write cannot publish a value its own
  * reader would report as `settings_malformed`.
+ *
+ * The two Stage 17 fields are **omitted at their defaults** (ruling `A160`): an
+ * empty address and a switch that is off are what an absent field means, so
+ * writing them would only make the old and the new record look different for the
+ * same state.
  */
-export function settingsValueOf(name: string): SettingsValue {
-  return { name };
+export function settingsValueOf(
+  name: string,
+  serverUrl = '',
+  syncEnabled = false,
+): SettingsValue {
+  const value: SettingsValue = { name };
+  if (serverUrl !== '') {
+    value.serverUrl = serverUrl;
+  }
+  if (syncEnabled) {
+    value.syncEnabled = true;
+  }
+  return value;
 }
 
 /**
@@ -100,20 +149,34 @@ export function settingsValueOf(name: string): SettingsValue {
  * a rule violation is not permission to rewrite the user's value.
  */
 export function settingsFromStorageValue(value: unknown): SettingsReadResult {
+  const defaults = { serverUrl: '', syncEnabled: false };
   if (!isRecord(value)) {
-    return { name: '', codes: ['settings_malformed'] };
+    return { name: '', codes: ['settings_malformed'], ...defaults };
   }
 
   const storedName = value['name'];
   if (typeof storedName !== 'string') {
-    return { name: '', codes: ['settings_malformed'] };
+    return { name: '', codes: ['settings_malformed'], ...defaults };
   }
+
+  // Stage 17 (`A160`): the two new fields are decoded defensively and never
+  // repaired. A wrong type or a blank address reads as "not configured", which is
+  // the answer ruling `A166` acts on — no request — while a damaged name keeps the
+  // code it already had. Nothing here switches synchronization on by accident.
+  const storedServerUrl = value['serverUrl'];
+  const serverUrl = typeof storedServerUrl === 'string' ? storedServerUrl.trim() : '';
+  const syncEnabled = value['syncEnabled'] === true ? true : false;
 
   const validation: LengthValidation = validateAuthorName(storedName);
   if (validation.ok) {
-    return { name: validation.normalized, codes: [] };
+    return { name: validation.normalized, codes: [], serverUrl, syncEnabled };
   }
-  return { name: validation.normalized, codes: ['name_required'] };
+  return {
+    name: validation.normalized,
+    codes: ['name_required'],
+    serverUrl,
+    syncEnabled,
+  };
 }
 
 /**
@@ -132,7 +195,7 @@ export async function loadSettings(port: StoragePort): Promise<SettingsReadResul
   try {
     items = await port.get([SETTINGS_KEY]);
   } catch {
-    return { name: '', codes: ['storage_unavailable'] };
+    return { name: '', codes: ['storage_unavailable'], serverUrl: '', syncEnabled: false };
   }
   return settingsFromStorageValue(items[SETTINGS_KEY]);
 }
@@ -158,13 +221,27 @@ export async function saveSettings(
     return { ok: false, code: 'name_required' };
   }
 
+  // Stage 17 (`A160`): a field the caller did not send keeps the stored value. The
+  // read is the same guarded `get` the loader makes, and a read that throws is not
+  // a reason to publish `syncEnabled: false` over the reader's choice — the write is
+  // reported as unavailable and the record stays as it was.
+  let carried: SettingsReadResult | null = null;
+  if (input.serverUrl === undefined || input.syncEnabled === undefined) {
+    carried = await loadSettings(port);
+    if (carried.codes.includes('storage_unavailable')) {
+      return { ok: false, code: 'unavailable' };
+    }
+  }
+  const serverUrl = input.serverUrl ?? carried?.serverUrl ?? '';
+  const syncEnabled = input.syncEnabled ?? carried?.syncEnabled ?? false;
+
   const write: StorageWriteResult = await attemptWrite(async () => {
-    await port.set({ [SETTINGS_KEY]: settingsValueOf(validation.normalized) });
+    await port.set({ [SETTINGS_KEY]: settingsValueOf(validation.normalized, serverUrl, syncEnabled) });
   });
   if (!write.ok) {
     return { ok: false, code: write.code };
   }
-  return { ok: true, name: validation.normalized };
+  return { ok: true, name: validation.normalized, serverUrl, syncEnabled };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

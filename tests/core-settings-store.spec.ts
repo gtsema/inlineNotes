@@ -62,7 +62,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const port = new MemoryStoragePort();
 
     const result = await loadSettings(port);
-    expect(result).toEqual({ name: '', codes: ['settings_malformed'] });
+    expect(result).toMatchObject({ name: '', codes: ['settings_malformed'] });
   });
 
   it('reports a stored value that is not an object the same way', async () => {
@@ -71,7 +71,7 @@ describe('loadSettings reads the author name (AC1)', () => {
       port.seed(SETTINGS_KEY, value);
 
       const result = await loadSettings(port);
-      expect(result).toEqual({ name: '', codes: ['settings_malformed'] });
+      expect(result).toMatchObject({ name: '', codes: ['settings_malformed'] });
     }
   });
 
@@ -81,7 +81,7 @@ describe('loadSettings reads the author name (AC1)', () => {
       port.seed(SETTINGS_KEY, value);
 
       const result = await loadSettings(port);
-      expect(result).toEqual({ name: '', codes: ['settings_malformed'] });
+      expect(result).toMatchObject({ name: '', codes: ['settings_malformed'] });
     }
   });
 
@@ -90,7 +90,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     port.seed(SETTINGS_KEY, { name: '  Anya Ivanova  ' });
 
     const result = await loadSettings(port);
-    expect(result).toEqual({ name: 'Anya Ivanova', codes: [] });
+    expect(result).toMatchObject({ name: 'Anya Ivanova', codes: [] });
     expect(result.name).toBe(validateAuthorName('  Anya Ivanova  ').normalized);
   });
 
@@ -98,7 +98,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name: 'Anya', theme: 'dark', version: 2 });
 
-    expect(await loadSettings(port)).toEqual({ name: 'Anya', codes: [] });
+    expect(await loadSettings(port)).toMatchObject({ name: 'Anya', codes: [] });
   });
 
   it('accepts a name of exactly MAX_AUTHOR_NAME_CODE_POINTS code points', async () => {
@@ -106,7 +106,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name });
 
-    expect(await loadSettings(port)).toEqual({ name, codes: [] });
+    expect(await loadSettings(port)).toMatchObject({ name, codes: [] });
   });
 
   it('measures the cap in code points, not UTF-16 units', async () => {
@@ -114,7 +114,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name: emojiName });
 
-    expect(await loadSettings(port)).toEqual({ name: emojiName, codes: [] });
+    expect(await loadSettings(port)).toMatchObject({ name: emojiName, codes: [] });
   });
 
   it('reports a stored name above the cap with name_required and keeps the stored value', async () => {
@@ -144,7 +144,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name: ' \t ' });
 
-    expect(await loadSettings(port)).toEqual({ name: '', codes: ['name_required'] });
+    expect(await loadSettings(port)).toMatchObject({ name: '', codes: ['name_required'] });
   });
 
   it('turns a port read failure into storage_unavailable and never throws', async () => {
@@ -152,7 +152,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     port.seed(SETTINGS_KEY, { name: 'Anya' });
     port.failReadOn(SETTINGS_KEY, 'unavailable');
 
-    expect(await loadSettings(port)).toEqual({ name: '', codes: ['storage_unavailable'] });
+    expect(await loadSettings(port)).toMatchObject({ name: '', codes: ['storage_unavailable'] });
   });
 
   it('reads exactly the settings key and never a page key or the index', async () => {
@@ -208,7 +208,7 @@ describe('loadSettings reads the author name (AC1)', () => {
     const before = JSON.stringify(port.snapshot());
     port.failReadOn(SETTINGS_KEY, 'unavailable');
 
-    expect(await loadSettings(port)).toEqual({ name: '', codes: ['storage_unavailable'] });
+    expect(await loadSettings(port)).toMatchObject({ name: '', codes: ['storage_unavailable'] });
     expect(writesOf(port)).toEqual([]);
     expect(JSON.stringify(port.snapshot())).toBe(before);
   });
@@ -219,10 +219,17 @@ describe('saveSettings writes the author name (AC2)', () => {
     const port = new MemoryStoragePort();
 
     const result = await saveSettings(port, { name: '  Anya Ivanova  ' });
-    expect(result).toEqual({ ok: true, name: 'Anya Ivanova' });
+    expect(result).toMatchObject({ ok: true, name: 'Anya Ivanova' });
+    expect(result).toHaveProperty('serverUrl', '');
+    expect(result).toHaveProperty('syncEnabled', false);
     expect(port.storedKeys()).toEqual([SETTINGS_KEY]);
     expect(storedSettingsJson(port)).toBe(JSON.stringify({ name: 'Anya Ivanova' }));
-    expect(port.calls).toEqual([{ op: 'set', keys: [SETTINGS_KEY] }]);
+    // Stage 17 (`A160`): the save first reads the record, because the two sync fields
+    // the caller did not mention keep what the store already holds.
+    expect(port.calls).toEqual([
+      { op: 'get', keys: [SETTINGS_KEY] },
+      { op: 'set', keys: [SETTINGS_KEY] },
+    ]);
   });
 
   it('leaves every other storage key byte-identical', async () => {
@@ -270,7 +277,7 @@ describe('saveSettings writes the author name (AC2)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name: 'Anya', theme: 'dark', version: 2 });
 
-    expect(await saveSettings(port, { name: 'Boris' })).toEqual({ ok: true, name: 'Boris' });
+    expect(await saveSettings(port, { name: 'Boris' })).toMatchObject({ ok: true, name: 'Boris' });
     expect(storedSettingsJson(port)).toBe(JSON.stringify({ name: 'Boris' }));
   });
 
@@ -331,7 +338,7 @@ describe('saveSettings writes the author name (AC2)', () => {
     const port = new MemoryStoragePort();
     port.seed(SETTINGS_KEY, { name: 42 });
 
-    expect(await saveSettings(port, { name: 'Anya' })).toEqual({ ok: true, name: 'Anya' });
+    expect(await saveSettings(port, { name: 'Anya' })).toMatchObject({ ok: true, name: 'Anya' });
     expect(storedSettingsJson(port)).toBe(JSON.stringify({ name: 'Anya' }));
   });
 
@@ -340,25 +347,36 @@ describe('saveSettings writes the author name (AC2)', () => {
 
     const saved = await saveSettings(port, { name: '  Anya  ' });
     expect(saved.ok).toBe(true);
-    expect(await loadSettings(port)).toEqual({ name: 'Anya', codes: [] });
+    expect(await loadSettings(port)).toMatchObject({ name: 'Anya', codes: [] });
   });
 });
 
 describe('the settings decode guard is pure (AC1)', () => {
   it('settingsFromStorageValue answers every unusable value without throwing', () => {
-    expect(settingsFromStorageValue(undefined)).toEqual({ name: '', codes: ['settings_malformed'] });
-    expect(settingsFromStorageValue(null)).toEqual({ name: '', codes: ['settings_malformed'] });
-    expect(settingsFromStorageValue('Anya')).toEqual({ name: '', codes: ['settings_malformed'] });
-    expect(settingsFromStorageValue([{ name: 'Anya' }])).toEqual({
+    expect(settingsFromStorageValue(undefined)).toMatchObject({
+      name: '',
+      codes: ['settings_malformed'],
+      serverUrl: '',
+      syncEnabled: false,
+    });
+    expect(settingsFromStorageValue(null)).toMatchObject({ name: '', codes: ['settings_malformed'] });
+    expect(settingsFromStorageValue('Anya')).toMatchObject({
       name: '',
       codes: ['settings_malformed'],
     });
-    expect(settingsFromStorageValue({ name: 'Anya' })).toEqual({ name: 'Anya', codes: [] });
+    expect(settingsFromStorageValue([{ name: 'Anya' }])).toMatchObject({
+      name: '',
+      codes: ['settings_malformed'],
+    });
+    expect(settingsFromStorageValue({ name: 'Anya' })).toMatchObject({ name: 'Anya', codes: [] });
   });
 
   it('settingsValueOf produces exactly the stored shape', () => {
     expect(settingsValueOf('Anya')).toEqual({ name: 'Anya' });
     expect(Object.keys(settingsValueOf('Anya'))).toEqual(['name']);
+    // Stage 17 (`A160`): the two sync fields are omitted at their defaults, so an
+    // unconfigured record is byte-identical to what the previous version wrote.
+    expect(settingsValueOf('Anya', '', false)).toEqual({ name: 'Anya' });
   });
 
   it('the guard never mutates the value it was given', () => {
@@ -366,5 +384,160 @@ describe('the settings decode guard is pure (AC1)', () => {
 
     settingsFromStorageValue(value);
     expect(value).toEqual({ name: '  Anya  ', extra: 1 });
+  });
+});
+
+describe('stage 17: the record gains two optional sync fields and still decodes an old one (A160)', () => {
+  it('decodes a record written by the previous version without losing the name', () => {
+    const legacy = settingsFromStorageValue({ name: '  Anya  ' });
+    expect(legacy).toEqual({ name: 'Anya', codes: [], serverUrl: '', syncEnabled: false });
+  });
+
+  it('answers an absent, a damaged and a primitive record with the defaults, never a throw', () => {
+    for (const value of [undefined, null, 'Anya', 42, ['Anya'], {}]) {
+      const result = settingsFromStorageValue(value);
+      expect(result.serverUrl).toBe('');
+      expect(result.syncEnabled).toBe(false);
+    }
+  });
+
+  it('reads the two fields a newer build stored', () => {
+    expect(
+      settingsFromStorageValue({
+        name: 'Anya',
+        serverUrl: 'http://localhost:8080',
+        syncEnabled: true,
+      }),
+    ).toEqual({
+      name: 'Anya',
+      codes: [],
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+  });
+
+  it('never switches synchronization on from a value that is not exactly `true`', () => {
+    for (const syncEnabled of [false, 'true', 1, null, undefined, {}, []]) {
+      expect(settingsFromStorageValue({ name: 'Anya', syncEnabled }).syncEnabled, String(syncEnabled)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('reads a non-string server address as not configured, trimming a string one', () => {
+    for (const serverUrl of [42, null, {}, ['http://x']]) {
+      expect(settingsFromStorageValue({ name: 'Anya', serverUrl }).serverUrl).toBe('');
+    }
+    expect(
+      settingsFromStorageValue({ name: 'Anya', serverUrl: '  http://localhost:8080  ' }).serverUrl,
+    ).toBe('http://localhost:8080');
+  });
+
+  it('answers an undecodable record with the defaults the name rule already reports', () => {
+    // One answer per state: a record whose `name` is not a string is the same
+    // `settings_malformed` it was before Stage 17, and it carries no sync answer of
+    // its own. Mixing the two would give one damaged record two readings.
+    for (const name of [42, null, ['Anya']]) {
+      expect(
+        settingsFromStorageValue({ name, serverUrl: 'http://localhost:8080', syncEnabled: true }),
+      ).toEqual({
+        name: '',
+        codes: ['settings_malformed'],
+        serverUrl: '',
+        syncEnabled: false,
+      });
+    }
+  });
+
+  it('keeps the two fields beside a name the rule refuses, which is a decodable record', () => {
+    // `name_required` is a *decoded* record the author-name rule refuses (`A11`), so
+    // the rest of the record is still readable: the reader's switch must not reset
+    // because the name is empty or too long.
+    expect(
+      settingsFromStorageValue({ name: '  ', serverUrl: 'http://localhost:8080', syncEnabled: true }),
+    ).toEqual({
+      name: '',
+      codes: ['name_required'],
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+  });
+
+  it('round-trips both fields through saveSettings and loadSettings', async () => {
+    const port = new MemoryStoragePort();
+
+    const saved = await saveSettings(port, {
+      name: 'Anya',
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+    expect(saved).toEqual({
+      ok: true,
+      name: 'Anya',
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+    expect(storedSettingsJson(port)).toBe(
+      JSON.stringify({ name: 'Anya', serverUrl: 'http://localhost:8080', syncEnabled: true }),
+    );
+    expect(await loadSettings(port)).toMatchObject({
+      name: 'Anya',
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+  });
+
+  it('stores neither field at its default, so the shipped shape did not grow', async () => {
+    const port = new MemoryStoragePort();
+
+    await saveSettings(port, { name: 'Anya', serverUrl: '', syncEnabled: false });
+    expect(storedSettingsJson(port)).toBe(JSON.stringify({ name: 'Anya' }));
+  });
+
+  it('keeps a configured server when a name-only save does not mention it', async () => {
+    const port = new MemoryStoragePort();
+    port.seed(SETTINGS_KEY, {
+      name: 'Anya',
+      serverUrl: 'http://localhost:8080',
+      syncEnabled: true,
+    });
+
+    const saved = await saveSettings(port, { name: 'Boris' });
+    expect(saved).toMatchObject({ ok: true, serverUrl: 'http://localhost:8080', syncEnabled: true });
+    expect(storedSettingsJson(port)).toBe(
+      JSON.stringify({ name: 'Boris', serverUrl: 'http://localhost:8080', syncEnabled: true }),
+    );
+  });
+
+  it('writes the sync fields without touching the index or a page slot', async () => {
+    const port = seededStore({ name: 'Anya' });
+    const before = port.snapshot();
+
+    await saveSettings(port, { name: 'Anya', serverUrl: 'http://127.0.0.1:8080', syncEnabled: true });
+    expect(port.snapshot()['pages:v1']).toEqual(before['pages:v1']);
+    expect(port.snapshot()[`notes:v1:https:__example.com_a`]).toEqual(
+      before[`notes:v1:https:__example.com_a`],
+    );
+    expect(writesOf(port)).toEqual([{ op: 'set', keys: [SETTINGS_KEY] }]);
+  });
+
+  it('refuses the whole save, sync fields included, when the name is unusable', async () => {
+    const port = new MemoryStoragePort();
+    port.seed(SETTINGS_KEY, { name: 'Anya', serverUrl: 'http://localhost:8080' });
+
+    expect(
+      await saveSettings(port, { name: '  ', serverUrl: 'http://example.com', syncEnabled: true }),
+    ).toEqual({ ok: false, code: 'name_required' });
+    expect(writesOf(port)).toEqual([]);
+  });
+
+  it('reports a read it cannot make as unavailable and writes nothing, so the switch is not reset', async () => {
+    const port = new MemoryStoragePort();
+    port.seed(SETTINGS_KEY, { name: 'Anya', serverUrl: 'http://localhost:8080', syncEnabled: true });
+    const before = JSON.stringify(port.snapshot());
+    port.failReadOn(SETTINGS_KEY, 'unavailable');
+
+    expect(await saveSettings(port, { name: 'Anya' })).toEqual({ ok: false, code: 'unavailable' });
+    expect(JSON.stringify(port.snapshot())).toBe(before);
   });
 });

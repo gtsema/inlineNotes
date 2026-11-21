@@ -1,0 +1,297 @@
+/**
+ * The network boundary of the sync feature: the extension's note to the server's
+ * note, and the two calls that carry it.
+ *
+ * Rule owner: `docs/specs/sync-integration.md` -> Rules / Semantics -> "Wire shape",
+ * "What a POST carries", "Foreign entries are memory only", "A failed load never
+ * blocks the page"; API taken verbatim from `docs/specs/sync-server.md`.
+ *
+ * Why this is `src/core/` and not `src/content/` or `src/popup/`: both halves of the
+ * extension speak the same wire — the popup pushes one author's notes, the content
+ * script pulls the page's notes — and the mapping between the stored record and the
+ * server row is a **rule**, not a plumbing detail. Writing it twice would give the
+ * extension two opinions about which local field becomes which server field. The
+ * module stays pure of UI: no DOM, no `chrome.*`, no Russian string. The only impure
+ * collaborator is the injected `SyncTransport` (`fetch` in every shipped caller).
+ *
+ * Two properties the callers depend on, stated here because they are the difference
+ * between "a note is safe" and "a page is broken":
+ *
+ * - **a POST carries the current author's entries and nothing else** (ruling `A161`).
+ *   `syncPayloadOf` filters by core `isSameAuthor`, so a foreign record that reached
+ *   the caller by mistake is dropped at the boundary rather than sent back;
+ * - **a failed load is an answer, never a throw** (ruling `A164`). `loadForeignNotes`
+ *   answers `{ ok: false, code }` for every failure it can meet — no transport, a
+ *   network error, a non-2xx status, a body that is not the server's shape — so the
+ *   page caller has no rejection to handle and the local feature is never blocked.
+ *
+ * The map is thin on purpose. The server stores `anchor` as opaque JSON (`A154`), so
+ * the anchor travels unchanged in both directions; `visible` is **not** sent, because
+ * it is the reader's own display flag and the server's schema has no column for it.
+ * A remote note therefore arrives visible, which is the default of `createEntry`
+ * (ruling `A1`).
+ */
+
+import type { Entry, EntryAnchor } from './entry';
+import { createEntry } from './entry';
+import { isSameAuthor, sortByCreatedAtAsc } from './entry-rules';
+import type { SyncTarget } from './sync-settings';
+
+/** One note as the sync server words it (`docs/specs/sync-server.md` -> API contract). */
+export interface RemoteNote {
+  readonly id: string;
+  readonly page_id: string;
+  readonly author_id: string;
+  readonly text: string;
+  readonly comment: string;
+  readonly anchor: unknown;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+/** The one HTTP call this module makes; `fetch` in every shipped caller. */
+export type SyncTransport = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string },
+) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+
+/** Why a sync call did not produce an answer. Machine codes only. */
+export type SyncFailureCode =
+  /** The address the record carried is not a usable server address (`A165`). */
+  | 'server_invalid'
+  /** There is nowhere to call: the switch is off or the field is empty (`A166`). */
+  | 'sync_off'
+  /** The transport is missing, or it rejected: the server was never reached. */
+  | 'network'
+  /** The server answered with a status other than 2xx. */
+  | 'http'
+  /** The server answered 2xx with a body this module cannot read. */
+  | 'response_invalid';
+
+/** Result of either call. */
+export type SyncCallResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly code: SyncFailureCode };
+
+/** What one save did: how many notes the server says it touched. */
+export interface SyncSaveSummary {
+  readonly saved: number;
+}
+
+/** What one load produced: the page's notes as the server holds them. */
+export interface SyncLoadSummary {
+  /** Every note of the page that the server returned, this author's included. */
+  readonly notes: readonly RemoteNote[];
+}
+
+/**
+ * One stored entry as the server's note. `visible` and `pageKey`'s local spelling are
+ * not part of the wire: the page is named by the route, and the display flag is the
+ * reader's own.
+ */
+export function remoteNoteOf(entry: Entry): RemoteNote {
+  return {
+    id: entry.id,
+    page_id: entry.pageKey,
+    author_id: entry.authorName,
+    text: entry.text,
+    comment: entry.comment,
+    anchor: entry.anchor,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+  };
+}
+
+/**
+ * One server note as a stored entry, or `null` when the row cannot be read as one.
+ *
+ * The decode is defensive by the same rule the local store applies: whatever came
+ * over the wire is untrusted. A row with a missing or non-string field, a `null`
+ * anchor or an unreadable `anchor` shape is skipped rather than guessed at — a note
+ * that arrives half-readable is a note the page cannot anchor, and inventing its text
+ * would put somebody else's words on the wrong span.
+ *
+ * `visible` is `true`: a foreign note has no local display flag yet, and `A1`'s
+ * default is "shown".
+ */
+export function entryFromRemoteNote(note: RemoteNote): Entry | null {
+  if (
+    typeof note.id !== 'string' ||
+    note.id === '' ||
+    typeof note.page_id !== 'string' ||
+    typeof note.author_id !== 'string' ||
+    typeof note.text !== 'string' ||
+    typeof note.comment !== 'string' ||
+    typeof note.created_at !== 'string' ||
+    typeof note.updated_at !== 'string'
+  ) {
+    return null;
+  }
+  const anchor = anchorFromUnknown(note.anchor);
+  if (anchor === null) {
+    return null;
+  }
+  return createEntry({
+    id: note.id,
+    pageKey: note.page_id,
+    authorName: note.author_id,
+    text: note.text,
+    comment: note.comment,
+    anchor,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+    visible: true,
+  });
+}
+
+/** The stored anchor of an unknown `anchor` value, `null` when it is not one. */
+function anchorFromUnknown(value: unknown): EntryAnchor | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const record: Record<string, unknown> = value as Record<string, unknown>;
+  const text = record['text'];
+  const prefix = record['prefix'];
+  const suffix = record['suffix'];
+  const fragmentCount = record['fragmentCount'];
+  if (
+    typeof text !== 'string' ||
+    typeof prefix !== 'string' ||
+    typeof suffix !== 'string' ||
+    typeof fragmentCount !== 'number' ||
+    !Number.isFinite(fragmentCount)
+  ) {
+    return null;
+  }
+  return { text, prefix, suffix, fragmentCount };
+}
+
+/**
+ * The POST body of one press: the current author's notes on this page, and the
+ * author named in `author_id` (rulings `A161`, `A160`).
+ *
+ * The filter is core `isSameAuthor`, the same answer the edit gate and the popup rows
+ * use, so "mine" means one thing across the extension. The order is
+ * `sortByCreatedAtAsc`, which is the order every other list of this extension uses;
+ * the server does not care, but a body that is stable across presses is one a reader
+ * can compare in the network panel.
+ */
+export function syncPayloadOf(
+  entries: readonly Entry[],
+  authorName: string,
+): { author_id: string; notes: RemoteNote[] } {
+  const own = entries.filter((entry: Entry) => isSameAuthor(entry.authorName, authorName));
+  return {
+    author_id: authorName,
+    notes: sortByCreatedAtAsc(own).map(remoteNoteOf),
+  };
+}
+
+/** `<serverUrl>/notes/page/<pageKey>`, the page key percent-encoded (`A153` of the server spec). */
+export function notesPageUrl(target: SyncTarget, pageKey: string): string {
+  return `${target.notesPageBase}${encodeURIComponent(pageKey)}`;
+}
+
+/**
+ * One `POST /notes/page/{page_id}`: saves **one author's** notes.
+ *
+ * `!payload.ok` is decided by the caller through `syncTargetOf`; passing a target is
+ * therefore proof that the feature is on and the address is usable, and the two
+ * refusal codes are reserved for the transport itself.
+ */
+export async function saveOwnNotes(
+  transport: SyncTransport,
+  target: SyncTarget,
+  pageKey: string,
+  authorName: string,
+  entries: readonly Entry[],
+): Promise<SyncCallResult<SyncSaveSummary>> {
+  const body = JSON.stringify(syncPayloadOf(entries, authorName));
+  const answer = await request(transport, notesPageUrl(target, pageKey), body);
+  if (!answer.ok) {
+    return answer;
+  }
+  const saved = savedCountOf(answer.value);
+  if (saved === null) {
+    return { ok: false, code: 'response_invalid' };
+  }
+  return { ok: true, value: { saved } };
+}
+
+/**
+ * One `GET /notes/page/{page_id}`: every author's notes on this page.
+ *
+ * The answer keeps **every** readable note of the page, this author's included: the
+ * caller decides what is foreign (`A163` keeps only the others in memory), and
+ * dropping rows here would hide whose note a row is from the only module that maps
+ * the wire. A note this author also has locally is still returned, so the caller can
+ * tell "the server knows about mine" from "the server has never seen mine".
+ */
+export async function loadForeignNotes(
+  transport: SyncTransport,
+  target: SyncTarget,
+  pageKey: string,
+): Promise<SyncCallResult<SyncLoadSummary>> {
+  const answer = await request(transport, notesPageUrl(target, pageKey), null);
+  if (!answer.ok) {
+    return answer;
+  }
+  const notes = remoteNotesOf(answer.value);
+  if (notes === null) {
+    return { ok: false, code: 'response_invalid' };
+  }
+  return { ok: true, value: { notes } };
+}
+
+/** One call, with every failure a code. `body === null` means GET. */
+async function request(
+  transport: SyncTransport,
+  url: string,
+  body: string | null,
+): Promise<SyncCallResult<unknown>> {
+  const init: { method: string; headers: Record<string, string>; body: string } = {
+    method: body === null ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ?? '',
+  };
+
+  let response: { ok: boolean; status: number; json: () => Promise<unknown> };
+  try {
+    response = await transport(url, init);
+  } catch {
+    // A refused connection, a blocked request, an aborted one: the server was never
+    // reached, and every one of those is the same answer to the reader.
+    return { ok: false, code: 'network' };
+  }
+  if (!response.ok) {
+    return { ok: false, code: 'http' };
+  }
+  try {
+    return { ok: true, value: await response.json() };
+  } catch {
+    return { ok: false, code: 'response_invalid' };
+  }
+}
+
+/** `{"saved": N}` as a number, `null` when the body is not that. */
+function savedCountOf(value: unknown): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const saved: unknown = (value as Record<string, unknown>)['saved'];
+  return typeof saved === 'number' && Number.isFinite(saved) ? saved : null;
+}
+
+/** `{"notes": [...]}` as the rows it carries, `null` when the body is not that. */
+function remoteNotesOf(value: unknown): RemoteNote[] | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const notes: unknown = (value as Record<string, unknown>)['notes'];
+  if (!Array.isArray(notes)) {
+    return null;
+  }
+  // Only the shape check that the mapping needs: a row is kept as it arrived and
+  // `entryFromRemoteNote` answers "unreadable" for a row that cannot be an entry.
+  return notes.filter((row: unknown): row is RemoteNote => typeof row === 'object' && row !== null);
+}
