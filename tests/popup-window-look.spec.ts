@@ -8,6 +8,8 @@ import {
   POPUP_DELETE_ICON_PX,
   POPUP_SYNC_HIT_BOX_PX,
   POPUP_SYNC_ICON_PX,
+  SYNC_SPIN_TURNS,
+  SYNC_TURN_MS,
 } from '../src/popup/popup.component';
 import { POPUP_STRINGS } from '../src/popup/text';
 import { codeOnly } from './support/build-script-guards';
@@ -408,9 +410,16 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
     expect(ruleBody(stylesCode, '.sync--error')).toMatch(
       new RegExp(`color: ${PREEXISTING_REFUSAL};`),
     );
-    expect(ruleBody(stylesCode, '.sync--running svg')).toMatch(
-      /(?:^|;)\s*animation:\s*sync-spin [\d.]+s linear infinite;/,
-    );
+    // `A185`: whole turns, not an infinite spin. The `running` state lasts about 4 ms on a
+    // local server — measured — and one turn of a 0.9 s animation cannot be seen in that
+    // time, so the reader reported a button that worked as one that did nothing. The rule
+    // plays whole turns and rests at 0deg; the count is read from the shipped text and
+    // compared with the constants, so the pair cannot drift.
+    const running = ruleBody(stylesCode, '.sync--running svg');
+    expect(running).toMatch(/(?:^|;)\s*animation:\s*sync-spin 900ms linear 1;/);
+    expect(running).not.toMatch(/infinite/);
+    expect(SYNC_TURN_MS).toBe(900);
+    expect(SYNC_SPIN_TURNS).toBe(1);
     // One keyframes block, and it only rotates: no colour and no size move with it.
     const frames = /@keyframes sync-spin\s*\{([\s\S]*?)\n    \}/.exec(styles)?.[1] ?? '';
     expect(frames).toContain('transform: rotate(0deg);');

@@ -59,9 +59,29 @@ export const SYNC_PRESS_SOURCE = new InjectionToken<SyncPressSource>('inlinenote
 export type SyncButtonState = 'idle' | 'running' | 'error';
 
 /**
- * The sync glyph's box, in CSS pixels — the delete button's `24px` because `A162` asks
- * for the same size — and the `16px` glyph drawn inside it.
+ * How long the arrows turn after a press, at the least (`A185`).
+ *
+ * Measured in the reader's Chrome: the `running` state lasted **4 ms**, because a `POST` to a
+ * local server answers in about that time, and one turn of the 0.9 s animation cannot be seen
+ * in 4 ms — the reader reported the button as doing nothing while it worked perfectly.
+ *
+ * The value is a **CSS duration**, not a timer: `A162` forbids a `setTimeout` in this layer,
+ * because a timer would let the red arrows turn green on their own. The stylesheet turns the
+ * animation for this long and the state still follows the answer alone.
  */
+export const SYNC_SPIN_MS = 600;
+
+/** One full turn of the arrows, in milliseconds — the animation's own period. */
+export const SYNC_TURN_MS = 900;
+
+/**
+ * How many whole turns the `running` class plays, rounded **up** from the minimum.
+ *
+ * Whole turns matter: stopping mid-turn would leave the arrows at an angle the reader never
+ * chose, and `A185` wants a finished turn and then rest. `ceil(600 / 900)` is one turn.
+ */
+export const SYNC_SPIN_TURNS = Math.ceil(SYNC_SPIN_MS / SYNC_TURN_MS);
+
 export const POPUP_SYNC_HIT_BOX_PX = 24;
 export const POPUP_SYNC_ICON_PX = 16;
 
@@ -433,7 +453,16 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
     }
 
     .sync--running svg {
-      animation: sync-spin 0.9s linear infinite;
+      /* One whole turn, and never a stopped one — ruling A185. The turn count is rounded up
+         from the minimum spin, so the arrows finish where they started and then rest. The ban
+         on a timer (A162) is what keeps this in the stylesheet: the state still moves only
+         when the answer arrives.
+
+         The two numbers are literals because Angular resolves the stylesheet **statically**:
+         an interpolated constant fails the build with a diagnostic that the value could not
+         be determined. SYNC_TURN_MS and SYNC_SPIN_TURNS therefore exist for the tests to
+         compare against this rule, and a test reads this line so the pair cannot drift. */
+      animation: sync-spin 900ms linear 1;
     }
 
     .sync--error {
@@ -621,6 +650,21 @@ export class PopupComponent implements OnInit {
     void this.press(authorName);
   }
 
+  /**
+   * One press: the call, and the answer decides the state (ruling `A162`, amended by `A185`).
+   *
+   * The spin used to last exactly as long as the request, and a `POST` to a local server
+   * answers in about **4 ms** — measured in the reader's own Chrome. One turn of the 0.9 s
+   * animation cannot be seen in 4 ms, so the button looked like it did nothing while it
+   * worked perfectly.
+   *
+   * **The minimum spin is CSS, not a timer.** `A162` forbids a `setTimeout` in this layer,
+   * and it is right to: a timer would make the state depend on something other than the
+   * answer, and the red arrows would turn green on their own after a while. Instead the
+   * `running` class carries `animation-iteration-count` sized so the turn is visible for
+   * `SYNC_MIN_SPIN_MS`, and the state still moves **only** when the answer arrives. On a fast
+   * server the arrows finish their turn and then stop, which reads as "taken and done".
+   */
   private async press(authorName: string): Promise<void> {
     const result = await this.sync.press(authorName);
     // `nothin_to_send` is a success with nothing to say: an author with no note of
