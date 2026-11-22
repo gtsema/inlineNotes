@@ -167,6 +167,12 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
       // notes come from the store, and a second copy of them would register two paint
       // names over one span.
       currentName: name === '' ? null : name,
+      // `A187`, `A188`: the load applies the reader's switched-off authors, and it must do
+      // so **here too**. This path is the automatic load every paint pass runs, and without
+      // the port it read an empty list and set every note back to `visible: true` — which is
+      // what undid the reader's switch a moment after the channel had written it. The two
+      // load paths are one rule: whichever one runs, the off list is read.
+      offListPort: wiring.port,
     });
     try {
       wiring.onLoad?.(outcome);
