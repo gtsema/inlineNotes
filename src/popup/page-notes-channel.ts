@@ -28,10 +28,20 @@
  *
  * No Russian string lives here: the notice the failure flag turns into is
  * `src/popup/text.ts`'s, and the row wording is the same module's.
+ *
+ * **The channel speaks both ways since `t17-06`** (ruling `A183`). The question above is
+ * what the popup asks; `listenForPageNotesUpdates` is what the popup **hears**, so a list
+ * that arrives after the popup's one question still reaches a popup that is already open.
+ * The listener is a `chrome.runtime.onMessage` subscription with no poll, no timer and no
+ * interval: the page announces, the popup re-asks, and the answer is rendered.
  */
 
 import type { ForeignAuthorView, PageNotesQueryResult } from '../core/page-notes-query';
-import { EMPTY_PAGE_NOTES_QUERY_RESULT, NOTES_QUERY_MESSAGE } from '../core/page-notes-query';
+import {
+  EMPTY_PAGE_NOTES_QUERY_RESULT,
+  NOTES_QUERY_MESSAGE,
+  PAGE_NOTES_UPDATED_MESSAGE,
+} from '../core/page-notes-query';
 
 /**
  * One runtime message: send a payload and get an answer, or `null` when nothing
@@ -43,7 +53,7 @@ import { EMPTY_PAGE_NOTES_QUERY_RESULT, NOTES_QUERY_MESSAGE } from '../core/page
  */
 export type RuntimeMessageSenderLike = (message: unknown) => Promise<unknown>;
 
-/** What the popup's channel talks to: the one send seam. */
+/** What the popup's channel talks to: the one send seam and the one listen seam. */
 export interface PageNotesChannelSource {
   /**
    * `chrome.runtime.sendMessage` in the shipped popup.
@@ -54,7 +64,26 @@ export interface PageNotesChannelSource {
    * as data, not as a throw.
    */
   readonly sendMessage: RuntimeMessageSenderLike;
+  /**
+   * `chrome.runtime.onMessage.addListener` in the shipped popup (ruling `A183`).
+   *
+   * Absent means "this popup hears nothing": a test that drives one question, and a
+   * document without the runtime API. The subscription function returns its own
+   * unsubscribe, which is what `listenForPageNotesUpdates` hands back to the component so
+   * a destroyed popup stops listening.
+   */
+  readonly listen?: RuntimeMessageListenerSource;
 }
+
+/**
+ * One runtime listener: subscribe and get the way to unsubscribe back.
+ *
+ * Declared structurally for the same reason `RuntimeMessageSenderLike` is: the shipped
+ * value is `chrome.runtime.onMessage`, and a test passes a recorder.
+ */
+export type RuntimeMessageListenerSource = (
+  listener: (message: unknown) => void,
+) => () => void;
 
 /**
  * `true` when the value really is an answer of this query.
@@ -167,7 +196,80 @@ export function createChromeRuntimeMessageSender(): RuntimeMessageSenderLike {
   return async (message: unknown): Promise<unknown> => await chrome.runtime.sendMessage(message);
 }
 
-/** The shipped source of the popup's question. */
+/**
+ * The shipped subscription: `chrome.runtime.onMessage`, and nothing else (`A183`).
+ *
+ * The popup's listener answers nothing — it is a **notification** consumer, not an
+ * answerer — so it returns `undefined`, which tells Chrome no response is coming. It is
+ * guarded at the call site by `listenForPageNotesUpdates`, because a document without the
+ * runtime API is a popup that hears nothing rather than a popup that breaks.
+ */
+export function createChromeRuntimeMessageListenerSource(): RuntimeMessageListenerSource {
+  return (listener: (message: unknown) => void): (() => void) => {
+    const chromeListener = (message: unknown): undefined => {
+      listener(message);
+      return undefined;
+    };
+    chrome.runtime.onMessage.addListener(chromeListener);
+    return (): void => {
+      chrome.runtime.onMessage.removeListener(chromeListener);
+    };
+  };
+}
+
+/**
+ * Hears the page's announcement and calls back for every one of them (ruling `A183`).
+ *
+ * `onChanged` is called with no argument, because the announcement carries no body the
+ * popup reads: the reaction is the ordinary question. Any other message on the channel is
+ * ignored, including the popup's own question, which a popup's listener never has to
+ * answer.
+ *
+ * The return value unsubscribes, and an empty function is the honest answer for a source
+ * that cannot listen at all: the caller tears a listener down without a branch of its own.
+ */
+export function listenForPageNotesUpdates(
+  source: PageNotesChannelSource,
+  onChanged: () => void,
+): () => void {
+  if (source.listen === undefined) {
+    return () => undefined;
+  }
+  try {
+    return source.listen((message: unknown) => {
+      if (isPageNotesUpdate(message)) {
+        onChanged();
+      }
+    });
+  } catch {
+    // A document without `chrome.runtime.onMessage` hears nothing, and nothing else in
+    // this popup changes because of it (ruling `A164` applied to a listener).
+    return () => undefined;
+  }
+}
+
+/**
+ * `true` when this is the page's announcement and not another message on the channel.
+ *
+ * Both spellings are accepted, exactly as the page's own half accepts the two spellings
+ * of the question: the bare string and the object with `type`. An announcement never
+ * carries an `op`, and a message that does is a row operation answer, not a notice.
+ */
+function isPageNotesUpdate(message: unknown): boolean {
+  if (message === PAGE_NOTES_UPDATED_MESSAGE) {
+    return true;
+  }
+  if (typeof message !== 'object' || message === null) {
+    return false;
+  }
+  const record = message as Record<string, unknown>;
+  return record['type'] === PAGE_NOTES_UPDATED_MESSAGE;
+}
+
+/** The shipped source of the popup's question and of its ear. */
 export function createPageNotesChannelSource(): PageNotesChannelSource {
-  return { sendMessage: createChromeRuntimeMessageSender() };
+  return {
+    sendMessage: createChromeRuntimeMessageSender(),
+    listen: createChromeRuntimeMessageListenerSource(),
+  };
 }

@@ -90,6 +90,16 @@ export interface SyncNotes {
    * `null` means "do not call", exactly as it does for the load.
    */
   loadTarget(): Promise<{ target: ReturnType<typeof syncTargetOf>; currentName: string }>;
+  /**
+   * The `A182` half of the same question, asked by the editor's delete button: where
+   * **one note's** delete would go, and to which page key — `target: null` meaning "do
+   * not call" (`A166`), exactly as it does for the load.
+   *
+   * It is a second reader of the same rule rather than a second rule: `syncTargetOf` over
+   * the same settings record, plus the pass's own page key, so a delete can never be sent
+   * to a key the stored notes do not live under.
+   */
+  deleteTarget(): Promise<{ target: ReturnType<typeof syncTargetOf>; currentName: string }>;
 }
 
 /**
@@ -194,6 +204,10 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
       return askedKey;
     },
     async loadTarget() {
+      const settings = await readSettings(wiring.port);
+      return { target: syncTargetOf(settings), currentName: settings.name };
+    },
+    async deleteTarget() {
       const settings = await readSettings(wiring.port);
       return { target: syncTargetOf(settings), currentName: settings.name };
     },

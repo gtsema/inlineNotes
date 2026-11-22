@@ -15,6 +15,12 @@
  *   `pageNotesQueryResultOf` over the memory, and nothing else is sent: no comment, no
  *   anchor, no id. The popup receives a view of the rows, never the notes. The page key
  *   is never compared, because one answerer exists per document.
+ * - **the answer is the memory now, not the end of a load** (`A183`, task `t17-06`). It
+ *   used to answer only after `loadOnce()` resolved, which made a popup opened during a
+ *   slow automatic load wait for it — and, since the popup asked once, render an empty
+ *   list forever. The ask path answers in the same turn and starts (or joins) the load
+ *   afterwards, and every finished load is **announced** to whatever is open. No polling
+ *   and no timer: the popup hears about a late list, it does not look for one.
  * - **it performs two operations and nothing else** (`A168`). A foreign row's checkbox
  *   switches **every** note of that author in this document's memory with one call of
  *   the aggregate write, and the delete control of a foreign row drops that author's
@@ -47,8 +53,13 @@ import { isSameAuthor } from '../../core/entry-rules';
 import type {
   ForeignNotesSnapshot,
   PageNotesQueryResult,
+  PageNotesUpdate,
 } from '../../core/page-notes-query';
-import { NOTES_QUERY_MESSAGE, pageNotesQueryResultOf } from '../../core/page-notes-query';
+import {
+  NOTES_QUERY_MESSAGE,
+  pageNotesQueryResultOf,
+  pageNotesUpdateOf,
+} from '../../core/page-notes-query';
 import type { SyncFailureCode } from '../../core/sync-client';
 import type { ExtraEntry } from '../paint/paint-plan';
 import type { ForeignLoadOutcome, ForeignNotes } from './foreign-notes';
@@ -76,6 +87,18 @@ export interface PageNotesChannel {
   loadCode(): SyncFailureCode | null;
   /** The answer the popup would get right now: the memory and the failure flag. */
   result(): PageNotesQueryResult;
+  /**
+   * Tells an open popup that this page's foreign rows moved (ruling `A183`).
+   *
+   * It is called by whoever changed the memory through a path that is **not** a popup
+   * operation — the automatic load, mostly — because the popup asked once when it opened
+   * and a list that arrives after that question would otherwise never reach it. It
+   * carries no body that the popup reads: the popup answers it with the ordinary
+   * question, so the answer shape stays the one of `A167` and there is still exactly one
+   * answerer. A page with no `announce` seam sends nothing, which is what a test and a
+   * frame without the runtime API get.
+   */
+  announce(): void;
 }
 
 /** What the page's channel must be given to run. */
@@ -93,6 +116,15 @@ export interface PageNotesChannelWiring {
    * pass's key read; a test answers with a recorder and no transport.
    */
   readonly load: () => Promise<ForeignLoadOutcome>;
+  /**
+   * Sends the `A183` announcement to whoever listens — `chrome.runtime.sendMessage` in
+   * the shipped page, a recorder in a test, absent in a frame that has no runtime API.
+   *
+   * It is a seam rather than a `chrome.*` call here for the reason this whole module has
+   * no `chrome.*`: the rule ("a popup that is open hears about a late list") is testable
+   * without a browser, and the wiring stays four lines in `src/content/main.ts`.
+   */
+  readonly announce?: (message: PageNotesUpdate) => void;
 }
 
 /** One row operation the popup may send. */
@@ -179,12 +211,54 @@ function switchNotesOfAuthor(
  */
 export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNotesChannel {
   let loadCode: SyncFailureCode | null = null;
+  /**
+   * The load that is running, `null` when none is (`A183`).
+   *
+   * The question no longer waits for a load, but two questions a moment apart (the popup
+   * opening, and the popup hearing an announcement) must not start two requests: the
+   * second caller joins the load already in flight. It is one promise and not a queue,
+   * because there is exactly one page per document.
+   */
+  let loading: Promise<void> | null = null;
 
-  /** One load, remembered (`A169`): a success clears the failure the reader saw. */
+  /**
+   * One load, remembered (`A169`): a success clears the failure the reader saw.
+   *
+   * The memory may have changed under the popup's rows, so the answer of a load is
+   * announced (`A183`): a popup that is already open re-asks and renders the list that
+   * arrived after its own question. The announcement is sent for a failure too, because a
+   * failed load is exactly the state the popup's notice line describes.
+   */
   async function loadOnce(): Promise<ForeignLoadOutcome> {
     const outcome = await wiring.load();
     loadCode = outcome.ok ? null : outcome.code;
+    announce();
     return outcome;
+  }
+
+  /**
+   * Starts the load if none is running, and resolves when one has finished (`A183`).
+   *
+   * It is **not** awaited by the ask path: the popup is answered from the memory at the
+   * moment it asks, which is what makes a popup opened during a slow load show what the
+   * page holds instead of waiting for nothing. What it awaits is only the shared promise, 
+   * so two callers can never produce two requests.
+   */
+  async function ensureLoaded(): Promise<void> {
+    loading ??= loadOnce().then(
+      () => undefined,
+      () => undefined,
+    );
+    await loading;
+    loading = null;
+  }
+
+  /** The `A183` announcement, if this page has a seam for it. */
+  function announce(): void {
+    if (wiring.announce === undefined) {
+      return;
+    }
+    wiring.announce(pageNotesUpdateOf(wiring.foreign as ForeignNotesSnapshot));
   }
 
   /**
@@ -224,14 +298,16 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
       return undefined;
     }
 
-    void loadOnce().then(() => {
-      // The answer belongs to the question, not to the load: a failed load still answers
-      // with the rows the page holds and with the `A169` flag, and one that succeeded
-      // answers the same way with the flag cleared.
-      respond(answerOf());
-    });
-    // Chrome's own model: the callback answers later.
-    return true;
+    // `A183`, and this is the whole fix: the answer is the memory **as it stands now**, 
+    // returned through the callback in the same turn as the question. A popup that opens
+    // during the page's automatic load therefore renders the rows the page has (possibly
+    // none) and does not wait for a request; when the load lands, the announcement above
+    // reaches that same open popup and the list arrives after all.
+    respond(answerOf());
+    // The load still runs — one per document, and only after the answer — so the page's
+    // foreign notes are asked for exactly as before, and a second question joins it.
+    void ensureLoaded();
+    return undefined;
   };
 
   return {
@@ -240,5 +316,6 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
       return loadCode;
     },
     result: answerOf,
+    announce,
   };
 }

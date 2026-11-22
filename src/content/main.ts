@@ -53,6 +53,7 @@ import { attachPageNotesChannel } from './sync/page-notes-channel';
 import type { ForeignLoadOutcome } from './sync/foreign-notes';
 import { loadIntoMemory } from './sync/foreign-notes';
 import { createSyncTransport } from './sync/fetch-transport';
+import { PAGE_NOTES_UPDATED_MESSAGE } from '../core/page-notes-query';
 
 function boot(): void {
   const overlay = ensureOverlayHost();
@@ -95,15 +96,44 @@ function boot(): void {
 
   attachCreateCardEvents(controller, document, window, overlay.host);
 
+  // The sync server's notes are memory only (ruling `A163`): `foreign` is this
+  // document's whole copy of them, and `attachSyncNotes` owns the one question "is this
+  // page's list already here, and am I allowed to ask?" (`A166` first, then one request
+  // per page key). Nothing is fetched until the first pass has resolved the page key.
+  //
+  // It is declared **before** the editor, because `t17-06` gave the editor's own delete
+  // two questions of this module (`A182`): where that one note's delete would go, and
+  // which page key it is filed under. Both are answered by the same wiring the load uses,
+  // so a delete and a load can never disagree about what "synchronization is on" means.
+  const foreign = createForeignNotes();
+  const transport = createSyncTransport();
+  const sync = attachSyncNotes({
+    painter,
+    foreign,
+    port,
+    transport,
+  });
+
   // Flow 4 and 5 of the overlay spec, task `t3-03` and the opening half of `t5-03`: the
   // editor of an existing entry. Ruling `A104` gives it its range: the entry it opens is
   // the `PaintedEntry` the last paint pass produced, so the editor never resolves an
   // anchor of its own, never asks the page for a span, and never moves a stored range;
   // it writes only through the core edit and delete APIs (`editor/edit-entry.ts`).
+  //
+  // The delete button reaches the server since `t17-06` (`A182`): `syncTarget` is the
+  // settings question asked **at the press**, `transport` is the page's one `fetch`, and
+  // `foreignNotes` is the memory a foreign delete (never reachable here, `A25`) would
+  // have to forget. The order is the ruling's — local first, then the one-note route.
   const editor = createEditorController(document, overlay, {
     port,
     pageUrl,
     clock: (): string => new Date().toISOString(),
+    transport,
+    foreignNotes: foreign,
+    syncTarget: async (): Promise<Awaited<ReturnType<typeof sync.deleteTarget>>['target']> => {
+      const { target } = await sync.deleteTarget();
+      return target;
+    },
     // Ruling `A68` in the other direction: an editor that closes does not hide the
     // overlay host out from under an open create card.
     isHostBusy: controller.isOpen,
@@ -157,19 +187,6 @@ function boot(): void {
 
   attachTooltipEvents(tooltip, document, window, overlay.host);
 
-  // The sync server's notes are memory only (ruling `A163`): `foreign` is this
-  // document's whole copy of them, and `attachSyncNotes` owns the one question "is this
-  // page's list already here, and am I allowed to ask?" (`A166` first, then one request
-  // per page key). Nothing is fetched until the first pass has resolved the page key.
-  const foreign = createForeignNotes();
-  const transport = createSyncTransport();
-  const sync = attachSyncNotes({
-    painter,
-    foreign,
-    port,
-    transport,
-  });
-
   // The popup's question (`A167`, `A168`, `A169`), wired here and answered by
   // `attachPageNotesChannel`.
   //
@@ -194,7 +211,25 @@ function boot(): void {
     return await loadIntoMemory(foreign, { transport, target, pageKey: key, currentName });
   };
 
-  const notesChannel = attachPageNotesChannel({ foreign, painter, load: loadPageNotes });
+  const notesChannel = attachPageNotesChannel({
+    foreign,
+    painter,
+    load: loadPageNotes,
+    // Ruling `A183`: a load that lands after the popup's one question has to reach a
+    // popup that is already open, so the page **announces** that its foreign list moved.
+    // The popup answers it with the same question as before (`src/popup/page-notes-
+    // channel.ts` -> `listenForPageNotesUpdates`), so there is still one answer shape and
+    // one answerer; nothing here polls and nothing here runs on a timer. The send is
+    // guarded for the same reason the listener subscription below is: a frame without the
+    // runtime API announces into nothing rather than breaking.
+    announce: (update): void => {
+      try {
+        void chrome.runtime.sendMessage({ type: PAGE_NOTES_UPDATED_MESSAGE, ...update });
+      } catch {
+        // No runtime API in this frame: nobody is listening, and nothing else changes.
+      }
+    },
+  });
 
   // The one `chrome.runtime.onMessage` listener of this document (`A167`). It is the
   // entry point's wiring and not the module's rule: the channel above is pure and runs in

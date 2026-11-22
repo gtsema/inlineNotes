@@ -68,6 +68,23 @@ export const CONTENT_STRINGS = {
   ownEntry: 'Вы',
   /** Accessible name of the hover tooltip (task `t3-02` AC3). */
   tooltipLabel: 'Заметка',
+  /**
+   * The line a **failed** one-note server delete leaves (ruling `A182`, task `t17-06`).
+   *
+   * The reader deleted their own note, the record is gone from this page immediately, and
+   * the server still holds a copy of it. That is one state and one sentence: the note is
+   * deleted **here**, the server's copy stays, and the reader is the only one who can do
+   * anything about it (the next press of the sync button is what rewrites that page's
+   * server rows).
+   *
+   * Where the sentence appears is the same place every other content-layer answer
+   * appears: the `refusal line` of the widget, rendered over a card that opens and closes
+   * at once — see `overlay/editor-controller.tsx`, which mounts the line for this state
+   * because the editor it belongs to is already gone (`A44`: a delete asks no
+   * confirmation and takes no press to dismiss). No modal, no second sentence, and
+   * nothing on the article (`A164` keeps the article silent).
+   */
+  deleteServerFailed: 'Заметка удалена здесь, но на сервере осталась',
 } as const;
 
 /**

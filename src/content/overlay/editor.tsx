@@ -44,7 +44,6 @@
 import { useState } from 'preact/hooks';
 import type { TargetedInputEvent, TargetedKeyboardEvent } from 'preact';
 import { validateComment } from '../../core/entry-rules';
-import type { EntryWriteResult } from '../../core/entry-store-write';
 import type { EditNoteResult } from '../editor/edit-entry';
 import { CONTENT_STRINGS, cardCounterText, refusalText } from '../text';
 import type { ContentRefusalCode } from '../text';
@@ -74,8 +73,15 @@ export interface EditorProps {
    * inside the widget, so the close path is reached from outside only.
    */
   onCancel: () => void;
-  /** Delete: removes the entry at once — no confirmation step exists (ruling `A44`). */
-  onDelete: () => Promise<EntryWriteResult>;
+  /**
+   * Delete: removes the entry at once — no confirmation step exists (ruling `A44`).
+   *
+   * The answer carries the **server** half of the delete as well (`A182`), but this
+   * component reads only `ok`/`code`: a failed server call is not a refusal of the
+   * delete — the note is gone — so it is the controller that states it, over the card it
+   * mounts once this one has closed.
+   */
+  onDelete: () => Promise<{ ok: boolean; code?: ContentRefusalCode }>;
 }
 
 /** The editor element tree, rendered into the shadow root by the controller. */
@@ -107,7 +113,7 @@ export function EntryEditor(props: EditorProps) {
     const result = await props.onDelete();
     setBusy(false);
     if (!result.ok) {
-      setRefusal(result.code);
+      setRefusal(result.code ?? 'entry_not_found');
     }
   };
 

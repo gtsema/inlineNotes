@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { NOTES_QUERY_MESSAGE } from '../src/core/page-notes-query';
+import { NOTES_QUERY_MESSAGE, PAGE_NOTES_UPDATED_MESSAGE } from '../src/core/page-notes-query';
+import type { PageNotesUpdate } from '../src/core/page-notes-query';
 import { createForeignNotes } from '../src/content/sync/foreign-notes';
-import type { ForeignNotes } from '../src/content/sync/foreign-notes';
+import type { ForeignLoadOutcome, ForeignNotes } from '../src/content/sync/foreign-notes';
 import { attachPageNotesChannel } from '../src/content/sync/page-notes-channel';
 import { codeOnly } from './support/build-script-guards';
 import type { ExtraEntry } from '../src/content/paint/paint-plan';
@@ -12,13 +13,18 @@ import type { RemoteNote } from '../src/core/sync-client';
 
 /**
  * The page's answer to the popup (Stage 17, `t17-02` AC2-AC7; rulings `A167`, `A168`,
- * `A169`, with `A163` and `A166` unchanged).
+ * `A169`, with `A163` and `A166` unchanged; `t17-06` AC11 for the two `A183` cases at the
+ * end).
  *
  * What this file pins, and each in its own words:
  *
  * - **the answer** (`A167`): the popup's question arrives, the page runs its load once,
  *   and the answer is the memory's rows plus the load's outcome — one row per author, in
  *   first-appearance order, and never the notes themselves.
+ * - **the answer does not wait for the load** (`A183`, `t17-06`): the same question is
+ *   answered from the memory in the same turn, and the load that lands afterwards is
+ *   **announced** to whoever is open. The load still runs once per document, and a second
+ *   question joins it instead of starting a second request.
  * - **the aggregate switch** (`A168`): one operation message flips every note of one
  *   author in this document's memory. No port exists in this module's wiring, so the
  *   absence of a storage write is structural — the assertion below is on the API and on
@@ -80,34 +86,65 @@ function painterStub(): {
   };
 }
 
-/** One attachment: the memory, the recorder and a load that answers what the test says. */
+/** One microtask turn is not enough: the load is `await`ed inside the handler. */
+async function settle(): Promise<void> {
+  await new Promise<void>((resolveTurn) => {
+    setTimeout(resolveTurn, 0);
+  });
+}
+
+/**
+ * One attachment: the memory, the recorder and a load that answers what the test says.
+ *
+ * `loadOutcome` may be a function, so a case can make the load **slow** (a promise it
+ * resolves by hand) — which is the state `A183` is about: the popup asked, the answer was
+ * empty, and the list arrives later.
+ */
 function attach(options: {
   notes?: readonly RemoteNote[];
-  outcome?: { ok: true; added: number } | { ok: false; code: string };
+  outcome?: ForeignLoadOutcome | (() => Promise<ForeignLoadOutcome>);
 } = {}): {
   memory: ForeignNotes;
   channel: ReturnType<typeof attachPageNotesChannel>;
   handed: (readonly ExtraEntry[] | null)[];
   refreshes: () => number;
   loads: () => number;
-  answerOf: (message: unknown) => Promise<{ responded: boolean; value: unknown }>;
+  announced: PageNotesUpdate[];
+  answerOf: (message: unknown) => Promise<{ responded: boolean; value: unknown; returned: boolean | undefined }>;
+  askNow: (message: unknown) => { responded: boolean; value: unknown; returned: boolean | undefined };
 } {
   const memory = createForeignNotes();
   if (options.notes !== undefined) {
     memory.replace(options.notes, 'reader-one');
   }
   const stub = painterStub();
+  const announced: PageNotesUpdate[] = [];
   let loads = 0;
+  const answer = options.outcome ?? { ok: false, code: 'network' };
   const channel = attachPageNotesChannel({
     foreign: memory,
     painter: stub.painter,
-    load: async (): Promise<never> => {
+    load: async (): Promise<ForeignLoadOutcome> => {
       loads += 1;
-      // The shape `loadIntoMemory` answers with; the cast is the seam's own, and the
-      // outcomes used below are the two the loader really produces.
-      return (options.outcome ?? { ok: false, code: 'network' }) as never;
+      const outcome = typeof answer === 'function' ? await answer() : answer;
+      // The memory is what a real `loadIntoMemory` would have replaced; the seam answers
+      // the outcome only, so a case that cares about the rows writes them itself.
+      return outcome;
+    },
+    announce: (update): void => {
+      announced.push(update);
     },
   });
+
+  const askNow = (message: unknown): { responded: boolean; value: unknown; returned: boolean | undefined } => {
+    let responded = false;
+    let value: unknown = null;
+    const returned = channel.onMessage(message, {}, (answerIn: unknown): void => {
+      responded = true;
+      value = answerIn;
+    });
+    return { responded, value, returned };
+  };
 
   return {
     memory,
@@ -115,23 +152,23 @@ function attach(options: {
     handed: stub.handed,
     refreshes: stub.refreshes,
     loads: (): number => loads,
-    answerOf: async (message: unknown): Promise<{ responded: boolean; value: unknown }> => {
-      let responded = false;
-      let value: unknown = null;
-      const returned = channel.onMessage(message, {}, (answer: unknown): void => {
-        responded = true;
-        value = answer;
-      });
-      // The listener answers asynchronously through the callback, which is what Chrome
-      // requires; the `true` return value is the promise of that answer.
-      expect(returned === true || returned === undefined).toBe(true);
-      // One microtask turn is not enough: the load is `await`ed inside the handler.
-      await new Promise<void>((resolveTurn) => {
-        setTimeout(resolveTurn, 0);
-      });
-      return { responded, value };
+    announced,
+    askNow,
+    answerOf: async (message: unknown) => {
+      const first = askNow(message);
+      await settle();
+      return first;
     },
   };
+}
+
+/** A promise the test resolves by hand, for the slow-load cases of `A183`. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 describe('AC2 the page answers the popup with its rows and its load outcome (A167, A169)', () => {
@@ -153,19 +190,26 @@ describe('AC2 the page answers the popup with its rows and its load outcome (A16
     });
   });
 
-  it('runs the page\'s own load once per question and answers with its outcome (A169)', async () => {
+  it('answers from the memory at once, and the load\'s outcome reaches the next question (A169, A183)', async () => {
     const failed = attach({ outcome: { ok: false, code: 'network' } });
 
     const first = await failed.answerOf({ type: NOTES_QUERY_MESSAGE });
+    // `t17-06` / `A183`: the first answer is the memory as it stood, answered in the same
+    // turn as the question — a popup must never wait for a server to learn it has no rows.
+    expect(first.responded).toBe(true);
+    expect((first.value as { syncFailed: boolean }).syncFailed).toBe(false);
     expect(failed.loads()).toBe(1);
-    expect((first.value as { syncFailed: boolean }).syncFailed).toBe(true);
+    // The load ran, so its outcome is remembered and the **next** question states it.
     expect(failed.channel.loadCode()).toBe('network');
 
-    // The failure stands until an answer that succeeds: the second question asks the page
+    const second = await failed.answerOf({ type: NOTES_QUERY_MESSAGE });
+    expect((second.value as { syncFailed: boolean }).syncFailed).toBe(true);
+
+    // The failure stands until an answer that succeeds: the third question asks the page
     // to try again (`A164` says the reader's retry is the press).
     const ok = attach({ notes: [remote()], outcome: { ok: true, added: 1 } });
-    const second = await ok.answerOf({ type: NOTES_QUERY_MESSAGE });
-    expect((second.value as { syncFailed: boolean }).syncFailed).toBe(false);
+    const third = await ok.answerOf({ type: NOTES_QUERY_MESSAGE });
+    expect((third.value as { syncFailed: boolean }).syncFailed).toBe(false);
     expect(ok.channel.loadCode()).toBeNull();
   });
 
@@ -295,6 +339,11 @@ describe('AC7 a question this page does not own is answered with nothing (A166)'
       { type: NOTES_QUERY_MESSAGE, op: 'unknown-op', authorName: 'Вася' },
       { type: NOTES_QUERY_MESSAGE, op: 'dismiss' },
       { type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: '' },
+      // The popup's own announcement name is not a question this page answers: the two
+      // directions of the channel are distinct, and a page that answered its sibling's
+      // notice would be a second answerer for nothing (`A183`).
+      { type: PAGE_NOTES_UPDATED_MESSAGE, rows: [] },
+      PAGE_NOTES_UPDATED_MESSAGE,
     ]) {
       const returned = a.channel.onMessage(message, {}, (answer: unknown): void => {
         answered.push(answer);
@@ -319,10 +368,95 @@ describe('AC7 a question this page does not own is answered with nothing (A166)'
   });
 });
 
-describe('the message name is one constant on both sides of the channel', () => {
+describe('AC11 a late list still reaches a popup that is already open (A183, t17-06)', () => {
+  it('answers the question without waiting for the load, and the load still runs once', async () => {
+    const slow = deferred<ForeignLoadOutcome>();
+    const a = attach({ outcome: async () => await slow.promise });
+
+    const asked = a.askNow({ type: NOTES_QUERY_MESSAGE });
+
+    // The question is answered **in the same turn**: no `true`, no callback taken, and the
+    // rows are the memory's rows — empty here, because the load has not landed.
+    expect(asked.returned).toBeUndefined();
+    expect(asked.responded).toBe(true);
+    expect(asked.value).toEqual({ rows: [], syncFailed: false });
+    expect(a.loads()).toBe(1);
+
+    slow.resolve({ ok: true, added: 0 });
+    await settle();
+    // One load, and it was announced — which is what wakes the open popup (`A183`).
+    expect(a.loads()).toBe(1);
+    expect(a.announced).toEqual([{ rows: [] }]);
+  });
+
+  it('joins the load already in flight instead of asking the server twice', async () => {
+    const slow = deferred<ForeignLoadOutcome>();
+    const a = attach({ outcome: async () => await slow.promise });
+
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+
+    expect(a.loads()).toBe(1);
+    slow.resolve({ ok: true, added: 0 });
+    await settle();
+    expect(a.loads()).toBe(1);
+    // One announcement for one load, however many questions it answered.
+    expect(a.announced).toHaveLength(1);
+
+    // A question after the load answered starts the next one: `A164`'s retry is the
+    // reader's next question, and there is still no timer anywhere.
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+    expect(a.loads()).toBe(2);
+  });
+
+  it('announces the rows the load left, in the shape the answer uses', async () => {
+    const a = attach({ outcome: { ok: true, added: 1 } });
+    // A real load writes the memory before it answers; the seam only reports the outcome,
+    // so this case writes what such a load would have written.
+    a.memory.replace([remote()], 'reader-one');
+
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+    await settle();
+
+    expect(a.announced).toEqual([{ rows: [{ authorName: 'Вася', count: 1, allVisible: true }] }]);
+    // And the announcement carries no note: an author name, a count and a flag (`A167`).
+    expect(JSON.stringify(a.announced)).not.toContain('their note');
+  });
+
+  it('announces a failed load too, so the popup\'s notice line is not left out', async () => {
+    const a = attach({ outcome: { ok: false, code: 'http' } });
+
+    a.askNow({ type: NOTES_QUERY_MESSAGE });
+    await settle();
+
+    expect(a.announced).toEqual([{ rows: [] }]);
+    expect(a.channel.loadCode()).toBe('http');
+    // The next question states the failure (the popup asks again when it hears this).
+    const second = await a.answerOf({ type: NOTES_QUERY_MESSAGE });
+    expect((second.value as { syncFailed: boolean }).syncFailed).toBe(true);
+  });
+
+  it('survives a load seam that rejects, because the page has no failure to show there', async () => {
+    const a = attach({
+      outcome: async () => {
+        throw new Error('a seam that breaks its contract');
+      },
+    });
+
+    expect((): unknown => a.askNow({ type: NOTES_QUERY_MESSAGE })).not.toThrow();
+    await settle();
+    // The page keeps answering, and nothing was announced for a load that never finished.
+    expect(a.announced).toEqual([]);
+    expect(a.channel.result()).toEqual({ rows: [], syncFailed: false });
+  });
+});
+
+describe('the message names are one constant on both sides of the channel', () => {
   it('is imported by the popup\'s half and by the page\'s half, and spelled nowhere else', () => {
     // `A167` is one contract between two bundles: the two halves must import the name
-    // rather than repeat it, or a rename in one of them becomes a silent no-answer.
+    // rather than repeat it, or a rename in one of them becomes a silent no-answer. `A183`
+    // adds the announcement, and it is held to the same rule.
     for (const path of ['src/content/sync/page-notes-channel.ts', 'src/popup/page-notes-channel.ts']) {
       const source = readFileSync(join(projectRoot, path), 'utf8');
       expect(source, path).toMatch(/NOTES_QUERY_MESSAGE/);
@@ -331,10 +465,18 @@ describe('the message name is one constant on both sides of the channel', () => 
       // declares it: a second spelling is a second contract.
       expect(source, path).not.toContain("'inlinenotes:page-notes'");
     }
+    // The announcement's name is spelled in `src/content/main.ts` (the page's send) and in
+    // the popup's half (its ear), and neither spells the literal.
+    for (const path of ['src/content/main.ts', 'src/popup/page-notes-channel.ts']) {
+      const source = readFileSync(join(projectRoot, path), 'utf8');
+      expect(source, path).toMatch(/PAGE_NOTES_UPDATED_MESSAGE/);
+      expect(source, path).not.toContain("'inlinenotes:page-notes-updated'");
+    }
     const declarers = readFileSync(
       join(projectRoot, 'src', 'core', 'page-notes-query.ts'),
       'utf8',
     );
     expect(declarers).toContain("'inlinenotes:page-notes'");
+    expect(declarers).toContain("'inlinenotes:page-notes-updated'");
   });
 });

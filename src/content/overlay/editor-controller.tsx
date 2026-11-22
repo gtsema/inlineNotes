@@ -92,20 +92,29 @@ import {
   sameSelectionBoundaries,
 } from '../capture/page-selection';
 import type { CapturedSelection, SelectionBoundaries } from '../capture/page-selection';
-import { saveEntryComment, removeEntryFromPage } from '../editor/edit-entry';
-import type { EditNoteResult } from '../editor/edit-entry';
+import { removeForeignFromPage, removeNoteFromPage, saveEntryComment } from '../editor/edit-entry';
+import type { DeleteNoteResult, EditNoteResult } from '../editor/edit-entry'
+import type { ForeignNotes } from '../sync/foreign-notes';
 import type { PaintedEntry } from '../paint/paint-plan';
 import { placeCard, placeCardInViewport } from './card-placement';
 import type { Viewport } from './card-placement';
-import { EDITOR_ROOT_CLASS, WIDGET_ROOT_CLASS, ensureCardStyle } from './card-style';
+import {
+  CARD_CLASS,
+  CARD_REFUSAL_CLASS,
+  EDITOR_ROOT_CLASS,
+  WIDGET_ROOT_CLASS,
+  ensureCardStyle,
+} from './card-style';
+import { CONTENT_STRINGS } from '../text';
 import { EntryEditor } from './editor';
 import { createFocusHandoff } from './focus-handoff';
 import { setOverlayHostHidden } from './host';
 import type { OverlayHost } from './host';
 import { isOwnEntry } from './tooltip-hit-test';
 import type { Entry } from '../../core/entry';
-import type { EntryWriteResult } from '../../core/entry-store-write';
 import type { StoragePort } from '../../core/storage-port';
+import type { SyncTransport } from '../../core/sync-client';
+import type { SyncTarget } from '../../core/sync-settings';
 
 /** What the controller needs from its environment; every seam is injectable. */
 export interface EditorControllerOptions {
@@ -132,6 +141,30 @@ export interface EditorControllerOptions {
    * closing an editor leaves the host visible while the card still needs it.
    */
   isHostBusy?: () => boolean;
+  /**
+   * The document's foreign notes, `null`/absent for a page that syncs nothing
+   * (`A163`).
+   *
+   * It is here for **one** rule of ruling `A168`: a foreign note's delete is local and
+   * this is the memory that has to forget it. A delete of the reader's own note never
+   * touches it — the stored record is core's, and the server is asked by
+   * `removeNoteFromPage`.
+   */
+  foreignNotes?: ForeignNotes;
+  /**
+   * Where the one-note server delete would go, from core `syncTargetOf`; resolved **at
+   * the press** and not at the open, because a settings write while the editor stands is
+   * the extension's only notification channel (`A50`, `A60`). `null` means "do not call"
+   * and is the answer of `A166`.
+   */
+  syncTarget?: () => Promise<SyncTarget | null>;
+  /**
+   * `fetch` in the page, as the editor's delete reaches it (`A182`). Optional: with no
+   * transport there is nowhere to call, so the delete is local and the server half is
+   * `'off'` — the same answer as `A166`'s, and the one a test that owns no network gets
+   * without a stub.
+   */
+  transport?: SyncTransport;
   /** Called when the editor takes the host: the coordinator dismisses the tooltip. */
   onOpened?: () => void;
   /** Handover to the painting stage: the entry as it is now stored. */
@@ -151,8 +184,13 @@ export interface EditorController {
   openFromPaintedEntry(owner: PaintedEntry, authorName: string): boolean;
   /** The save button: writes through core and closes on success only. */
   submit(comment: string): Promise<EditNoteResult>;
-  /** The delete button: removes the entry at once (ruling `A44`). */
-  remove(): Promise<EntryWriteResult>;
+  /**
+   * The delete button: removes the entry at once (ruling `A44`), and — for the reader's
+   * own note — also calls the one-note server route (`A182`). `ok` is core's answer, which
+   * is what `EntryEditor` renders; the server half of the answer is reported through
+   * `onServerDeleteFailed`, because a server failure is **not** a refusal of the delete.
+   */
+  remove(): Promise<DeleteNoteResult>;
   /** Closes the editor and writes nothing (`A42`, `A43`). */
   close(): void;
   isOpen(): boolean;
@@ -323,23 +361,100 @@ export function createEditorController(
   /**
    * The delete button: core removes the record, and the coordinator takes away the
    * paint and the tooltip (task `t3-03` AC4). No confirmation is asked (ruling `A44`),
-   * and no
-   * authorship is checked here: `A25` puts that rule in the UI, and the UI half is
+   * and no authorship is checked here: `A25` puts that rule in the UI, and the UI half is
    * `openFromPaintedEntry` answering `false` for a foreign entry at all.
+   *
+   * Since `t17-06` the press also states the **server** half of the delete (ruling
+   * `A182`), and the three placements of that half are deliberate:
+   *
+   * - **the local write is first** and the widget closes on it, so the page reacts at
+   *   once and a slow or dead server holds nothing back (`A182`);
+   * - **a failed call is not silent**: the page shows `CONTENT_STRINGS.deleteServerFailed`
+   *   in the `refusal line` of a card mounted for it, because the editor that owned the
+   *   line is already closed. It is the one sentence of this state and `src/content/
+   *   text.ts` is its one address;
+   * - **a foreign note is local only** (`A168`): the memory forgets it, no route is built
+   *   and no request is made. A foreign editor is never opened by the shipped wiring
+   *   (`A25`), and this branch is the second line of the same rule rather than a dead
+   *   one — it is what `tests/content-editor-controller.spec.ts` pins.
    */
-  async function remove(): Promise<EntryWriteResult> {
+  async function remove(): Promise<DeleteNoteResult> {
     if (session === null) {
-      return { ok: false, code: 'entry_not_found' };
+      return { ok: false, code: 'entry_not_found', serverDelete: 'off' };
     }
     const entryId = session.entryId;
-    const result = await removeEntryFromPage(options.port, options.pageUrl(), entryId);
-    if (result.ok) {
-      close();
-      if (options.onDeleted !== undefined) {
-        options.onDeleted(entryId);
-      }
+    const authorName = session.authorName;
+    // The stored record an entry of this session must be the reader's own (`A25`, pinned
+    // by `openFromPaintedEntry`). A foreign note is **not** a stored record: it lives in
+    // the memory, and `foreignNotes` holding it is the two facts together — the ruling
+    // `A168` branch, unreachable through the shipped wiring and stated anyway.
+    const foreign = options.foreignNotes?.all().some((note) => note.entry.id === entryId);
+    if (foreign === true) {
+      return await removeForeign(entryId);
+    }
+
+    const target = options.syncTarget === undefined ? null : await options.syncTarget();
+    const result = await removeNoteFromPage({
+      port: options.port,
+      url: options.pageUrl(),
+      id: entryId,
+      currentName: authorName,
+      target,
+      transport: options.transport ?? noTransport,
+    });
+    if (!result.ok) {
+      // The local write was refused: the editor stays open with the code, exactly as it
+      // did before this task, and the server was not called.
+      return result;
+    }
+    close();
+    if (options.onDeleted !== undefined) {
+      options.onDeleted(entryId);
+    }
+    if (result.serverDelete === 'failed') {
+      announceServerFailure();
     }
     return result;
+  }
+
+  /**
+   * The foreign half of `remove` (`A168`): the memory forgets the note, the page paints
+   * again, and nothing is sent anywhere.
+   */
+  async function removeForeign(entryId: string): Promise<DeleteNoteResult> {
+    const memory = options.foreignNotes;
+    if (memory === undefined) {
+      return { ok: false, code: 'entry_not_found', serverDelete: 'local' };
+    }
+    const result = removeForeignFromPage(memory, entryId);
+    if (!result.ok) {
+      return result;
+    }
+    close();
+    if (options.onDeleted !== undefined) {
+      options.onDeleted(entryId);
+    }
+    return result;
+  }
+
+  /**
+   * The `A182` sentence, rendered where every other content answer is rendered: the
+   * `refusal line` of the card.
+   *
+   * A dedicated mount is needed because the editor the line belongs to is gone by the
+   * time the server answers — the local delete closed it (`A44`: a delete takes no press
+   * to dismiss, so the line cannot live in a card the reader has to close). The node is
+   * the editor's own `.card` and `.refusal` class pair, so the stylesheet already paints
+   * it, and it stays until the reader's next press anywhere on the page or the next
+   * widget mount replaces the wrapper's content.
+   */
+  function announceServerFailure(): void {
+    const note = doc.createElement('p');
+    note.className = `${CARD_CLASS} ${CARD_REFUSAL_CLASS}`;
+    note.setAttribute('role', 'status');
+    note.textContent = CONTENT_STRINGS.deleteServerFailed;
+    render(note, wrapper);
+    setOverlayHostHidden(overlay, false);
   }
 
   function close(): void {
@@ -438,6 +553,18 @@ export function createEditorController(
     openEntryId: (): string | null => (session === null ? null : session.entryId),
   };
 }
+
+/**
+ * The transport of a page that was given none: every call resolves with a status the
+ * caller reads as a refusal, so the delete stays local and is reported as `'failed'`
+ * rather than being silently counted as done. It cannot reject, because `A164` says a
+ * call to a server that is not there is an answer.
+ */
+const noTransport: SyncTransport = async () => ({
+  ok: false,
+  status: 0,
+  json: async (): Promise<unknown> => null,
+});
 
 /** The outcome of one measurement attempt (`A64`, not `A65`). */
 type AnchorMeasurement = { ok: true; box: Box | null } | { ok: false };

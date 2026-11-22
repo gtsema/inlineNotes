@@ -33,6 +33,12 @@
  * unchanged both ways; `visible` is never sent, because it is the reader's own display
  * flag and the schema has no column for it. A remote note therefore arrives visible,
  * which is the default of `createEntry` (ruling `A1`).
+ *
+ * Stage 17 (`t17-06`) adds a **third** call, and it is a delete rather than a map: the
+ * one-note route of ruling `A181`, called by the reader's own delete so that a note
+ * removed locally does not come back on the next load (`A182`). It shares this module
+ * because it is the same server, the same target and the same failure vocabulary, and
+ * because the server's triple `(page, author, note)` has to be spelled once.
  */
 
 import type { Entry, EntryAnchor } from './entry';
@@ -99,6 +105,16 @@ export type SyncCallResult<T> =
 /** What one save did: how many notes the server says it touched. */
 export interface SyncSaveSummary {
   readonly saved: number;
+}
+
+/**
+ * What one note delete did: how many rows the server says it removed.
+ *
+ * `1` is the ordinary answer and `0` is not an error — the server did not hold that
+ * note, which is exactly the state the reader asked for (`A181`).
+ */
+export interface SyncDeleteSummary {
+  readonly deleted: number;
 }
 
 /** What one load produced: the page's notes as the server holds them. */
@@ -214,6 +230,31 @@ export function notesPageUrl(target: SyncTarget, pageKey: string): string {
 }
 
 /**
+ * The path segment that names one note inside its author's page (`A181` of the server
+ * spec), declared before the one URL that uses it.
+ */
+export const NOTE_DELETE_PATH = '/note/';
+
+/**
+ * `<serverUrl>/notes/page/<pageKey>/author/<authorName>/note/<noteId>` (ruling
+ * `A181`): the page-scoped route of `notesPageUrl` plus the author and the note.
+ *
+ * Both names travel **percent-encoded**, exactly as the page key does: an author name
+ * is the reader's own Russian text and a note id is an opaque string, so neither may
+ * be read as a path separator or as a query. Nothing else is added — no timestamp, no
+ * query parameter — because the server's predicate is the upsert triple and this
+ * function is the only place the extension spells it.
+ */
+export function noteDeleteUrl(
+  target: SyncTarget,
+  pageKey: string,
+  authorName: string,
+  noteId: string,
+): string {
+  return `${notesPageUrl(target, pageKey)}/author/${encodeURIComponent(authorName)}${NOTE_DELETE_PATH}${encodeURIComponent(noteId)}`;
+}
+
+/**
  * One `POST /notes/page/{page_id}`: saves **one author's** notes.
  *
  * `!payload.ok` is decided by the caller through `syncTargetOf`; passing a target is
@@ -264,16 +305,73 @@ export async function loadForeignNotes(
   return { ok: true, value: { notes } };
 }
 
-/** One call, with every failure a code. `body === null` means GET. */
+/**
+ * The verb of the one-note delete, spelled once (`A181`, `A182`). A constant rather
+ * than a literal at the call site, because the server route and the extension's one
+ * caller have to agree on it and there is exactly one caller.
+ */
+export const DELETE_VERB = 'DELETE';
+
+/**
+ * One `DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}` (ruling
+ * `A182`): removes exactly the one note the reader just deleted locally.
+ *
+ * `{ deleted: 0 }` is a **success**, not a failure: the server did not hold that row,
+ * so it holds no copy of it now, and the reader is told nothing (`A181`). The refusal
+ * codes are the transport's, exactly as for the other two calls.
+ *
+ * The order of a delete is the caller's: the local write happens first and this call
+ * second (`A182`), so a failure here can never undo the reader's action — it only
+ * decides which sentence the page shows about the copy the server keeps.
+ *
+ * The page key and the author name travel percent-encoded in the path, the same rule
+ * the other two routes follow; the reader's own note is the only one this function is
+ * called for (`A168` keeps a foreign delete local), so `authorName` is always the
+ * settings name of the caller.
+ */
+export async function deleteRemoteNote(
+  transport: SyncTransport,
+  target: SyncTarget,
+  pageKey: string,
+  authorName: string,
+  noteId: string,
+): Promise<SyncCallResult<SyncDeleteSummary>> {
+  const answer = await request(
+    transport,
+    noteDeleteUrl(target, pageKey, authorName, noteId),
+    DELETE_VERB,
+  );
+  if (!answer.ok) {
+    return answer;
+  }
+  const deleted = deletedCountOf(answer.value);
+  if (deleted === null) {
+    return { ok: false, code: 'response_invalid' };
+  }
+  return { ok: true, value: { deleted } };
+}
+
+/** One call, with every failure a code. `body === null` means GET; `verb` carries it otherwise. */
 async function request(
   transport: SyncTransport,
   url: string,
   body: string | null,
+  verb?: string,
+): Promise<SyncCallResult<unknown>> {
+  return await send(transport, url, verb ?? (body === null ? 'GET' : 'POST'), body ?? '');
+}
+
+/** One call with one verb, with every failure a code. */
+async function send(
+  transport: SyncTransport,
+  url: string,
+  method: string,
+  body: string,
 ): Promise<SyncCallResult<unknown>> {
   const init: { method: string; headers: Record<string, string>; body: string } = {
-    method: body === null ? 'GET' : 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
-    body: body ?? '',
+    body,
   };
 
   let response: { ok: boolean; status: number; json: () => Promise<unknown> };
@@ -296,11 +394,21 @@ async function request(
 
 /** `{"saved": N}` as a number, `null` when the body is not that. */
 function savedCountOf(value: unknown): number | null {
+  return countOf(value, 'saved');
+}
+
+/** `{"deleted": N}` as a number, `null` when the body is not that (`A181`). */
+function deletedCountOf(value: unknown): number | null {
+  return countOf(value, 'deleted');
+}
+
+/** One `{ <field>: N }` body as its number, `null` when the body is not that. */
+function countOf(value: unknown, field: string): number | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
   }
-  const saved: unknown = (value as Record<string, unknown>)['saved'];
-  return typeof saved === 'number' && Number.isFinite(saved) ? saved : null;
+  const counted: unknown = (value as Record<string, unknown>)[field];
+  return typeof counted === 'number' && Number.isFinite(counted) ? counted : null;
 }
 
 /** `{"notes": [...]}` as the rows it carries, `null` when the body is not that. */

@@ -118,14 +118,18 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     // `t17-02` adds the sixteenth: `sync/sync-notes.ts` guards the `onLoad` hook it
     // publishes the load's outcome to (an observer of the load is not the page's
     // business, `A169`), which is the same rule as `A164`: nothing an unrelated
-    // collaborator does may reach the reader's page. `src/content/main.ts` needed no new
-    // `catch` for the channel, because the delivered listener is four lines over a
-    // function that answers codes.
+    // collaborator does may reach the reader's page.
+    //
+    // `t17-06` (`A183`) adds the second one: the entry point now **announces** a finished
+    // load to the popup, and that send is guarded exactly like the listener subscription
+    // below it — a frame without `chrome.runtime` announces into nothing rather than
+    // breaking. Two guards in one file, one per direction of the same channel: the
+    // question in, the announcement out.
     const pinned: Record<string, number> = {
       'create/create-note.ts': 1,
       // `t17-02`: the entry point subscribes the popup's question listener (`A167`) inside
       // one guard, so a frame without `chrome.runtime` answers nothing instead of breaking.
-      'main.ts': 1,
+      'main.ts': 2,
       'editor/edit-entry.ts': 1,
       'overlay/create-card-controller.tsx': 2,
       'overlay/editor-controller.tsx': 1,
@@ -144,7 +148,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(17);
+    expect(total).toBe(18);
   });
 });
 

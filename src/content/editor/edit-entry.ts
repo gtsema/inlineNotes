@@ -73,9 +73,14 @@ import { deleteEntry, updateEntryComment } from '../../core/entry-store-write';
 import type { EntryWriteCode, EntryWriteResult } from '../../core/entry-store-write';
 import { loadEntries } from '../../core/entry-store-read';
 import { findOverlappingEntry } from '../../core/entry-overlap';
-import { entriesOfAuthor, removeById } from '../../core/entry-rules';
+import { entriesOfAuthor, removeById, validateAuthorName } from '../../core/entry-rules';
 import type { Entry } from '../../core/entry';
+import { pageKeyFromUrl } from '../../core/page-key';
 import type { StoragePort } from '../../core/storage-port';
+import type { SyncTransport } from '../../core/sync-client';
+import { deleteRemoteNote } from '../../core/sync-client';
+import type { SyncTarget } from '../../core/sync-settings';
+import type { ForeignNotes } from '../sync/foreign-notes';
 
 /**
  * Every reason this path can answer with: each code the core edit and delete answers
@@ -88,6 +93,60 @@ export type EditNoteCode = EntryWriteCode | 'selection_lost';
 
 /** Outcome of one comment save: the stored entry, or the code the editor shows. */
 export type EditNoteResult = { ok: true; entry: Entry } | { ok: false; code: EditNoteCode };
+
+/**
+ * What the server side of one delete did (ruling `A182`, task `t17-06`).
+ *
+ * It is deliberately not a `SyncFailureCode`: the reader is told nothing about a code, and
+ * the three states are the three things that can be true about the copy the server holds:
+ *
+ * - `deleted` — the server removed that row (`{deleted: 1}`);
+ * - `absent` — the server did not hold it (`{deleted: 0}`), which is a success (`A181`);
+ * - `off` — nothing was asked: the feature is off, the address is unusable, or the local
+ *   write was refused first (`A166`);
+ * - `local` — a foreign note: the delete is local only and no server question exists
+ *   (`A168`);
+ * - `failed` — the call was made and did not answer 2xx with `{deleted: N}`. The note is
+ *   gone locally, the server keeps a copy, and `CONTENT_STRINGS.deleteServerFailed` is
+ *   the one sentence for it.
+ */
+export type ServerDeleteState = 'deleted' | 'absent' | 'off' | 'local' | 'failed';
+
+/** Outcome of one delete: the removed entry, or the code, plus the server half. */
+export type DeleteNoteResult = { ok: true; entry: Entry; serverDelete: ServerDeleteState } | {
+  ok: false;
+  code: EntryWriteCode;
+  serverDelete: ServerDeleteState;
+};
+
+/** One delete of the reader's own note (`A182`). */
+export interface DeleteNoteInput {
+  port: StoragePort;
+  /** Current page URL; the page key of the route is resolved by core from it. */
+  url: string;
+  /** The stored entry to remove. */
+  id: string;
+  /**
+   * The settings name the editor was opened with, `null` when no usable one exists.
+   *
+   * It is the `author_id` of the route: the server addresses a note by the triple
+   * `(page, author, note)`, so the name is part of the address and not a decoration.
+   */
+  currentName: string | null;
+  /**
+   * Where the call would go, from core `syncTargetOf` — `null` means "do not call"
+   * (`A166`). It is injected rather than read here, because the settings read lives in
+   * `sync-notes.ts` and this module has never touched it (`A31`).
+   */
+  target: SyncTarget | null;
+  /** `fetch` in the page; a recorder in a test. */
+  transport: SyncTransport;
+}
+
+/** Outcome of one foreign delete (`A168`): the memory forgot the note, the server was not asked. */
+export type ForeignDeleteResult =
+  | { ok: true; entry: Entry; serverDelete: ServerDeleteState }
+  | { ok: false; code: EntryWriteCode; serverDelete: ServerDeleteState };
 
 /** One comment save: which entry, what was typed, and what was re-selected. */
 export interface EditNoteInput {
@@ -182,16 +241,113 @@ export async function saveEntryComment(input: EditNoteInput): Promise<EditNoteRe
 }
 
 /**
+ * One delete of the reader's own note (rulings `A44`, `A182`, task `t17-06`).
+ *
+ * Three facts, in this order, and the order is the ruling:
+ *
+ * 1. **the local write comes first.** The page must react at once, and a server that is
+ *    down must not undo the reader's action; so core `deleteEntry` runs before anything
+ *    is sent, and a refusal from core answers here without a request;
+ * 2. **then the server, for this one note** (`A182`): one
+ *    `DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}`, addressed by the
+ *    entry's own page key, its author and its id — never by the popup's page-scoped
+ *    route, which would delete the author's whole page (`A181`);
+ * 3. **and the outcome is reported**: `serverDelete` is `'deleted'` when the server
+ *    removed the row, `'absent'` when it never held it (`{deleted: 0}` is a success, not
+ *    an error) and `'failed'` for every refusal code. Only `'failed'` has a sentence, and
+ *    it is `CONTENT_STRINGS.deleteServerFailed` — the note is deleted here and the server
+ *    still holds a copy.
+ *
+ * What decides whether a call is made at all:
+ *
+ * - a **foreign** note is never sent (`A168`): that path is `removeForeignFromPage`, which
+ *   performs no request and keeps the delete local;
+ * - with **no target** — synchronization off, or an address that does not parse — nothing
+ *   is called and the outcome is `'off'` (`A166`). That is not a failure the reader has to
+ *   fix: they turned the feature off, so there is no copy they asked anyone to remove;
+ * - a **page address core cannot key**, or a **settings record with no usable name**, is
+ *   the same answer as no target: there is no route to call and no author to name, and the
+ *   note stays deleted locally.
+ *
+ * The refusal of core is reported as it always was, and the server is not called for a
+ * write that did not happen: a note that is still stored must not leave the server.
+ */
+export async function removeNoteFromPage(input: DeleteNoteInput): Promise<DeleteNoteResult> {
+  const removed = await removeEntryFromPage(input.port, input.url, input.id);
+  if (!removed.ok) {
+    return { ok: false, code: removed.code, serverDelete: 'off' };
+  }
+
+  // `A166` first, and it is the same reader the automatic load uses: `syncTargetOf` over
+  // the settings record this call just read through the injected seam.
+  const target = input.target;
+  if (target === null) {
+    return { ok: true, entry: removed.entry, serverDelete: 'off' };
+  }
+  const pageKey = pageKeyFromUrl(input.url);
+  const authorName = input.currentName === null ? null : validateAuthorName(input.currentName).ok
+    ? input.currentName
+    : null;
+  if (pageKey === null || authorName === null) {
+    return { ok: true, entry: removed.entry, serverDelete: 'off' };
+  }
+
+  const answer = await deleteRemoteNote(
+    input.transport,
+    target,
+    pageKey,
+    authorName,
+    input.id,
+  );
+  if (!answer.ok) {
+    return { ok: true, entry: removed.entry, serverDelete: 'failed' };
+  }
+  return {
+    ok: true,
+    entry: removed.entry,
+    serverDelete: answer.value.deleted > 0 ? 'deleted' : 'absent',
+  };
+}
+
+/**
+ * Removes one foreign note from this page's memory and nothing else (ruling `A168`,
+ * unchanged by `t17-06`).
+ *
+ * A foreign note has no stored record: it lives in the content script's memory for this
+ * tab, so the delete is one `dismiss` of it — no server call, no storage write, and the
+ * note is back on the next page load. The answer is `'local'` because there is no server
+ * side of this delete to report, which is what keeps the two paths of `removeNoteFromPage`
+ * and this function from being confused: the first may ask the server about **one** note,
+ * this one never asks anything.
+ */
+export function removeForeignFromPage(memory: ForeignNotes, noteId: string): ForeignDeleteResult {
+  const note = memory.all().find((candidate) => candidate.entry.id === noteId);
+  if (note === undefined) {
+    return { ok: false, code: 'entry_not_found', serverDelete: 'local' };
+  }
+  const dismissed = memory.dismissNote(note.entry.authorName, note.entry.id);
+  if (!dismissed) {
+    return { ok: false, code: 'entry_not_found', serverDelete: 'local' };
+  }
+  return { ok: true, entry: note.entry, serverDelete: 'local' };
+}
+
+/**
  * Removes one entry of this page (the delete button of Flow 5, model AC11, task
  * `t3-03` AC4).
  *
  * No confirmation and no undo exist in v1 (ruling `A44`), so this function is the
- * whole of the delete path: it hands core `deleteEntry` the id and reports the coded
- * answer. Authorship is **not** checked here — `A25` rules that core does not gate
- * `deleteEntry` by author and that the UI is what hides the affordance — so the
- * editor controller's refusal to open for a foreign entry is the only line that
+ * whole of the local half of the delete path: it hands core `deleteEntry` the id and
+ * reports the coded answer. Authorship is **not** checked here — `A25` rules that core
+ * does not gate `deleteEntry` by author and that the UI is what hides the affordance —
+ * so the editor controller's refusal to open for a foreign entry is the only line that
  * keeps a reader from deleting somebody else's note, and it is pinned in
  * `tests/content-editor-controller.spec.ts`.
+ *
+ * Since `t17-06` this is the **first half** of the reader's own delete: the whole path, 
+ * with the one-note server call and its report, is `removeNoteFromPage` above. It stays
+ * exported because it is the local write stated on its own, and the pinned answer of the
+ * `t3-03`/`t3-05` tests is still exactly this call.
  */
 export function removeEntryFromPage(
   port: StoragePort,

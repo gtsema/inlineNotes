@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, InjectionToken, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, OnInit, inject, signal } from '@angular/core';
 
 import { createChromeLocalStoragePort } from '../content/store/chrome-storage-port';
 import { activeTabUrl } from './active-tab';
@@ -516,6 +516,15 @@ export class PopupComponent implements OnInit {
 
   ngOnInit(): void {
     void this.apply(this.service.open());
+    // Ruling `A183`: the popup asks once, and then **listens**. The page announces when
+    // its foreign list moved — which is what happens when its automatic load lands after
+    // that one question — so a late list still reaches a popup that is already open. No
+    // poll, no timer and no second question of this component's own: the announcement is
+    // the trigger and the service decides what to render.
+    const stop = this.service.watchPage((view: PageEntriesView): void => {
+      this.view.set(view);
+    });
+    inject(DestroyRef).onDestroy(stop);
   }
 
   /** Wording of one notice line, from the single constants module. */

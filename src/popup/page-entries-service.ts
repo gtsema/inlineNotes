@@ -69,7 +69,12 @@ import { loadSettings } from '../core/settings-store';
 import type { StoragePort } from '../core/storage-port';
 import { syncTargetOf } from '../core/sync-settings';
 import type { PageNotesChannelSource } from './page-notes-channel';
-import { askPage, dismissPageAuthor, switchPageAuthor } from './page-notes-channel';
+import {
+  askPage,
+  dismissPageAuthor,
+  listenForPageNotesUpdates,
+  switchPageAuthor,
+} from './page-notes-channel';
 
 /**
  * Schemes the content script is registered for (`src/manifest.json` ->
@@ -349,6 +354,16 @@ export class PageEntriesService {
   /** Port the writes go through; kept private so the component cannot reach it. */
   private readonly port: StoragePort;
 
+  /**
+   * `true` while a row press or a sync press is in flight (`A183`).
+   *
+   * An announcement that arrives during a press is a change that press caused — the
+   * page's memory moved because this popup asked it to — so it is dropped: the answer of
+   * the press is the fresher of the two views, and rendering the announcement's one would
+   * show a list the press has already moved past.
+   */
+  private pressing = false;
+
   constructor(source: PageEntriesSource) {
     this.source = source;
     this.port = source.port;
@@ -357,6 +372,36 @@ export class PageEntriesService {
   /** Opening the popup: one address read, one settings read, one page read. */
   async open(): Promise<PageEntriesView> {
     return await this.viewOf(await this.addressOf());
+  }
+
+  /**
+   * The page's announcement, heard (ruling `A183`).
+   *
+   * The popup asks **once** when it opens, and the page answers with what its memory holds
+   * at that moment — which may be nothing, because the page's automatic load is still
+   * running. This is the other half: while the popup is open it listens for the page's
+   * announcement and rebuilds the view, so a list that arrives late is still rendered. No
+   * poll, no timer and no second question of its own: the page says when something moved.
+   *
+   * It returns the unsubscribe, and the component calls it when it is destroyed, so a
+   * closed popup re-renders nothing. A source that cannot listen at all answers with a
+   * no-op, which is the honest state of a popup on a page that cannot announce.
+   */
+  watchPage(onView: (view: PageEntriesView) => void): () => void {
+    return listenForPageNotesUpdates(this.source.page, () => {
+      void this.refreshFor(onView);
+    });
+  }
+
+  /** One announcement answered: rebuild the view and hand it to the caller. */
+  private async refreshFor(onView: (view: PageEntriesView) => void): Promise<void> {
+    // A press in flight owns the view: the announcement of a change it caused would
+    // overwrite the state its own answer produces, and the two answers are the same one.
+    if (this.pressing) {
+      return;
+    }
+    const view = await this.viewOf(await this.addressOf());
+    onView(view);
   }
 
   /**
@@ -374,15 +419,15 @@ export class PageEntriesService {
    * and the row list that comes back is the page's own answer.
    */
   async setVisibilityForAuthor(authorName: string, visible: boolean): Promise<PageEntriesView> {
-    const url = await this.addressOf();
-    if (await this.routesToPage(authorName, url)) {
-      await switchPageAuthor(this.source.page, authorName, visible);
-      return await this.viewOf(url);
-    }
-    if (url !== null) {
-      await setVisibleForAuthor(this.port, { url, authorName, visible });
-    }
-    return await this.viewOf(url);
+    return await this.press(async (url: string | null) => {
+      if (await this.routesToPage(authorName, url)) {
+        await switchPageAuthor(this.source.page, authorName, visible);
+        return;
+      }
+      if (url !== null) {
+        await setVisibleForAuthor(this.port, { url, authorName, visible });
+      }
+    });
   }
 
   /**
@@ -399,13 +444,33 @@ export class PageEntriesService {
    * is what `A163`'s "memory only" means in the spec's own words.
    */
   async removeAllOfAuthor(authorName: string): Promise<PageEntriesView> {
+    return await this.press(async (url: string | null) => {
+      if (await this.routesToPage(authorName, url)) {
+        await dismissPageAuthor(this.source.page, authorName);
+        return;
+      }
+      if (url !== null) {
+        await deleteEntriesOfAuthor(this.port, { url, authorName });
+      }
+    });
+  }
+
+  /**
+   * One press: one address read, the write or the message, and the re-read that follows
+   * (`A1`, `A108`, `A183`).
+   *
+   * The `pressing` flag is what keeps an announcement from overwriting the answer a press
+   * is about to produce: a page that announces its own dismissal would otherwise hand the
+   * popup a view built before that dismissal had been asked for, and the row would blink.
+   * The flag is cleared in `finally`, so a write that throws leaves the popup listening.
+   */
+  private async press(act: (url: string | null) => Promise<void>): Promise<PageEntriesView> {
     const url = await this.addressOf();
-    if (await this.routesToPage(authorName, url)) {
-      await dismissPageAuthor(this.source.page, authorName);
-      return await this.viewOf(url);
-    }
-    if (url !== null) {
-      await deleteEntriesOfAuthor(this.port, { url, authorName });
+    this.pressing = true;
+    try {
+      await act(url);
+    } finally {
+      this.pressing = false;
     }
     return await this.viewOf(url);
   }

@@ -124,17 +124,20 @@ function excludeLocatorDefinition(file: string): boolean {
 
 describe('the content layer owns no persistence of its own (AC4)', () => {
   it('asks core for a write in exactly two modules, one per write flow', () => {
-    // `t3-03` widens this pin deliberately: Flow 5 of the overlay spec is a second
+    // `t3-03` widened this pin deliberately: Flow 5 of the overlay spec is a second
     // write flow, and a page-side editor that did not go through core would be a
     // second owner of the caps, the authorship rule and the write policy. The widening
-    // is one module per flow, not a second module per flow. The two widget files in the
-    // list name the module **for its result type only** — the `refusal line` of the
-    // editor is keyed by that type — and the call-level pin below is the one with teeth.
+    // is one module per flow, not a second module per flow.
+    //
+    // `t17-06` (ruling `A182`) narrows it back to the two flows and **removes** the two
+    // widget files: the delete path now answers `DeleteNoteResult` instead of core's
+    // `EntryWriteResult`, because a delete has a server half a stored record knows
+    // nothing about, so neither widget names `entry-store-write.ts` any more. The list is
+    // still exactly one module per write flow, and the call-level pin below is the one
+    // with teeth: no other module of `src/content/` calls a core write.
     expect(contentFilesImporting('src/core/entry-store-write.ts')).toEqual([
       'src/content/create/create-note.ts',
       'src/content/editor/edit-entry.ts',
-      'src/content/overlay/editor-controller.tsx',
-      'src/content/overlay/editor.tsx',
     ]);
     expect(
       contentFilesMatching(/\b(createEntryOnPage|updateEntryComment|deleteEntry|setVisible|clearPage)\s*\(/),
@@ -167,13 +170,21 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
       'src/content/create/create-note.ts',
       'src/content/sync/sync-notes.ts',
     ]);
-    // The address rule itself is core's and both modules of `src/content/sync/` read it:
+    // The address rule itself is core's. Both modules of `src/content/sync/` read it —
     // the wiring to decide whether to ask, and the memory to answer `A161` ("whose note
-    // is this?") for the rows the server returned. No third module names it.
+    // is this?") for the rows the server returned — and `t17-06` (ruling `A182`) adds the
+    // two modules of the delete path, which need the **type** of the target and nothing
+    // else: `editor/edit-entry.ts` sends the one-note route and `overlay/
+    // editor-controller.tsx` carries the target it was handed. Neither of them calls
+    // `syncTargetOf`, which the next case pins: the decision of `A166` still has exactly
+    // two readers, and those two are in `src/content/sync/`.
     expect(contentFilesImporting('src/core/sync-settings.ts')).toEqual([
+      'src/content/editor/edit-entry.ts',
+      'src/content/overlay/editor-controller.tsx',
       'src/content/sync/foreign-notes.ts',
       'src/content/sync/sync-notes.ts',
     ]);
+    expect(contentFilesMatching(/\bsyncTargetOf\s*\(/)).toEqual(['src/content/sync/sync-notes.ts']);
   });
 
   it('never imports the settings write, so the page cannot switch synchronization on itself', () => {

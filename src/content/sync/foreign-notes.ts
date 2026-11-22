@@ -83,6 +83,16 @@ export interface ForeignNotes {
    * not called, nothing is stored, and the notes are back on the next page load.
    */
   dismiss(authorName: string): number;
+  /**
+   * Removes **one** note from this page's memory, by its author and its id (`A168`).
+   *
+   * The id alone would be ambiguous: two authors may legitimately share one id on one
+   * page (`sync-server.md` -> the upsert triple), so a delete addressed by id only
+   * could take the wrong author's note. `false` means "this page holds no such note",
+   * and nothing was removed. The server is not called, nothing is stored, and the note
+   * is back on the next page load — the same promise `dismiss` makes for a whole author.
+   */
+  dismissNote(authorName: string, entryId: string): boolean;
   /** The authors this page currently holds notes from, in first-appearance order. */
   authors(): readonly { readonly authorName: string; readonly count: number; readonly allVisible: boolean }[];
 }
@@ -156,6 +166,14 @@ export function createForeignNotes(): ForeignNotes {
       const before = notes.length;
       notes = notes.filter((note) => !isSameAuthor(note.entry.authorName, authorName));
       return before - notes.length;
+    },
+
+    dismissNote(authorName: string, entryId: string): boolean {
+      const before = notes.length;
+      notes = notes.filter(
+        (note) => !(note.entry.id === entryId && isSameAuthor(note.entry.authorName, authorName)),
+      );
+      return notes.length !== before;
     },
 
     authors(): readonly { readonly authorName: string; readonly count: number; readonly allVisible: boolean }[] {

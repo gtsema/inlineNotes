@@ -144,10 +144,14 @@ describe('AC7 foreign notes are memory only, and their rows are this document\'s
     expect(memory.all().map((note) => note.entry.authorName)).toEqual(['Петя']);
     // Nothing to write to: this module holds no port at all, which is why the absence is
     // structural rather than observed. The assertion is the shape of the API.
+    // `t17-06` adds the fifth operation, `dismissNote` (ruling `A168` applied to one
+    // note instead of one author), and with it no port of any kind: the list is the same
+    // closure it was, and this assertion stays structural rather than observed.
     expect(Object.keys(memory).sort()).toEqual([
       'all',
       'authors',
       'dismiss',
+      'dismissNote',
       'paintInput',
       'replace',
       'setNoteVisible',

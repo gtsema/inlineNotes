@@ -50,6 +50,22 @@ import type { Entry } from './entry';
 export const NOTES_QUERY_MESSAGE = 'inlinenotes:page-notes';
 
 /**
+ * The `chrome.runtime` message a page sends to the popup when its foreign list moved
+ * (Stage 17, ruling `A183`, task `t17-06`).
+ *
+ * It is the **second direction** of the same channel and it carries nothing: the popup
+ * reacts by asking the ordinary question above, so there is one answer shape and one
+ * answerer. The word is `updated` rather than `changed` so the two constants cannot be
+ * mistaken for each other in a grep, and it is declared here for the same reason
+ * `NOTES_QUERY_MESSAGE` is: the two documents are separate bundles.
+ *
+ * Why a message and not a second question from the popup: a popup that asked twice
+ * would be polling (`A183` forbids a timer, and forbids a second question too), and a
+ * popup opened while the page was still loading would ask the same empty page twice.
+ */
+export const PAGE_NOTES_UPDATED_MESSAGE = 'inlinenotes:page-notes-updated';
+
+/**
  * One foreign author of a page, as the popup needs it.
  *
  * `authorName` is the stored name **verbatim**, because that is the address of the one
@@ -97,6 +113,27 @@ export interface PageNotesQueryResult {
   readonly syncFailed: boolean;
 }
 
+/**
+ * What a page sends as its announcement (`A183`): the rows it holds right now.
+ *
+ * It is the answer shape **minus** the failure flag, because an announcement is a
+ * statement about a list and not about a request. The popup that hears it asks the
+ * ordinary question, so the flag the popup renders is still the one the page's own load
+ * decided.
+ */
+export interface PageNotesUpdate {
+  /** One row per foreign author this document holds, in first-appearance order. */
+  readonly rows: readonly ForeignAuthorView[];
+}
+
+/**
+ * The announcement a page sends when its foreign list moved (`A183`), built by the one
+ * projection the answer uses.
+ */
+export function pageNotesUpdateOf(memory: ForeignNotesSnapshot): PageNotesUpdate {
+  return { rows: foreignAuthorRowsOf(memory) };
+}
+
 /** The answer of a page that holds nothing: the state ruling `A166` describes. */
 export const EMPTY_PAGE_NOTES_QUERY_RESULT: PageNotesQueryResult = { rows: [], syncFailed: false };
 
@@ -130,6 +167,21 @@ export function pageNotesQueryResultOf(
   memory: ForeignNotesSnapshot,
   syncFailed: boolean,
 ): PageNotesQueryResult {
+  return { rows: foreignAuthorRowsOf(memory), syncFailed };
+}
+
+/**
+ * The foreign rows of one document, grouped by author (`A95`, `A108`, `A167`).
+ *
+ * It is the projection above minus the failure flag, and it exists because the page has
+ * a second reader of the same rows: the announcement a page sends when its memory moved
+ * (`A183`) carries the rows and no load outcome, since a change of the list says nothing
+ * about the last load. One grouping serves both, so the answer and the announcement can
+ * never disagree about what a row is.
+ */
+export function foreignAuthorRowsOf(
+  memory: ForeignNotesSnapshot,
+): readonly ForeignAuthorView[] {
   const grouped: ForeignAuthorView[] = [];
   for (const note of memory.all()) {
     const at = grouped.findIndex(
@@ -146,5 +198,5 @@ export function pageNotesQueryResultOf(
       allVisible: row.allVisible && note.visible,
     };
   }
-  return { rows: grouped, syncFailed };
+  return grouped;
 }
