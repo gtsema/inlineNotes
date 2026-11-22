@@ -47,7 +47,6 @@
 import { render } from 'preact';
 import { documentRangeForFragment, placementFragmentBox } from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
-import { paintColourOfSlot } from '../paint/paint-palette';
 import type { PaintedEntry } from '../paint/paint-plan';
 import { placeCard } from './card-placement';
 import type { Viewport } from './card-placement';
@@ -181,11 +180,12 @@ export function createTooltipController(
     setOverlayHostHidden(overlay, false);
 
     const header = ownershipHeaderOf(entry.entry, options.authorName());
-    // The author's own colour is read from the palette slot the paint pass already
-    // decided for this entry (Stage 17, `A163`): one hash, one slot, one colour for the
-    // underline on the page and for the name in this header.
-    const headerColour = paintColourOfSlot(entry.paintSlot);
-    const key = `${entry.entry.id}|${header}|${entry.entry.comment}|${headerColour}`;
+    // The header's ink is the **stylesheet's** decision alone (ruling `A180`, `t17-05`):
+    // the own header keeps the surface ink and a foreign one takes the `A125` action
+    // colour, both declared in `tooltip-style.ts`. `A163` used to pass the author's
+    // palette fill here as an inline style, which painted a 26 %-alpha *background*
+    // colour onto a name and made it unreadable on the cream card.
+    const key = `${entry.entry.id}|${header}|${entry.entry.comment}`;
     if (key !== renderedKey) {
       renderedKey = key;
       render(
@@ -193,7 +193,6 @@ export function createTooltipController(
           header={header}
           isOwnEntry={isOwnEntry(entry.entry, options.authorName())}
           comment={entry.entry.comment}
-          headerColour={headerColour}
         />,
         wrapper,
       );

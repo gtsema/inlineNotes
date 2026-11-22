@@ -462,10 +462,16 @@ describe('the tooltip of painted text (AC3)', () => {
  * `A125` mapping as the two cards, so the page does not keep one surface on the old greys.
  * The four values this module shipped with — `#ffffff`, `#14171a`, `#b9bec4` and `#444c56`
  * — are **updated** to their roles rather than dropped: the surface is the cream role, the
- * ink the ink role, the frame the decorative role and the foreign header's ink the hint
- * role. Nothing but colours moved (`A150`), and the highlight slots of
- * `src/content/paint/paint-palette.ts` stay byte-identical (`A151`, pinned by
- * `tests/content-paint-palette.spec.ts` without edits).
+ * ink the ink role and the frame the decorative role. Nothing but colours moved (`A150`),
+ * and the highlight slots of `src/content/paint/paint-palette.ts` stay byte-identical
+ * (`A151`, pinned by `tests/content-paint-palette.spec.ts` without edits).
+ *
+ * Ruling `A180` (`t17-05`) moved **one** of those roles: the `ownership header` of a
+ * `foreign entry` is no longer the hint `#7b6a55` (nor the author's palette fill, which is
+ * what `A163` passed as an inline style) but the `A125` **action** colour `#b8480d`, and
+ * the name is no longer italic. The five roles this stylesheet declares are therefore
+ * `#1b2a33`, `#a6cbdc`, `#fdf7ee`, `#7b6a55` (the hint, still carried by no rule of this
+ * file — see the counterfactual below) and `#b8480d`.
  */
 describe('the tooltip takes the A125 palette (A152)', () => {
   /** The body of one rule of the shipped stylesheet, by its selector text. */
@@ -487,17 +493,48 @@ describe('the tooltip takes the A125 palette (A152)', () => {
     expect(surface).toContain('color: #1b2a33;');
     expect(surface).toContain('background: #fdf7ee;');
     expect(surface).toContain('border: 1px solid #a6cbdc;');
-    // The `ownership header` of a `foreign entry` is the tooltip's only secondary ink.
-    expect(
-      tooltipRuleBody(`.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS}`),
-    ).toContain('color: #7b6a55;');
+  });
+
+  it('colours a foreign author name with the A125 action role, not the hint and not a fill (A180)', () => {
+    // The one role `t17-05` moved. The pin is on the **rule**, so a later edit that
+    // reaches for the hint ink again — or for a palette fill — is red here.
+    const foreign = tooltipRuleBody(
+      `.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS}`,
+    );
+    expect(foreign).toContain('color: #b8480d;');
+    expect(foreign).not.toContain('#7b6a55');
+    // `A180`: the name is no longer italic — the action colour is what makes it read as
+    // a name rather than as a hint. The own header's weight asymmetry stays.
+    expect(foreign).toContain('font-weight: 400;');
+    expect(foreign).not.toMatch(/font-style:\s*italic/);
+    // The reader's own header carries no colour of its own: it keeps the surface ink
+    // (`A180` changes the foreign branch only).
+    expect(tooltipRuleBody(`.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}`)).not.toMatch(
+      /(?:^|;)\s*color:/,
+    );
+  });
+
+  it('renders the header with no inline colour at all: the fill of `A163` is gone (A180)', async () => {
+    await boot();
+    caret = { node: textOf('p1'), offset: 20 };
+
+    tooltip.hoverAt(20, 84);
+
+    const header = overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS}`);
+    expect(header).not.toBeNull();
+    // The defect the user reported: `paintColourOfSlot` wrote an `rgba(…, 0.26)`
+    // background colour onto a name. There is no inline style left to carry one.
+    expect(header?.getAttribute('style')).toBeNull();
+    expect(header?.getAttribute('style') ?? '').not.toContain('rgba(');
   });
 
   it('declares exactly the four roles and invents no colour', () => {
     const declared = new Set(
       [...TOOLTIP_CSS.matchAll(/#[0-9a-fA-F]{6}/g)].map((match) => match[0].toLowerCase()),
     );
-    expect([...declared].sort()).toEqual(['#1b2a33', '#7b6a55', '#a6cbdc', '#fdf7ee']);
+    // `A180` retired `#7b6a55` from this file: the only `#b8480d` is the action role, and
+    // no new literal was invented for the header.
+    expect([...declared].sort()).toEqual(['#1b2a33', '#a6cbdc', '#b8480d', '#fdf7ee']);
   });
 
   it('moves no geometry with the colours: the box a reader presses is the one it was', () => {

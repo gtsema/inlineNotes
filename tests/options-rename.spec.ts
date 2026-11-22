@@ -426,6 +426,7 @@ function componentOver(port: MemoryStoragePort): {
     setDraft: (value: string) => void;
   };
   service: AuthorNameService;
+  raw: Record<string, unknown>;
 } {
   const service = serviceFor(port);
   const surface = Object.create(OptionsComponent.prototype) as Record<string, unknown>;
@@ -456,7 +457,12 @@ function componentOver(port: MemoryStoragePort): {
     }),
   };
   Object.assign(surface, { service, ...signals });
+  // The prototype-backed object is what the component's own methods bind to, so it is
+  // returned as `raw` for the accessor helper below: a plain wrapper object has the
+  // signals but not `message()`, and calling one on it is `this.message is not a
+  // function`.
   return {
+    raw: surface,
     surface: {
       draft: (): { value: string } => draft,
       renameConfirm: (): boolean => confirm,
@@ -552,5 +558,110 @@ describe('the component shows the warning and its two answers (t17-04 AC4, AC5, 
     expect(surface.renameConfirm()).toBe(false);
     expect(surface.view()).toEqual({ name: NEW_NAME, message: 'saved' });
     expect(writeOrder(port)).toEqual([`set:${SETTINGS_KEY}`]);
+  });
+});
+
+/**
+ * Ruling `A179` (`t17-05` AC3): the confirmation line renders **once** on every path.
+ *
+ * The defect the user found in Run 16 was two `@if` blocks answering the same `saved` code,
+ * so a rename save printed «Сохранено» twice. The template now renders one node from one
+ * merged accessor, and this case counts the nodes the shipped accessors would produce on
+ * the **rename** path — driven through the real handlers, over the real store.
+ */
+describe('Ruling A179 — exactly one confirmation node on the rename path (t17-05 AC3)', () => {
+  /**
+   * The stand-in for the shipped template's one message block: it renders a node only when
+   * `hasConfirmation()` says so, exactly like `@if (hasConfirmation())`.
+   */
+  function confirmationNodes(surface: {
+    hasConfirmation: () => boolean;
+    message: () => string;
+    messageClass: () => string;
+  }): { text: string; className: string }[] {
+    return surface.hasConfirmation()
+      ? [{ text: surface.message(), className: surface.messageClass() }]
+      : [];
+  }
+
+  function accessorsOf(component: ReturnType<typeof componentOver>['raw']): {
+    hasConfirmation: () => boolean;
+    message: () => string;
+    messageClass: () => string;
+  } {
+    const method = (name: string): (() => unknown) =>
+      (OptionsComponent.prototype as unknown as Record<string, (this: unknown) => unknown>)[
+        name
+      ] as (this: unknown) => unknown;
+    return {
+      hasConfirmation: method('hasConfirmation').bind(component) as () => boolean,
+      message: method('message').bind(component) as () => string,
+      messageClass: method('messageClass').bind(component) as () => string,
+    };
+  }
+
+  it('shows exactly one «Сохранено» after a rename save', async () => {
+    const port = renameableStore();
+    const { surface, raw, service } = componentOver(port);
+    await service.open();
+    surface.setDraft(NEW_NAME);
+
+    surface.onSave();
+    await settled();
+    surface.onRenameContinue();
+    await settled();
+
+    const nodes = confirmationNodes(accessorsOf(raw));
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].text).toBe(OPTIONS_STRINGS.saved);
+    // And both sources agree, which is what makes the merge a merge and not a mask: the
+    // retired second block would have printed the same sentence a second time.
+    expect(surface.view().message).toBe('saved');
+    expect(surface.renameOutcome()?.outcome).toBe('saved');
+  });
+
+  it('shows exactly one line on the ordinary save, the refusal and the partial sweep too', async () => {
+    // The ordinary save: no rename outcome at all.
+    const ordinaryPort = emptyStore();
+    const ordinary = componentOver(ordinaryPort);
+    await ordinary.service.open();
+    ordinary.surface.setDraft(NEW_NAME);
+    ordinary.surface.onSave();
+    await settled();
+    expect(confirmationNodes(accessorsOf(ordinary.raw))).toHaveLength(1);
+
+    // The rename whose sweep could not finish: the partial sentence, once.
+    //
+    // The failure has to be a real one — the sweep must save the name and then fail to
+    // clean a page — so the slot write of one page is refused. Seeding the new name and
+    // typing the same value again, which this case used to do, performs no rename at all
+    // and answered the ordinary confirmation.
+    const partialPort = renameableStore();
+    const partial = componentOver(partialPort);
+    await partial.service.open();
+    partial.surface.setDraft(NEW_NAME);
+    partialPort.failWriteOn(SLOT_A, 'quota');
+    partial.surface.onSave();
+    await settled();
+    partial.surface.onRenameContinue();
+    await settled();
+    const partialNodes = confirmationNodes(accessorsOf(partial.raw));
+    expect(partialNodes).toHaveLength(1);
+    expect(partialNodes[0].text).toBe(RENAME_OUTCOME_TEXT.sweep_failed);
+  });
+
+  it('shows nothing at all while the rename warning stands', async () => {
+    const port = renameableStore();
+    const { surface, raw, service } = componentOver(port);
+    await service.open();
+    surface.setDraft(NEW_NAME);
+
+    surface.onSave();
+    await settled();
+
+    expect(surface.renameConfirm()).toBe(true);
+    // The warning is the only line the page shows, so the appearing-block budget of
+    // `A178` covers one block at a time.
+    expect(confirmationNodes(accessorsOf(raw))).toEqual([]);
   });
 });

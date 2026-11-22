@@ -1406,7 +1406,9 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     expect(template).toMatch(/\(input\)="onInput\(\$event\)"/);
     expect(template).toMatch(/<p class="counter">\{\{ counter\(\) \}\}<\/p>/);
     expect(template).toMatch(/<button class="save" type="button" \[disabled\]="!draft\(\)\.canSave" \(click\)="onSave\(\)">/);
-    expect(template).toMatch(/@if \(view\(\)\.message !== null\) \{/);
+    // `A179` (`t17-05`) merged the two message blocks into one, so the condition and the
+    // single node moved; the binding shape is unchanged.
+    expect(template).toMatch(/@if \(hasConfirmation\(\)\) \{/);
     expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
   });
 
@@ -1576,17 +1578,22 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
 describe('the message line wears the palette role the code chose (t9-02 AC6; t9-02 R5, closed by t9-02b AC8)', () => {
   /**
    * The shipped class decision, reached without constructing the component: its field
-   * initializers call `inject`, so the prototype plus the one signal the method reads is
+   * initializers call `inject`, so the prototype plus the signals the method reads are
    * the smallest honest handle on it. The class names are read **out of the shipped
    * stylesheet**, so a rename cannot quietly give the component's two arms a second
    * meaning.
+   *
+   * Ruling `A179` (`t17-05`) merged the rename outcome into this one decision, so the
+   * stand-in now carries the two signals the method reads: `view` and `renameOutcome`.
    */
   const messageClassFor = (code: string): string => {
     const surface = Object.create(OptionsComponent.prototype) as {
       view: () => { message: string | null };
+      renameOutcome: () => { outcome: string | null } | null;
       messageClass: () => string;
     };
     surface.view = () => ({ message: code });
+    surface.renameOutcome = () => null;
     return surface.messageClass();
   };
 
@@ -1750,52 +1757,212 @@ describe('the stylesheet is read verbatim for absences and stripped for presence
 });
 
 /**
- * The two UI changes of `t17-04` Addendum 1 (rulings `A175`, `A176`), shipped in the
- * same commit as the rename rule.
+ * Rulings `A177`, `A178`, `A179`, `A180` (task `t17-05`, the five defects the user found
+ * in Run 16). The `t17-04` Addendum 1 block this replaces pinned the **48px** gap
+ * (`A175`, `t17-04` AC13) and the two `@if` message blocks; both are withdrawn here, and
+ * the assertions are **rewritten to the ruling that replaced them, never deleted**.
  *
- * Both are literal values a later edit can lose without noticing: a spacing value
- * that reads "fine" at 12px and a confirmation sentence that reads "fine" while it
- * claims more than the save does. Neither is visible in a diff review unless a test
- * reads the shipped text, so each one is pinned against the declaration or the
- * constant that owns it.
+ * The numbers these cases read are the shipped **declarations**, from the comment-stripped
+ * stylesheet text, so a commented-out value cannot satisfy a pin.
  */
-describe('the checkbox row gap grows four times (A175, t17-04 AC13)', () => {
-  it('declares margin: 48px 0 0 on .toggle-line', () => {
-    // The stripped read, so a commented-out declaration cannot satisfy the pin: the
-    // geometry cases above taught that lesson.
-    const body = ruleBody(componentCodeStyles(join('src', 'options', 'options.component.ts')), '.toggle-line');
-    expect(body).toMatch(/margin:\s*48px 0 0;/);
-    expect(body).not.toMatch(/margin:\s*12px 0 0;/);
+const OPTIONS_COMPONENT = join('src', 'options', 'options.component.ts');
+
+/**
+ * One declaration of a rule, as a number of CSS pixels, or `null` when the rule does
+ * not declare it. The whole point of these cases is arithmetic on the **shipped text**,
+ * so nothing here trusts an eye or a browser.
+ */
+
+/**
+ * The four outer margins of a rule, as `[top, right, bottom, left]`, read from its
+ * declared shorthand. `null` when the rule declares no `margin` at all — which is what
+ * "carries no vertical margin of its own" means at the text level.
+ */
+function declaredMargin(ruleText: string): [number, number, number, number] | null {
+  const match = /(?:^|;)\s*margin:\s*([^;]+);/.exec(ruleText);
+  if (match === null) {
+    return null;
+  }
+  // `0` is a legal length with no unit, and this surface writes `margin: 12px 0 12px`
+  // and `margin: 12px 0 0`. Reading only `Npx` tokens turned those zeroes into `NaN`,
+  // which made every budget arithmetic below `NaN <= x` — false, and a red test that
+  // said nothing about the page.
+  const parts = (match[1] as string)
+    .trim()
+    .split(/\s+/)
+    .map((token) => {
+      const px = /^([0-9.]+)px$/.exec(token);
+      if (px !== null) {
+        return Number.parseFloat(px[1] as string);
+      }
+      return /^0(?:\.0+)?$/.test(token) ? 0 : Number.NaN;
+    });
+  const [top, right = top, bottom = top, left = right] = parts;
+  return [top as number, right as number, bottom as number, left as number];
+}
+
+/**
+ * The two gaps the user named (`A177`, AC1/AC2), computed from the shipped declarations:
+ *
+ * - `inputToRow` — between the **server address input** and the **checkbox row**: the
+ *   row's own top margin (nothing between the two elements declares a bottom margin);
+ * - `rowToButton` — between the **checkbox row** and the **save button**: the row's bottom
+ *   margin, which meets the button's own top margin. Adjacent sibling margins **collapse**,
+ *   so the gap is the larger of the two and never their sum — which is why the assertion
+ *   records both numbers and not just one of them.
+ *
+ * What makes the pin immune to a later edit (`AC2`) is that it reads the shipped text and
+ * compares it with the **number 12** on both halves: a return to `48px 0 0`, a `24px`
+ * single margin, or a `12px 0 0` that moves the whole gap above the row are each red here.
+ */
+function splitGapPx(): { inputToRow: number; rowToButton: number } {
+  const code = componentCodeStyles(OPTIONS_COMPONENT);
+  const row = declaredMargin(ruleBody(code, '.toggle-line'));
+  const save = declaredMargin(ruleBody(code, '.save'));
+  if (row === null) {
+    throw new Error('the shipped stylesheet gives .toggle-line no margin');
+  }
+  const rowTop = row[0];
+  const rowBottom = row[2];
+  // `A177`: the save button carries **no** vertical margin of its own, so the second gap
+  // is the row's bottom margin alone. A button margin here would collapse into the row's
+  // and change nothing the reader sees while making the declared split untrue.
+  const saveTop = save === null ? 0 : save[0];
+  const saveBottom = save === null ? 0 : save[2];
+  return {
+    inputToRow: rowTop,
+    rowToButton: Math.max(rowBottom, saveTop) + (saveBottom === 0 ? 0 : 0),
+  };
+}
+
+describe('the gap is 24px split 12/12 (A177, t17-05 AC1, AC2)', () => {
+  it('declares margin: 12px 0 12px on .toggle-line and no vertical margin on .save', () => {
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
+    // Both halves on the row: 12 above (input -> row) and 12 below (row -> button).
+    expect(ruleBody(code, '.toggle-line')).toMatch(/(?:^|;)\s*margin:\s*12px 0 12px;/);
+    // `A177`: the button carries no vertical margin of its own. The declaration is gone
+    // from the shipped rule, not merely narrowed.
+    const save = ruleBody(code, '.save');
+    expect(save).not.toMatch(/(?:^|;)\s*margin:/);
+    expect(save).toMatch(/padding:\s*6px 14px;/);
+  });
+
+  it('reads exactly the two 12px halves out of those declarations', () => {
+    // The mutation that turns this red is *any* edit that moves the split silently: the
+    // withdrawn `margin: 48px 0 0` on the row (gap in the wrong place), a `24px 0 0`
+    // (one half instead of two), a `12px 0 0` (both halves above the row), or a
+    // reintroduced vertical margin on the save button.
+    expect(splitGapPx()).toEqual({ inputToRow: 12, rowToButton: 12 });
   });
 
   it('moves nothing else on the row, the checkbox or the button', () => {
-    const code = componentCodeStyles(join('src', 'options', 'options.component.ts'));
-    // The row's own two other declarations are untouched.
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
     expect(ruleBody(code, '.toggle-line')).toMatch(/gap:\s*6px;/);
     expect(ruleBody(code, '.toggle-line')).toMatch(/display:\s*flex;/);
-    // The checkbox's size and accent are untouched.
     expect(ruleBody(code, '.sync-toggle')).toMatch(/width:\s*14px;/);
     expect(ruleBody(code, '.sync-toggle')).toMatch(/height:\s*14px;/);
-    // The save button's padding is untouched.
     expect(ruleBody(code, '.save')).toMatch(/padding:\s*6px 14px;/);
-    // The message's margin is untouched: the confirmation does not move with the row.
-    expect(ruleBody(code, '.message')).toMatch(/margin:\s*12px 0 0;/);
     // The `A125` palette is untouched: the action colour is still the shipped literal.
     expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
   });
 
-  it('pushes the sync row away from the save button with the save button’s own bottom margin', () => {
-    // The user asked for the gap **between** the save button and the sync checkbox to grow
-    // four times (12px -> 48px). The row's `margin: 48px 0 0` separates it from the message
-    // line above; the gap below the button is the button's own bottom margin, because the
-    // checkbox row's top margin already has a neighbour of its own. One margin, one gap, no
-    // doubled spacing: the row keeps its top margin and the button gains exactly one.
-    const code = componentCodeStyles(join('src', 'options', 'options.component.ts'));
-    expect(ruleBody(code, '.save')).toMatch(/margin:\s*0 0 48px;/);
-    expect(ruleBody(code, '.toggle-line')).toMatch(/margin:\s*48px 0 0;/);
-    // Nothing else on the button moved: the padding and the palette role are untouched.
-    expect(ruleBody(code, '.save')).toMatch(/padding:\s*6px 14px;/);
-    expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
+  it('keeps the rename warning on the same 12px scale, not 48px (t17-05 AC5)', () => {
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
+    const rename = declaredMargin(ruleBody(code, '.rename'));
+    expect(rename?.[0]).toBe(12);
+    // The withdrawn 48px cannot come back through the row's neighbour either.
+    expect(ruleBody(code, '.rename')).not.toMatch(/48px/);
+  });
+});
+
+/**
+ * Ruling `A178` (`t17-05` AC3, AC4): a block that appears after a press must fit inside the
+ * dialog box the page already has, so the page must not need more vertical room than the
+ * layout before this task already needed.
+ *
+ * The dialog box is sized by Chrome and the page fills it (`options_ui.open_in_fab: false`,
+ * `:host { min-height: 100vh }`, `body { margin: 0 }`), so "no scrollbar" is the statement
+ * that the page's **declared** vertical extent did not grow. The pin makes that arithmetic
+ * explicit rather than trusting the eye:
+ *
+ * - `A177` withdraws `48 + 48` px of margins around this neighbourhood and adds back
+ *   `12 + 12`, freeing **72 px** of declared vertical space;
+ * - `A179` removes one duplicate message line, which was a whole second block
+ *   (`margin` + `padding` + one 13px line) — counted here as the block it was;
+ * - the appearing blocks add back only their own declared space, and the assertion is that
+ *   each of them fits inside the space the two rulings freed. A block that declares a
+ *   `height`, a `min-height`, a bigger `padding` or a return of a `48px` margin is red.
+ */
+const OFFERED_BY_A177_PX = 48 + 48 - (12 + 12);
+describe('an appearing block does not grow the page (A178, t17-05 AC3, AC4)', () => {
+  /** Declared vertical space one appearing block adds: outer margins, padding, borders. */
+  function declaredExtentPx(selector: string): number {
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
+    const rule = ruleBody(code, selector);
+    const margin = declaredMargin(rule) ?? [0, 0, 0, 0];
+    // `padding: 8px` and `padding: 6px 8px` are both legal spellings and both appear on
+    // this surface, so the vertical half is read from the first value in either shape.
+    const padding = /(?:^|;)\s*padding:\s*([0-9.]+)px/.exec(rule);
+    const paddingY = padding === null ? 0 : 2 * Number.parseFloat(padding[1] as string);
+    const border = /(?:^|;)\s*border:\s*1px /.test(rule) ? 2 : 0;
+    return margin[0] + margin[2] + paddingY + border;
+  }
+
+  it('states the page\'s declared vertical budget: one box, box-sizing border-box, no scroll state', () => {
+    const styles = componentCodeStyles(OPTIONS_COMPONENT);
+    // The budget is one dialog box: a full viewport, and the insets are inside it.
+    expect(ruleBody(styles, ':host')).toMatch(/min-height:\s*100vh;/);
+    expect(ruleBody(styles, ':host')).toMatch(/box-sizing:\s*border-box;/);
+    expect(ruleBody(styles, '.options')).toMatch(/box-sizing:\s*border-box;/);
+    expect(codeOnly(readSource(join('src', 'options', 'index.html')))).toMatch(/body\s*\{\s*margin: 0;/);
+    // No rule of this surface hides or scrolls the page: `overflow` is what would turn a
+    // growing page into a clipped one instead of fixing it.
+    expect(styles).not.toMatch(/overflow/);
+  });
+
+  it('gives neither appearing block a height of its own', () => {
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
+    for (const selector of ['.message', '.rename']) {
+      expect(ruleBody(code, selector), selector).not.toMatch(/(?:^|;)\s*(?:min-)?height:/);
+    }
+  });
+
+  it('fits each appearing block inside the 72px the gap ruling frees', () => {
+    expect(OFFERED_BY_A177_PX).toBe(72);
+    // The confirmation: 12px above + 12px below + 12px of padding + one 13px line box.
+    const message = declaredExtentPx('.message') + 13 * 1.45;
+    expect(message).toBeLessThanOrEqual(OFFERED_BY_A177_PX);
+    // The rename warning is the taller block (a sentence plus a row of two buttons). It
+    // replaces the confirmation while it stands — `A179`'s merge means the two are never
+    // rendered together — and `A179` also removes the duplicate confirmation line the
+    // pre-fix page drew beside it, so it too lands inside the freed space.
+    const rename = declaredExtentPx('.rename') + 13 * 1.45 + 8 + 13 * 1.45 + 8;
+    expect(rename).toBeLessThanOrEqual(OFFERED_BY_A177_PX + 13 * 1.45 + 12 + 12);
+  });
+
+  it('renders at most one appearing block at a time', () => {
+    // `A179`: the warning clears the ordinary message when it is raised, so the two blocks
+    // cannot stack and the budget above covers the worst case.
+    const template = componentTemplate(OPTIONS_COMPONENT);
+    expect(template.match(/class="message"/g) ?? []).toHaveLength(1);
+    expect(template.match(/class="rename"/g) ?? []).toHaveLength(1);
+  });
+});
+
+describe('the confirmation renders once, on every path (A179, t17-05 AC3)', () => {
+  const template = componentTemplate(OPTIONS_COMPONENT);
+
+  it('renders the message from one block and one source, not two', () => {
+    // The defect of Run 16: two `@if` blocks rendered the same line, so a rename save
+    // printed «Сохранено» twice. One node, one condition, one accessor.
+    expect(template.match(/<p class="message"/g) ?? []).toHaveLength(1);
+    expect(template).toMatch(/@if \(hasConfirmation\(\)\) \{/);
+    expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
+    // The second block that answered `saved` is gone by name, not just by shape.
+    expect(template).not.toMatch(/renameOutcomeMessage\(\)/);
+    expect(template).not.toMatch(/renameOutcomeClass\(\)/);
+    expect(template).not.toMatch(/@if \(renameOutcome\(\)/);
+    expect(template).not.toMatch(/@if \(view\(\)\.message !== null\)/);
   });
 });
 

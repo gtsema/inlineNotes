@@ -161,12 +161,8 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         </div>
       }
 
-      @if (view().message !== null) {
+      @if (hasConfirmation()) {
         <p class="message" [class]="messageClass()">{{ message() }}</p>
-      }
-
-      @if (renameOutcome() !== null) {
-        <p class="message" [class]="renameOutcomeClass()">{{ renameOutcomeMessage() }}</p>
       }
     </main>
   `,
@@ -268,7 +264,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 48px 0 0;
+      margin: 12px 0 12px;
     }
 
     .sync-toggle {
@@ -280,7 +276,6 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .save {
-      margin: 0 0 48px;
       padding: 6px 14px;
       color: #ffffff;
       background: #b8480d;
@@ -297,7 +292,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .message {
-      margin: 12px 0 0;
+      margin: 12px 0 12px;
       padding: 6px 8px;
       border-radius: 6px;
       background: #eef4f7;
@@ -397,10 +392,37 @@ export class OptionsComponent implements OnInit {
     return nameCounterText(this.draft().codePointCount);
   }
 
-  /** Russian wording of the current message code, from the single map. */
+  /**
+   * The **one** sentence the confirmation band shows (ruling `A179`, `t17-05`).
+   *
+   * Before this ruling the template carried two independent `@if` blocks — one for
+   * `view().message` and one for `renameOutcome()` — and a rename save answered `saved`
+   * through **both**, so the reader saw «Сохранено» twice. The two sources are merged
+   * here, before rendering, so the page renders one node on every path:
+   *
+   * - a rename outcome with wording wins, because it is the more specific answer
+   *   (`sweep_failed` says the name saved and a page could not be cleaned, which the
+   *   ordinary `saved` code cannot express);
+   * - otherwise the ordinary message code's sentence, `''` when there is none.
+   *
+   * The rename **rule** is untouched (`A173`, `A174`): this is the render half only.
+   */
   message(): string {
+    const rename = this.renameOutcome();
+    if (rename !== null && rename.outcome !== null) {
+      return renameOutcomeText(rename.outcome);
+    }
     const code = this.view().message;
     return code === null ? '' : optionsMessageText(code);
+  }
+
+  /**
+   * Whether the confirmation band renders at all — the one condition of the one block
+   * (`A179`). `false` while no source carries a sentence, which is what makes the
+   * ordinary and the rename path share a single rendering site.
+   */
+  hasConfirmation(): boolean {
+    return this.message() !== '';
   }
 
   /** Russian wording of the address refusal, from the single map (ruling `A33`). */
@@ -414,9 +436,21 @@ export class OptionsComponent implements OnInit {
    * accent on the pale band, a refusal keeps the color this page shipped with
    * before the palette existed. This chooses a class and no wording — the wording
    * is the map's, and the code that decides the class is the map's key.
+   *
+   * Merged with the rename outcome in the same ruling (`A179`): a rename that
+   * completed wears the confirmation role, a partial deletion the refusal one — the
+   * class `renameOutcomeClass()` used to carry, now decided in the one place the
+   * sentence is decided, so wording and colour cannot disagree.
    */
   messageClass(): string {
-    return this.view().message === 'saved' ? 'message message--saved' : 'message message--refusal';
+    const rename = this.renameOutcome();
+    if (rename !== null && rename.outcome === 'sweep_failed') {
+      return 'message message--refusal';
+    }
+    if (this.view().message === 'saved' || (rename !== null && rename.outcome === 'saved')) {
+      return 'message message--saved';
+    }
+    return 'message message--refusal';
   }
 
   /** One typed value: the service cuts everything past the cap, then the field re-renders. */
@@ -456,19 +490,6 @@ export class OptionsComponent implements OnInit {
    */
   onRenameContinue(): void {
     void this.confirmRename();
-  }
-
-  /** Russian wording of the rename outcome, or `''` when there is none. */
-  renameOutcomeMessage(): string {
-    const outcome = this.renameOutcome()?.outcome;
-    return outcome === null || outcome === undefined ? '' : renameOutcomeText(outcome);
-  }
-
-  /** The partial-deletion state wears the refusal colour; a complete rename the saved one. */
-  renameOutcomeClass(): string {
-    return this.renameOutcome()?.outcome === 'sweep_failed'
-      ? 'message message--refusal'
-      : 'message message--saved';
   }
 
   /** One typed character of the address field: a draft only, nothing is written yet. */
@@ -523,6 +544,11 @@ export class OptionsComponent implements OnInit {
       // `A173`: the warning asks first and writes nothing. The field keeps the typed
       // value so `Отмена` leaves the reader's edit in place, and applying the stored
       // name here would erase what they typed.
+      //
+      // `A179` (`t17-05`): while the warning stands it is the **only** line the page
+      // shows, so a sentence from an earlier save cannot stand beside it and make the
+      // reader count two answers. The name is kept; only the message is cleared.
+      this.view.set({ name: this.view().name, message: null });
       return;
     }
     this.apply(decision.view);
@@ -532,9 +558,12 @@ export class OptionsComponent implements OnInit {
     const view = await this.service.confirmRename(this.draft().value);
     this.renameConfirm.set(false);
     this.renameOutcome.set(view);
+    // `A179`: one source of truth for the sentence. When the sweep left pages behind,
+    // the outcome itself carries the wording and the ordinary `saved` code is **not**
+    // written beside it — that would print "Сохранено" over a deletion that failed.
     this.apply({
       name: view.name,
-      message: view.refusal === null ? 'saved' : view.refusal,
+      message: view.outcome === 'sweep_failed' ? null : (view.refusal ?? 'saved'),
     });
   }
 

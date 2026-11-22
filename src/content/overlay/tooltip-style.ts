@@ -25,6 +25,16 @@
  * is invented, and the highlight slots of `src/content/paint/paint-palette.ts` stay
  * untouched (ruling `A151`).
  *
+ * The two header states are ink only, and one of them moved (ruling `A180`, `t17-05`): the
+ * `ownership header` of a `foreign entry` reads in the `A125` **action** colour `#b8480d`,
+ * not in the hint `#7b6a55` and not in the author's palette fill. `A163` had coloured the
+ * foreign name with `paintColourOfSlot`, an `rgba(…, 0.26)` background colour that a
+ * 13 px name on the cream card cannot carry: it read as a hint. The palette itself is
+ * untouched (`A151`) — the underline on the page keeps the per-author colour — and the
+ * reader's own header keeps the inherited ink of the surface (`#1b2a33`). The name is no
+ * longer italic either: the action colour is what makes it read as a name, and the
+ * italic-and-grey pair was the shape the user named as unreadable.
+ *
  * `pointer-events: auto` is what makes the tooltip clickable at all: the host element
  * carries `pointer-events: none` (`host-style.ts`), so a widget that does not undo it
  * can be seen and never pressed. The tooltip stays non-modal: it has no backdrop, and
@@ -82,8 +92,7 @@ export const TOOLTIP_CSS: string = [
   '}',
   `.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS} {`,
   '  font-weight: 400;',
-  '  font-style: italic;',
-  '  color: #7b6a55;',
+  '  color: #b8480d;',
   '}',
   `.${TOOLTIP_ROOT_CLASS} .${TOOLTIP_COMMENT_CLASS} {`,
   '  margin: 0;',
