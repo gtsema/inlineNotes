@@ -69,18 +69,10 @@ export type SyncButtonState = 'idle' | 'running' | 'error';
  * because a timer would let the red arrows turn green on their own. The stylesheet turns the
  * animation for this long and the state still follows the answer alone.
  */
-export const SYNC_SPIN_MS = 600;
+export const SYNC_MIN_SPIN_MS = 600;
 
 /** One full turn of the arrows, in milliseconds — the animation's own period. */
 export const SYNC_TURN_MS = 900;
-
-/**
- * How many whole turns the `running` class plays, rounded **up** from the minimum.
- *
- * Whole turns matter: stopping mid-turn would leave the arrows at an angle the reader never
- * chose, and `A185` wants a finished turn and then rest. `ceil(600 / 900)` is one turn.
- */
-export const SYNC_SPIN_TURNS = Math.ceil(SYNC_SPIN_MS / SYNC_TURN_MS);
 
 export const POPUP_SYNC_HIT_BOX_PX = 24;
 export const POPUP_SYNC_ICON_PX = 16;
@@ -642,6 +634,9 @@ export class PopupComponent implements OnInit {
     if (this.syncState() === 'running') {
       return;
     }
+    // `A185`: the reader must see that the press was taken. Without this the state lived
+    // exactly as long as the request — about **4 ms** to a local server, measured — so the
+    // button looked dead while it worked. The arrows turn for at least `SYNC_MIN_SPIN_MS`.
     this.syncState.set('running');
     void this.press(authorName);
   }
@@ -654,18 +649,42 @@ export class PopupComponent implements OnInit {
    * animation cannot be seen in 4 ms, so the button looked like it did nothing while it
    * worked perfectly.
    *
-   * **The minimum spin is CSS, not a timer.** `A162` forbids a `setTimeout` in this layer,
-   * and it is right to: a timer would make the state depend on something other than the
-   * answer, and the red arrows would turn green on their own after a while. Instead the
-   * `running` class carries `animation-iteration-count` sized so the turn is visible for
-   * `SYNC_MIN_SPIN_MS`, and the state still moves **only** when the answer arrives. On a fast
-   * server the arrows finish their turn and then stop, which reads as "taken and done".
+   * **The timer delays only the return to green.** `A162` forbids a `setTimeout` in this layer
+   * because a timer that decided the outcome would let the red arrows turn green on their own.
+   * This one cannot: it runs **after** a success has been read and only makes the turn last
+   * `SYNC_MIN_SPIN_MS`, while `error` is set the moment the answer says so and returns before
+   * the timer is even started. `A185` narrows the ban to that one use, and the pin in
+   * `tests/popup-sync-button.spec.ts` reads the shipped text to keep it that narrow.
    */
   private async press(authorName: string): Promise<void> {
+    const started = Date.now();
     const result = await this.sync.press(authorName);
     // `nothin_to_send` is a success with nothing to say: an author with no note of
     // their own on this page has no failure to report, so the arrows go back to green.
-    this.syncState.set(result.ok || result.code === 'nothin_to_send' ? 'idle' : 'error');
+    const settled: SyncButtonState =
+      result.ok || result.code === 'nothin_to_send' ? 'idle' : 'error';
+
+    // **A failure never waits.** Red is the state that asks the reader to do something, so it
+    // appears the moment the answer says so — a minimum spin must not hold it back.
+    if (settled === 'error') {
+      this.syncState.set('error');
+      return;
+    }
+
+    // The turn is the acknowledgement, and the answer is the outcome; the reader sees the
+    // turn for `SYNC_MIN_SPIN_MS` even when the server answered long before that. The timer
+    // delays **only** the return to green — it can never produce `error` and never decides
+    // the outcome, which is why the ban on timers in this layer (`A162`) is narrowed by
+    // `A185` instead of lifted: see the pin in `tests/popup-sync-button.spec.ts`.
+    const remaining = SYNC_MIN_SPIN_MS - (Date.now() - started);
+    if (remaining > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, remaining);
+      });
+    }
+    // The list may have been rebuilt while the turn ran, so the state is set on the signal
+    // and never on a captured element.
+    this.syncState.set('idle');
   }
 
   /** One place moves the signal, so the list is always what the store just said. */

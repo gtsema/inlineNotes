@@ -288,16 +288,39 @@ describe('AC6 a press answers a code, never a rejection, and never a timer (A162
     expect(calls).toHaveLength(1);
   });
 
-  it('keeps no timer in the popup layer: the state is driven by the answer alone', () => {
-    // `A162` in the negative. A `setTimeout` that turned the red arrows green again after
-    // a while would be exactly the design the ruling forbids, and it cannot be observed
-    // in a promise, so it is read out of the shipped text.
-    for (const path of ['src/popup/popup.component.ts', 'src/popup/sync-button-service.ts']) {
-      const code = codeOnly(readFileSync(join(projectRoot, path), 'utf8'));
-      expect(code, path).not.toMatch(/\bsetTimeout\b|\bsetInterval\b|\bDate\.now\b/);
-    }
-  });
-});
+  it('keeps the one timer to the minimum spin, and never lets it decide the outcome', () => {
+    // A162 forbids a timer in this layer because a timer that decided the outcome would let
+    // the red arrows turn green on their own. A185 narrows that ban instead of lifting it: the
+    // reader must SEE that the press was taken, and a local server answers in about 4 ms —
+    // measured — so the turn has to outlive the request.
+    //
+    // The narrowing is checked as text, because the difference between the forbidden timer and
+    // the allowed one is not visible in a promise: the allowed timer runs AFTER a success has
+    // been read, and the failure path returns before it is even started.
+    const service = codeOnly(
+      readFileSync(join(projectRoot, 'src', 'popup', 'sync-button-service.ts'), 'utf8'),
+    );
+    // The service — the half that owns the request — still has no clock at all.
+    expect(service).not.toMatch(/\bsetTimeout\b|\bsetInterval\b|\bDate\.now\b/);
+
+    const component = codeOnly(
+      readFileSync(join(projectRoot, 'src', 'popup', 'popup.component.ts'), 'utf8'),
+    );
+    // Exactly one timer, and no more than two clock reads: one to stamp the press and one to
+    // measure what is left of the minimum. A third would be a second way to decide when the
+    // turn ends.
+    expect(component.match(/\bsetTimeout\b/g) ?? []).toHaveLength(1);
+    expect(component.match(/\bDate\.now\b/g) ?? []).toHaveLength(2);
+    expect(component).not.toMatch(/\bsetInterval\b/);
+
+    // And the failure returns BEFORE the timer: red is never held behind the spin.
+    const press = component.slice(component.indexOf('private async press('));
+    const failure = press.indexOf("this.syncState.set('error')");
+    const timer = press.indexOf('setTimeout(');
+    expect(failure).toBeGreaterThan(-1);
+    expect(timer).toBeGreaterThan(-1);
+    expect(failure, 'error must be set before the timer is reached').toBeLessThan(timer);
+  });});
 
 describe('the popup strings of the feature are Russian and live in the one module', () => {
   it('names the control and the failure with a Russian sentence each', () => {
