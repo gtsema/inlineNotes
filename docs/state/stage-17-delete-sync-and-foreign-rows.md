@@ -132,3 +132,35 @@ at all. That is `A183`'s job, not a new control.
 `A182` says a failed server delete is reported to the reader. The wording is new Russian text on the
 content surface, and the project allows exactly one string per new state. The engineer proposes the
 sentence in the report and the PM approves it before the spec is written as fact.
+
+---
+
+## Answers (owner, 2026-11-19): «запускай. везде дефолт»
+
+1. **The failure wording** (`A182`): the default stands — «**Заметка удалена здесь, но на сервере
+   осталась**». One string, in the content text module, for the one new state.
+2. Everything else in the brief is accepted as written, including `A183` and `A184`.
+
+## The diagnosis the PM could confirm without the extension
+
+The PM could not run the extension — the Chrome instance he was given has **no extension loaded**:
+`Target.getTargets` returns 10 targets, none of them `chrome-extension://`, and
+`chrome.runtime` is `undefined` on the ScienceDirect page. So the live path was not exercised.
+
+The defect was instead localised by reading the shipped code, and **two mechanisms explain the
+symptom** — «заметки видны на странице, но не в попапе»:
+
+1. **The listener answers only after the server load finishes.** In
+   `src/content/sync/page-notes-channel.ts` the ask path is
+   `void loadOnce().then(() => respond(answerOf()))` with `return true`. A popup that opens while the
+   load is still running waits for it, and the popup asks **once** — so a slow load and a fast popup
+   produce an empty list that is never refreshed.
+2. **A page opened before the extension was reloaded has no content script at all.** Then
+   `chrome.runtime.sendMessage` rejects, `send` (`src/popup/page-notes-channel.ts:87`) reads the
+   rejection as "no rows", and the popup renders nothing.
+
+Mechanism 1 is the one the reader's report points at: the notes **did arrive** and were painted on
+the page, so the load succeeded — the popup simply asked before it finished. `A183` addresses it.
+
+The PM states this as a **diagnosis, not a reproduction**, and the fix must be verified by the reader
+in a Chrome that has the extension loaded.
