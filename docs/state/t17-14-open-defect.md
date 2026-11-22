@@ -62,3 +62,43 @@ next attempt must explain before any code changes.
 - `60d275a` and `bced8ca` are committed and green: **1303 tests**, `build` 0, `typecheck` 0, checker 0.
 - The feature does not work, and the reader should know that before it is used.
 - Nothing is half-edited: the working tree is clean apart from the untracked `test_img/`.
+
+---
+
+## Rolled back by the reader's decision (2026-11-23)
+
+«откати целиком». Two reverts, so the history shows what was tried and what came out:
+
+| Commit | What it undoes |
+|---|---|
+| `dd2d8f8` | `bced8ca` — the automatic load reading the off list |
+| `76fec6d` | `60d275a` — the whole `t17-14` slice |
+
+**The tree is byte-identical to the state before `t17-14`**, apart from this file: `git diff --stat
+eabe71d HEAD` lists only `docs/state/t17-14-open-defect.md`. `src/core/sync-off-list.ts` and its
+suite are gone, no file under `src/` names `sync-off` or `offList`, and the test count is back to
+**1273**.
+
+### Verified after the rollback
+
+| Gate | Result |
+|---|---|
+| `npm run build` | 0, `dist/` 12 files |
+| `npm test` | 0 — **1273 / 58** |
+| `npm run typecheck` | 0 |
+| `node scripts/check-agent-config.mjs` | 0 — 207 info |
+| the reader's Chrome | a switch no longer changes `allVisible`; the storage holds the three keys it held before `t17-14`, and no `sync-off:v1` |
+
+### What this file is for
+
+The feature does not exist now, and the two facts worth keeping are here rather than in a diff:
+
+1. **the contradiction the next attempt must explain** — the switch branch runs and the function on
+   its next line is never reached, on a fresh tab, with the served package confirmed to carry the
+   diagnostic;
+2. **the process failures that cost this stage two days** — three self-inflicted regressions from
+   `git checkout` over uncommitted work and one edit that left two `repaint()` calls, plus eight
+   attempts where a single measurement should have come first.
+
+If the reader ever wants the behaviour back, the brief is still in the history at `eabe71d` and the
+engineer's report at `60d275a`; the rollback does not erase either.
