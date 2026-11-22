@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RemoteNote, SyncTransport } from '../src/core/sync-client';
-import { entryStorageKey, PAGE_INDEX_KEY, SETTINGS_KEY } from '../src/core/storage-keys';
+import { entryStorageKey, PAGE_INDEX_KEY, SETTINGS_KEY, SYNC_OFF_KEY } from '../src/core/storage-keys';
 import type { ExtraEntry } from '../src/content/paint/paint-plan';
 import { createForeignNotes, loadIntoMemory } from '../src/content/sync/foreign-notes';
 import { attachSyncNotes } from '../src/content/sync/sync-notes';
@@ -400,3 +400,134 @@ describe('AC8 the wiring asks once per page key and hands the answer to the pain
     expect(port.calls.filter((call) => call.op !== 'get')).toEqual([]);
   });
 });
+
+/**
+ * The off list applied at load (task `t17-14`, rulings `A187`, `A188`; `A163` unchanged).
+ *
+ * The load is the only place a stored decision is applied: `loadIntoMemory` reads the
+ * page's list and `replace` starts those authors' notes at `visible: false`. Each case
+ * below is one of `A188`'s consequences, in the reader's own terms:
+ *
+ * - a first load shows everybody, because nothing is off until the reader says so;
+ * - a reload keeps what the reader set;
+ * - a name the server no longer returns does not survive the load.
+ */
+describe('AC3, AC4, AC6 a load applies the page\'s off list (A187, A188)', () => {
+  /** A port whose only content is the off record of `PAGE_KEY`. */
+  function offPort(authorNames: readonly string[]): MemoryStoragePort {
+    const port = new MemoryStoragePort();
+    port.seed(SYNC_OFF_KEY, { version: 1, pages: { [PAGE_KEY]: [...authorNames] } });
+    return port;
+  }
+
+  function load(port: MemoryStoragePort | undefined, notes: readonly RemoteNote[]): Promise<unknown> {
+    const memory = createForeignNotes();
+    return loadIntoMemory(memory, {
+      transport: transportOf({ body: { notes } }).transport,
+      target: TARGET,
+      pageKey: PAGE_KEY,
+      currentName: 'reader-one',
+      ...(port === undefined ? {} : { offListPort: port }),
+    }).then(() => memory);
+  }
+
+  it('starts every note visible on a first load, when the record names nobody (AC4)', async () => {
+    const memory = (await load(offPort([]), [remote(), remote({ id: 'petya001', author_id: 'Петя' })])) as ForeignNotesLike;
+
+    expect(memory.all().map((note) => note.visible)).toEqual([true, true]);
+    // A page with no port at all is the same state: no list to apply.
+    const bare = (await load(undefined, [remote()])) as ForeignNotesLike;
+    expect(bare.all().map((note) => note.visible)).toEqual([true]);
+  });
+
+  it('starts the named authors off and everybody else on (AC3)', async () => {
+    const memory = (await load(offPort(['Вася']), [
+      remote(),
+      remote({ id: 'petya001', author_id: 'Петя' }),
+      remote({ id: 'petya002', author_id: 'Петя' }),
+    ])) as ForeignNotesLike;
+
+    // The whole author is off, not one of their notes: the row's switch is per author.
+    expect(memory.all().map((note) => [note.entry.authorName, note.visible])).toEqual([
+      ['Вася', false],
+      ['Петя', true],
+      ['Петя', true],
+    ]);
+    // And the paint input carries the flag, which is what makes the note absent (`A186`).
+    expect(memory.paintInput().map((entry) => entry.visible)).toEqual([false, true, true]);
+  });
+
+  it('narrows the list to the authors the answer named, so a departed name does not survive (AC6)', async () => {
+    const memory = (await load(offPort(['Ушедший', 'Вася']), [remote()])) as ForeignNotesLike;
+
+    expect(memory.all().map((note) => note.visible)).toEqual([false]);
+    // `replace` was handed a list that holds only the author the server answered with.
+    const only = createForeignNotes();
+    only.replace([remote()], 'reader-one', ['Ушедший', 'Вася']);
+    expect(only.all().map((note) => note.visible)).toEqual([false]);
+    const none = createForeignNotes();
+    none.replace([remote()], 'reader-one', ['Ушедший']);
+    expect(none.all().map((note) => note.visible)).toEqual([true]);
+  });
+
+  it('reads an unreadable record as an empty list and never throws (AC7, A187)', async () => {
+    for (const broken of [null, 'nope', { version: 2, pages: {} }, { version: 1, pages: [] }]) {
+      const port = new MemoryStoragePort();
+      port.seed(SYNC_OFF_KEY, broken);
+      const memory = (await load(port, [remote()])) as ForeignNotesLike;
+      expect(memory.all().map((note) => note.visible), JSON.stringify(broken)).toEqual([true]);
+    }
+    const refusing = new MemoryStoragePort();
+    refusing.failReadOn(SYNC_OFF_KEY, 'unavailable');
+    const memory = (await load(refusing, [remote()])) as ForeignNotesLike;
+    expect(memory.all().map((note) => note.visible)).toEqual([true]);
+  });
+
+  it('reads nothing when the load itself failed, so a failure moves nothing (A164)', async () => {
+    const port = offPort(['Вася']);
+    const memory = createForeignNotes();
+    const before = port.calls.length;
+
+    expect(
+      await loadIntoMemory(memory, {
+        transport: transportOf({ ok: false, status: 500, body: {} }).transport,
+        target: TARGET,
+        pageKey: PAGE_KEY,
+        currentName: 'reader-one',
+        offListPort: port,
+      }),
+    ).toEqual({ ok: false, code: 'http' });
+    expect(port.calls.length).toBe(before);
+    expect(memory.all()).toEqual([]);
+  });
+
+  it('writes nothing on a load: the record is the press\'s business (A187)', async () => {
+    const port = offPort(['Вася']);
+    await load(port, [remote()]);
+
+    expect(port.calls.filter((call) => call.op !== 'get')).toEqual([]);
+  });
+
+  it('files the list under the key the load asked for, which is the pass\'s key', async () => {
+    // The key comes from the caller, which reads it from the paint pass (`A188`): the
+    // record cannot be filed under a page the document is not showing.
+    const port = new MemoryStoragePort();
+    port.seed(SYNC_OFF_KEY, { version: 1, pages: { 'https://example.com/other': ['Вася'] } });
+    const memory = createForeignNotes();
+
+    await loadIntoMemory(memory, {
+      transport: transportOf({ body: { notes: [remote()] } }).transport,
+      target: TARGET,
+      pageKey: PAGE_KEY,
+      currentName: 'reader-one',
+      offListPort: port,
+    });
+    expect(memory.all().map((note) => note.visible)).toEqual([true]);
+  });
+});
+
+/** The two reads the load cases make of the memory, named so the casts above stay honest. */
+interface ForeignNotesLike {
+  all(): readonly { readonly entry: { readonly authorName: string }; visible: boolean }[];
+  paintInput(): readonly { readonly visible: boolean }[];
+}

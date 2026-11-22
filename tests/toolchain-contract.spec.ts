@@ -1139,6 +1139,39 @@ describe('layer boundaries', () => {
     expect(modulesHoldingLiteral('settings:v1')).toEqual(['src/core/storage-keys.ts']);
   });
 
+  it('keeps every foreign note out of storage, and names the one key that is stored (ruling A163, A187)', () => {
+    // `A163`: no foreign note is written to `chrome.storage.local`. `t17-14` (`A187`) adds
+    // the one record that *is* stored about the foreign rows — the fact «this author is
+    // switched off on this page», author names only — so this pin names that key beside
+    // the rule, and pins the two halves that make the claim checkable:
+    //
+    // - the record's own module is the only one that composes it, and it holds no field of
+    //   a note: no comment, no anchor, no timestamp, no text;
+    // - the key's literal appears in exactly one module (`storage-keys.ts`), beside the
+    //   other three keys, so a reader can see what *is* stored in one place.
+    expect(modulesHoldingLiteral('sync-off:v1')).toEqual(['src/core/storage-keys.ts']);
+    // The key's name is imported by the one module that composes the record and by nobody
+    // else: the two content modules that write it call core `saveOffAuthorNames`, which is
+    // why the rule over the record has one owner rather than three.
+    expect(importersOf('SYNC_OFF_KEY')).toEqual(['src/core/sync-off-list.ts']);
+
+    const offList = codeOnly(
+      readFileSync(join(projectRoot, 'src', 'core', 'sync-off-list.ts'), 'utf8'),
+    );
+    for (const noteField of ['comment', 'anchor', 'createdAt', 'updatedAt', 'visible', 'text']) {
+      expect(offList, noteField).not.toMatch(new RegExp(`\b${noteField}\b`));
+    }
+    // And the memory that holds the notes writes through no storage call of its own: the
+    // one port it *reads* the off list through is the caller's (`A188`), and every write
+    // goes through core `saveOffAuthorNames`, never through a raw `set` here.
+    const memory = codeOnly(
+      readFileSync(join(projectRoot, 'src', 'content', 'sync', 'foreign-notes.ts'), 'utf8'),
+    );
+    expect(memory).not.toContain('port.set(');
+    expect(memory).not.toContain('port.remove(');
+    expect(memory).not.toContain('chrome.storage');
+  });
+
   it('imports no internal settings helper anywhere (ruling A57)', () => {
     // `settingsValueOf` and `settingsFromStorageValue` build and decode the stored
     // record for `saveSettings` and `loadSettings` only. A UI half that composed

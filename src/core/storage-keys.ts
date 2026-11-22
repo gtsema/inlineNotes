@@ -22,6 +22,17 @@ export const SETTINGS_KEY = 'settings:v1';
 /** Single index key holding `{ version: 1, pageKeys: string[] }`. */
 export const PAGE_INDEX_KEY = 'pages:v1';
 
+/**
+ * Single key holding `{ version: 1, pages: { [pageKey]: string[] } }` — the authors the
+ * reader has switched off, per page (Stage 17, task `t17-14`, ruling `A187`).
+ *
+ * It holds **author names only**. A foreign note itself is never written to
+ * `chrome.storage.local` (ruling `A163`): what this key stores is the fact «this author
+ * is switched off on this page», which is the reader's own display decision and not a
+ * copy of somebody else's note. The rules over it live in `sync-off-list.ts`.
+ */
+export const SYNC_OFF_KEY = 'sync-off:v1';
+
 /** Builds the storage key of the entry list for an already normalized `pageKey`. */
 export function entryStorageKey(pageKey: string): string {
   return `${ENTRY_KEY_PREFIX}${slotKeyFor(pageKey)}`;
