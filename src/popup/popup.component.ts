@@ -453,16 +453,12 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
     }
 
     .sync--running svg {
-      /* One whole turn, and never a stopped one — ruling A185. The turn count is rounded up
-         from the minimum spin, so the arrows finish where they started and then rest. The ban
-         on a timer (A162) is what keeps this in the stylesheet: the state still moves only
-         when the answer arrives.
-
-         The two numbers are literals because Angular resolves the stylesheet **statically**:
-         an interpolated constant fails the build with a diagnostic that the value could not
-         be determined. SYNC_TURN_MS and SYNC_SPIN_TURNS therefore exist for the tests to
-         compare against this rule, and a test reads this line so the pair cannot drift. */
-      animation: sync-spin 900ms linear 1;
+      /* The turn is **decoration**: the class says the state and the answer ends it. An
+         earlier attempt tied the state to this animation's end event and hung the button
+         forever — a hidden tab does not play animations, so the event never arrived
+         (measured: the document was hidden, the transform never moved, and the class stayed
+         on the running modifier). Nothing in this rule may be what ends the state. */
+      animation: sync-spin 900ms linear infinite;
     }
 
     .sync--error {

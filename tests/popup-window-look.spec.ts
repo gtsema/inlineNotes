@@ -8,7 +8,6 @@ import {
   POPUP_DELETE_ICON_PX,
   POPUP_SYNC_HIT_BOX_PX,
   POPUP_SYNC_ICON_PX,
-  SYNC_SPIN_TURNS,
   SYNC_TURN_MS,
 } from '../src/popup/popup.component';
 import { POPUP_STRINGS } from '../src/popup/text';
@@ -410,16 +409,18 @@ describe('the popup wears the A125 palette and nothing else (t14-01 AC1; ruling 
     expect(ruleBody(stylesCode, '.sync--error')).toMatch(
       new RegExp(`color: ${PREEXISTING_REFUSAL};`),
     );
-    // `A185`: whole turns, not an infinite spin. The `running` state lasts about 4 ms on a
-    // local server — measured — and one turn of a 0.9 s animation cannot be seen in that
-    // time, so the reader reported a button that worked as one that did nothing. The rule
-    // plays whole turns and rests at 0deg; the count is read from the shipped text and
-    // compared with the constants, so the pair cannot drift.
+    // `A185`: the turn runs while the class stands. The class used to live as long as the
+    // request — about **4 ms** on a local server, measured — so a turn of a 0.9 s animation
+    // was cut off before its first frame and the reader saw a button that did nothing. The
+    // class now ends on the turn's own `animationend` **and** the answer, so the count is
+    // infinite and the period is the constant the tests read.
     const running = ruleBody(stylesCode, '.sync--running svg');
-    expect(running).toMatch(/(?:^|;)\s*animation:\s*sync-spin 900ms linear 1;/);
-    expect(running).not.toMatch(/infinite/);
+    expect(running).toMatch(/(?:^|;)\s*animation:\s*sync-spin 900ms linear infinite;/);
     expect(SYNC_TURN_MS).toBe(900);
-    expect(SYNC_SPIN_TURNS).toBe(1);
+    // And nothing in the stylesheet ends the state: the template carries no animation event,
+    // because a hidden tab never plays one — an attempt that relied on `animationend` hung the
+    // button on the running modifier forever, measured in the reader's Chrome.
+    expect(componentTemplate()).not.toMatch(/animationend|animationstart|animationcancel/);
     // One keyframes block, and it only rotates: no colour and no size move with it.
     const frames = /@keyframes sync-spin\s*\{([\s\S]*?)\n    \}/.exec(styles)?.[1] ?? '';
     expect(frames).toContain('transform: rotate(0deg);');
