@@ -32,3 +32,24 @@ export async function activeTabUrl(): Promise<string | null> {
   const url = tabs[0]?.url;
   return typeof url === 'string' && url.length > 0 ? url : null;
 }
+
+/**
+ * Id of the active tab of the current window, `null` when there is none to read.
+ *
+ * The channel addresses its question **to this tab** (`t17-08`): a content script answers
+ * `chrome.tabs.sendMessage(tabId, …)`, not a runtime-wide send, so the id is what makes
+ * the question reachable at all. It lives here because this module is the one shipped
+ * place that names `chrome.tabs` (`tests/toolchain-contract.spec.ts` pins that), and the
+ * two reads answer about the same tab.
+ */
+export async function activeTabId(): Promise<number | null> {
+  let tabs: chrome.tabs.Tab[];
+  try {
+    tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  } catch {
+    return null;
+  }
+
+  const id = tabs[0]?.id;
+  return typeof id === 'number' ? id : null;
+}

@@ -56,7 +56,16 @@ export type RuntimeMessageSenderLike = (message: unknown) => Promise<unknown>;
 /** What the popup's channel talks to: the one send seam and the one listen seam. */
 export interface PageNotesChannelSource {
   /**
-   * `chrome.runtime.sendMessage` in the shipped popup.
+   * `chrome.tabs.sendMessage(tabId, …)` in the shipped popup — **addressed to the page's
+   * tab**, which is the whole point.
+   *
+   * `chrome.runtime.sendMessage` was the shipped call until `t17-08`, and it is the wrong
+   * one: a content script's `chrome.runtime.onMessage` answers a message addressed **to
+   * its tab**, while a runtime-wide send goes to the extension's own pages and workers.
+   * The channel therefore asked a question nobody on the page could hear, the answer never
+   * came, and the popup rendered no foreign rows — measured in the reader's Chrome as
+   * `askedRows: []` while a direct `chrome.tabs.sendMessage` to the same tab answered the
+   * row.
    *
    * It rejects when no listener answers — the popup is open on a page the content
    * script was never injected into, on a `chrome://` page, or on a page that has not
@@ -192,8 +201,19 @@ export async function dismissPageAuthor(
  * constant, so importing this file never touches the `chrome` global outside an
  * extension context.
  */
-export function createChromeRuntimeMessageSender(): RuntimeMessageSenderLike {
-  return async (message: unknown): Promise<unknown> => await chrome.runtime.sendMessage(message);
+export function createChromeRuntimeMessageSender(
+  tabId: () => Promise<number | null>,
+): RuntimeMessageSenderLike {
+  return async (message: unknown): Promise<unknown> => {
+    const id = await tabId();
+    if (id === null) {
+      // No tab to address: the popup cannot say which page it describes, so there is
+      // nobody to ask. `send` reads the throw as "no rows", exactly like a page that
+      // never booted (`A166`).
+      throw new Error('inlinenotes: no active tab to ask');
+    }
+    return await chrome.tabs.sendMessage(id, message);
+  };
 }
 
 /**
@@ -267,9 +287,11 @@ function isPageNotesUpdate(message: unknown): boolean {
 }
 
 /** The shipped source of the popup's question and of its ear. */
-export function createPageNotesChannelSource(): PageNotesChannelSource {
+export function createPageNotesChannelSource(
+  tabId: () => Promise<number | null>,
+): PageNotesChannelSource {
   return {
-    sendMessage: createChromeRuntimeMessageSender(),
+    sendMessage: createChromeRuntimeMessageSender(tabId),
     listen: createChromeRuntimeMessageListenerSource(),
   };
 }

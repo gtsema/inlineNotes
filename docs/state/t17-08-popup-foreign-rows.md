@@ -66,3 +66,48 @@ The cheapest way is a temporary diagnostic build that records those three values
 | `npm test` | exit 0 — **1273 tests / 58 files** |
 | `npm run typecheck` | exit 0 |
 | `node scripts/check-agent-config.mjs` | exit 0 — 207 info |
+
+---
+
+## Root cause found — the popup asked through the wrong channel
+
+The diagnostic build wrote the three values the PM could not see into `chrome.storage.local`
+(through the popup's own port, so the pinned `t4-01` boundary stayed intact). Read out of the
+reader's browser with the article active:
+
+```json
+{ "url": "https://…/article/7968", "injectable": true,
+  "askedRows": [], "storedNames": ["Спонж"], "mergedNames": ["Спонж"] }
+```
+
+The popup read the **right** page and got an **empty** answer — while a direct
+`chrome.tabs.sendMessage(tabId, …)` from the same context answered the foreign row. That narrowed
+the defect to the channel itself, and the cause is one call:
+
+`src/popup/page-notes-channel.ts` sent the question with **`chrome.runtime.sendMessage`**. A
+content script's `chrome.runtime.onMessage` answers a message addressed **to its tab**; a
+runtime-wide send goes to the extension's own pages and workers instead. The question therefore
+reached nobody on the page, the answer never came, and the popup rendered no foreign rows. No test
+caught it, because every test replaces the channel with a recorder — the one line that mattered was
+the one line no test executed.
+
+### The fix
+
+- the send is `chrome.tabs.sendMessage(tabId, …)`, addressed to the page's tab;
+- the tab id comes from `activeTabId()` in `src/popup/active-tab.ts` — the one shipped module that
+  names `chrome.tabs`, so the boundary rule is unchanged;
+- no tab to address throws, and `send` reads that as "no rows" (`A166`), exactly like a page that
+  never booted;
+- the pins move with it: the channel's call pin now asserts `chrome.tabs.sendMessage` and forbids
+  the runtime-wide spelling from coming back, and the `chrome.tabs` file set grows from one module
+  to two, one per concern (the reads, and the send).
+
+### Verified live
+
+```json
+{ "askedRows": ["Ефим:1"], "mergedNames": ["Спонж","Ефим"] }
+```
+
+and the popup renders `["Вы — 1", "Ефим — 1"]` — the reader's own row and the foreign one.
+
+The diagnostic seam was removed afterwards; `grep diagnose src/popup/*.ts` answers nothing.

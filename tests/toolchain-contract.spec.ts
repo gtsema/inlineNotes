@@ -1256,10 +1256,15 @@ describe('layer boundaries', () => {
     });
 
     it('reads the active tab in exactly one shipped module (ruling A49)', () => {
+      // `t17-08` widens the set by one file, and by the same rule this pin already used:
+      // one module per concern. The **reads** stay in `active-tab.ts`; the channel sends
+      // its question to that tab (`chrome.tabs.sendMessage`), which is a different call in
+      // a different module — a runtime-wide send could not reach a content script at all,
+      // which is the defect that fix closes.
       const tabUsers = popupFiles()
         .filter((file) => codeOnly(file.text).includes('chrome.tabs'))
         .map((file) => file.path);
-      expect(tabUsers).toEqual(['src/popup/active-tab.ts']);
+      expect(tabUsers).toEqual(['src/popup/active-tab.ts', 'src/popup/page-notes-channel.ts']);
 
       const address = codeOnly(
         readFileSync(join(projectRoot, 'src', 'popup', 'active-tab.ts'), 'utf8'),
@@ -1297,7 +1302,11 @@ describe('layer boundaries', () => {
       const channel = codeOnly(
         readFileSync(join(projectRoot, 'src', 'popup', 'page-notes-channel.ts'), 'utf8'),
       );
-      expect(channel).toMatch(/chrome\.runtime\.sendMessage/);
+      // The one call is `chrome.tabs.sendMessage`, addressed to the page's tab: a
+      // runtime-wide send reaches the extension's own pages and workers, not a content
+      // script, and that is why the popup rendered no foreign rows before `t17-08`.
+      expect(channel).toMatch(/chrome\.tabs\.sendMessage/);
+      expect(channel).not.toMatch(/chrome\.runtime\.sendMessage/);
       expect(channel).not.toMatch(/\bconnect(\s*\(|\.Port)/);
       expect(popupCode()).not.toMatch(/\bconnect(\s*\(|\.Port)/);
       expect(popupCode()).not.toMatch(/\bchrome\.storage\.onChanged\b/);

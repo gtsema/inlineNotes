@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, OnInit, inject, signal } from '@angular/core';
 
 import { createChromeLocalStoragePort } from '../content/store/chrome-storage-port';
-import { activeTabUrl } from './active-tab';
+import { activeTabId, activeTabUrl } from './active-tab';
 import type { AuthorRowView, PageEntriesSource, PageEntriesView, PopupNoticeCode } from './page-entries-service';
 import { PageEntriesService, rowClass } from './page-entries-service';
 import { createPageNotesChannelSource } from './page-notes-channel';
@@ -32,7 +32,7 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       },
       // Stage 17 (`A167`, `A168`): the two controls a foreign row owns are messages to
       // the page, never storage writes of this layer.
-      page: createPageNotesChannelSource(),
+      page: createPageNotesChannelSource(activeTabId),
     }),
   },
 );

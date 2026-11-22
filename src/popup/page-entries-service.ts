@@ -202,8 +202,7 @@ export interface PageEntriesSource {
    * highlights for this tab. **No storage of this layer is touched by any of them** —
    * which is the whole reason the channel exists (`A163`).
    */
-  page: PageNotesChannelSource;
-}
+  page: PageNotesChannelSource;}
 
 /**
  * Row classes of the ownership marker (ruling `A82`): a foreign row is marked by
@@ -536,6 +535,7 @@ export class PageEntriesService {
     const asked: PageNotesQueryResult =
       enabled && isInjectableUrl(url) ? await this.pageState() : EMPTY_PAGE_NOTES_QUERY_RESULT;
     const rows = mergeAuthorRows(stored, foreignGroupsOf(asked.rows));
+
 
     const notices: PopupNoticeCode[] = [];
     if (!author.ok) {

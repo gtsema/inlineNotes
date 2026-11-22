@@ -502,14 +502,18 @@ describe('the popup\'s half of the channel is a message and nothing else', () =>
     ]);
   });
 
-  it('names `chrome.runtime.sendMessage` in the one shipped factory, and reaches no network', () => {
+  it('addresses the question to the tab of the page in the one shipped factory, and reaches no network', () => {
     const source = readFileSync(join(projectRoot, 'src', 'popup', 'page-notes-channel.ts'), 'utf8');
     const code = codeOnly(source);
 
-    // The popup's only door to the page is `chrome.runtime.sendMessage`, and it is built
-    // by one function so that importing this module touches no global.
-    expect(code).toMatch(/chrome\.runtime\.sendMessage/);
-    expect(code.match(/chrome\.runtime\.sendMessage/g) ?? []).toHaveLength(1);
+    // The popup's only door to the page is `chrome.tabs.sendMessage`, **addressed to the
+    // tab** — `t17-08`. A runtime-wide `sendMessage` was the shipped call and it could not
+    // reach a content script at all: the page's `chrome.runtime.onMessage` answers a
+    // message sent to its tab, so the question went nowhere and the popup rendered no
+    // foreign rows. The runtime-wide call must not come back.
+    expect(code).toMatch(/chrome\.tabs\.sendMessage/);
+    expect(code.match(/chrome\.tabs\.sendMessage/g) ?? []).toHaveLength(1);
+    expect(code).not.toMatch(/chrome\.runtime\.sendMessage/);
     expect(typeof createChromeRuntimeMessageSender).toBe('function');
     // `A167` chose the message over a second request: no network API appears here, which
     // is the same claim `tests/toolchain-contract.spec.ts` makes about the whole file set.
