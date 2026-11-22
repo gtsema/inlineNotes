@@ -23,19 +23,6 @@
  * popup's row controls belong to the reader, and the answer to "I do not want to see
  * this note" must not be "I deleted somebody else's note from a shared server". That
  * is answer 5 of the brief, and the only place it is implemented is `dismiss`.
- *
- * **What *is* stored, since `t17-14`** (rulings `A187`-`A189`): the fact «this author
- * is switched off on this page», as a list of author names per page key under
- * `sync-off:v1` (core `sync-off-list.ts`). That is not a foreign note — no text, no id,
- * no anchor, no comment — so `A163` is unchanged in what it protects, and this module
- * still declares no storage port: the record is read and written by the caller.
- *
- * The off list is applied **at load and only then** (`A188`): `replace` starts a note
- * `visible: false` when its author is on the given list and `visible: true` otherwise,
- * and the list it is handed has already been filtered to the authors this load answered
- * with, so a departed author leaves no stale entry behind. A switch inside the live
- * document then changes the memory alone (`A189`); a reload is the only thing that reads
- * the record again.
  */
 
 import type { Entry } from '../../core/entry';
@@ -48,8 +35,6 @@ import type {
 } from '../../core/sync-client';
 import { entryFromRemoteNote, loadForeignNotes } from '../../core/sync-client';
 import type { SyncTarget } from '../../core/sync-settings';
-import { authorNamesOf, isAuthorOff, loadOffAuthorNames, offListOfLoad } from '../../core/sync-off-list';
-import type { StoragePort } from '../../core/storage-port';
 import type { ExtraEntry } from '../paint/paint-plan';
 
 /** One foreign note as this document holds it: the record plus this tab's flag. */
@@ -77,14 +62,8 @@ export interface ForeignNotes {
    * Replaces the list with what one load returned, keeping nothing of the old one:
    * a note the server no longer has is gone from this page too, and a note it has
    * again is one note, not two.
-   *
-   * `offAuthors` is the page's stored off list, filtered to the authors this answer
-   * names (`A188`): a note whose author is on it starts switched off, every other note
-   * starts visible. It defaults to the empty list, which is the first load — nothing is
-   * off until the reader says so — and the "no foreign notes left" reset every caller
-   * makes when the server has nothing for this page.
    */
-  replace(notes: readonly RemoteNote[], authorName: string | null, offAuthors?: readonly string[]): void;
+  replace(notes: readonly RemoteNote[], authorName: string | null): void;
   /** The shape the paint pass takes (`page-painter.ts` -> `setExtraEntries`). */
   paintInput(): readonly ExtraEntry[];
   /** The display flag of one note, by entry id, `null` when this page holds no such note. */
@@ -94,11 +73,9 @@ export interface ForeignNotes {
    *
    * This is the **memory** write and not a storage write: a foreign note has no stored
    * `visible` field (`A163`), so the popup's ✓ for a foreign row changes this flag in
-   * this document only. The name differs from core's `setVisible` on purpose, so the
-   * content-layer pin that keeps every stored-entry write out of this directory reads
-   * the boundary unchanged. What the row's press also does is update the **off list** of
-   * names (`A187`, `A189`) — that is the channel's business, not the note's, and this
-   * memory still holds no record of it.
+   * this document only, and the next page load reads the note back visible. The name
+   * differs from core's `setVisible` on purpose, so the content-layer pin that keeps
+   * every stored-entry write out of this directory reads the boundary unchanged.
    */
   setNoteVisible(entryId: string, visible: boolean): boolean;
   /**
@@ -137,13 +114,8 @@ export function createForeignNotes(): ForeignNotes {
       return notes;
     },
 
-    replace(
-      incoming: readonly RemoteNote[],
-      authorName: string | null,
-      offAuthors: readonly string[] = [],
-    ): void {
+    replace(incoming: readonly RemoteNote[], authorName: string | null): void {
       const mine = authorName === null ? null : authorName;
-      const off = offAuthors.length === 0 ? null : offAuthors;
       const next: ForeignNote[] = [];
       const seen = new Set<string>();
       for (const remote of incoming) {
@@ -167,9 +139,7 @@ export function createForeignNotes(): ForeignNotes {
           continue;
         }
         seen.add(key);
-        // `A188`: the author's stored decision, applied once, here. Every other note of
-        // the page starts visible, which is what makes a first load show everything.
-        next.push({ entry, visible: off === null || !isAuthorOff(off, entry.authorName) });
+        next.push({ entry, visible: true });
       }
       notes = next;
     },
@@ -242,15 +212,6 @@ export interface ForeignLoadRequest {
   readonly pageKey: string;
   /** The settings name, used to keep the reader's own notes out of memory. */
   readonly currentName: string | null;
-  /**
-   * Where the page's off list is read (`A187`, `A188`).
-   *
-   * It is a port and not a value because the list must be read **at load and only then**
-   * (`A189`): a caller that handed a cached list would re-apply a stale decision after
-   * the reader changed it. Absent means "this page has no off list to read", and every
-   * note then starts visible — the state of a first load.
-   */
-  readonly offListPort?: StoragePort;
 }
 
 /**
@@ -261,11 +222,6 @@ export interface ForeignLoadRequest {
  * the page keeps painting its stored notes and the popup has a code to show. The
  * `try` is here because the caller is a fire-and-forget boot step with no rejection
  * handler, exactly like `painter.refresh()`.
- *
- * The off list is read before the answer is applied and only for the answer that landed
- * (`A187`, `A188`): a failed load changes nothing, so it reads nothing, and the memory
- * keeps whatever it already holds. The list it applies is narrowed to the authors this
- * answer names, so a departed author cannot keep a stale entry alive.
  */
 export async function loadIntoMemory(
   memory: ForeignNotes,
@@ -282,38 +238,11 @@ export async function loadIntoMemory(
       return { ok: false, code: answer.code };
     }
     const summary: SyncLoadSummary = answer.value;
-    memory.replace(summary.notes, request.currentName, await offListFor(request, summary.notes));
+    memory.replace(summary.notes, request.currentName);
     return { ok: true, added: memory.all().length };
   } catch {
     // A transport that throws instead of rejecting its promise is still one answer to
     // the reader, and never a broken page.
     return { ok: false, code: 'network' };
   }
-}
-
-/**
- * The off list this answer is applied with (`A188`), filtered to the authors the answer
- * named.
- *
- * It never throws: `loadOffAuthorNames` answers an empty list for a damaged record and
- * for a port that refused the read, and a page without a port has no list at all. Both
- * narrowings leave the first load with an empty list, which is exactly `A188`'s "a first
- * load shows everything".
- *
- * The filtered list is **not** written here. Only a press writes the record (`A187`), and
- * a load that wrote would be a second writer: a load whose server answered nothing for a
- * page would otherwise erase the reader's decisions on it.
- */
-async function offListFor(
-  request: ForeignLoadRequest,
-  notes: readonly RemoteNote[],
-): Promise<readonly string[]> {
-  if (request.offListPort === undefined) {
-    return [];
-  }
-  const stored = await loadOffAuthorNames(request.offListPort, request.pageKey);
-  const answered = authorNamesOf(
-    notes.map((note) => ({ authorName: note.author_id })),
-  );
-  return offListOfLoad(stored.authorNames, answered);
 }

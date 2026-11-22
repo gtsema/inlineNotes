@@ -208,15 +208,7 @@ function boot(): void {
       // `A166` again, at the door the reader knocked on: nothing is called.
       return { ok: false, code: 'sync_off' };
     }
-    return await loadIntoMemory(foreign, {
-      transport,
-      target,
-      pageKey: key,
-      currentName,
-      // `A187`, `A188`: the off list is read at load and only here, so a reload is the one
-      // thing that re-applies the reader's switched-off authors.
-      offListPort: port,
-    });
+    return await loadIntoMemory(foreign, { transport, target, pageKey: key, currentName });
   };
 
   const notesChannel = attachPageNotesChannel({
@@ -237,12 +229,6 @@ function boot(): void {
         // No runtime API in this frame: nobody is listening, and nothing else changes.
       }
     },
-    // `t17-14` (`A187`-`A189`): the off list. The port is the same one every other
-    // record of this page is read and written through, and the key is the pass's own
-    // answer, read at the press and never remembered here — a remembered key would file a
-    // decision under the page the document used to show after an SPA move (`A59`).
-    port,
-    pageKey: painter.pageKeyOfPass,
   });
 
   // The one `chrome.runtime.onMessage` listener of this document (`A167`). It is the

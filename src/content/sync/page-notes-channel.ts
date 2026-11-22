@@ -25,16 +25,7 @@
  *   switches **every** note of that author in this document's memory with one call of
  *   the aggregate write, and the delete control of a foreign row drops that author's
  *   notes from this document's view with one `dismiss`. Both are local: the server is not
- *   called, and no foreign note is written anywhere.
- * - **the switched-off authors are remembered** (`A187`-`A189`, task `t17-14`). The
- *   press of a foreign row also updates the page's **off list** — the author names the
- *   reader switched off on this page, stored under `sync-off:v1` — and the delete of a
- *   foreign row removes that author from it, so a row the reader deleted comes back
- *   switched on on the next load (the reader's `1a`). What is stored is the fact, never
- *   the note: `A163` is unchanged and no note text, id or anchor reaches the record. The
- *   list is read once per load (`A188`) and never on a switch (`A189`): a press changes
- *   the memory and then the record, in that order, and the paint pass follows the
- *   memory.
+ *   called, storage is not written, and both are gone on reload.
  * - **it remembers the failure** (`A169`). The automatic load is run by the entry point
  *   through the injected `load` seam — the same closure the paint wiring uses, so the
  *   two cannot disagree about how a load ends — and the outcome is answered to the popup
@@ -69,15 +60,6 @@ import {
   pageNotesQueryResultOf,
   pageNotesUpdateOf,
 } from '../../core/page-notes-query';
-import type { StoragePort } from '../../core/storage-port';
-import {
-  authorNamesOf,
-  isAuthorOff,
-  loadOffAuthorNames,
-  offListOfLoad,
-  saveOffAuthorNames,
-  withAuthorOff,
-} from '../../core/sync-off-list';
 import type { SyncFailureCode } from '../../core/sync-client';
 import type { ExtraEntry } from '../paint/paint-plan';
 import type { ForeignLoadOutcome, ForeignNotes } from './foreign-notes';
@@ -129,27 +111,8 @@ export interface PageNotesChannel {
 
 /** What the page's channel must be given to run. */
 export interface PageNotesChannelWiring {
-  /**
-   * The notes held in this document's memory, and the only list it reads (`A163`).
-   */
+  /** The notes held in this document's memory, and the only list it reads (`A163`). */
   readonly foreign: ForeignNotes;
-  /**
-   * Where the page's off list is written (`A187`) and read (`A188`).
-   *
-   * **No port means no record**: a caller that has none — a test of the answer shape, a
-   * frame that cannot store — keeps the memory-only behaviour of `A163` and persists
-   * nothing, and the read is the one `loadIntoMemory` makes on its own.
-   */
-  readonly port?: StoragePort;
-  /**
-   * The page key the notes of this document are filed under (`A188`), read per use.
-   *
-   * It is the key the paint pass resolved, never one derived here: the stored notes may
-   * live under the `origin + pathname` fallback, and an off list filed under a key the
-   * notes do not live under would switch the wrong page's author off. `null` means
-   * "this document has no page", and then nothing is stored and no list is read.
-   */
-  readonly pageKey: () => string | null;
   /** Where one more pass is asked for; it cannot reject (`page-painter.ts`, `A75`). */
   readonly painter: {
     setExtraEntries(entries: readonly ExtraEntry[] | null): void;
@@ -381,74 +344,16 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
     return pageNotesQueryResultOf(wiring.foreign as ForeignNotesSnapshot, loadCode !== null);
   }
 
-  /**
-   * The press of a foreign row's checkbox: the memory first, then the record (`A189`).
-   *
-   * The order is the ruling's, and it is observable: the paint pass is asked for one more
-   * pass over the memory before the write is attempted, so the page follows the memory
-   * whatever storage answers. The record is read **only** to merge this page's list into
-   * it — never to re-decide the memory — and the authors the load did not answer with are
-   * dropped from the merged list (`A188`), so a departed author cannot be kept alive by a
-   * press.
-   *
-   * A storage failure is silent here on purpose: a switch is the reader's display
-   * decision, the page and the popup both already show it, and a popup row has no line to
-   * report a storage failure with. What the reader loses is one reload's worth of the
-   * decision, never the note.
-   */
-  async function rememberSwitchedAuthor(authorName: string, visible: boolean): Promise<void> {
-    const port = wiring.port;
-    const pageKey = wiring.pageKey();
-    if (port === undefined || pageKey === null) {
-      return;
-    }
-    const current = await loadOffAuthorNames(port, pageKey);
-    const answered = authorNamesOf(wiring.foreign.all().map((note) => note.entry));
-    const kept = offListOfLoad(current.authorNames, answered);
-    await saveOffAuthorNames(port, pageKey, withAuthorOff(kept, authorName, !visible));
-  }
-
-  /**
-   * The delete of a foreign row: the author leaves the off list too (`A188`, `1a`).
-   *
-   * Deleting a row means "I do not want this author on this page"; if the reader had
-   * switched them off as well, a stored off entry would hide them forever after —
-   * including after the server returns them with new notes. So the delete removes the
-   * name, and the next load shows that author again, checked on. The server is still not
-   * called (`A168`), and no note is written (`A163`).
-   */
-  async function forgetSwitchedAuthor(authorName: string): Promise<void> {
-    const port = wiring.port;
-    const pageKey = wiring.pageKey();
-    if (port === undefined || pageKey === null) {
-      return;
-    }
-    const current = await loadOffAuthorNames(port, pageKey);
-    if (!isAuthorOff(current.authorNames, authorName)) {
-      // Nothing to remove, and nothing to write: a delete that leaves the record exactly
-      // as it was is a delete with no storage call at all.
-      return;
-    }
-    await saveOffAuthorNames(port, pageKey, withAuthorOff(current.authorNames, authorName, false));
-  }
-
   const onMessage: RuntimeMessageListenerLike = (message, _sender, respond) => {
     const operation = operationOf(message);
     if (operation !== null) {
       if (operation.kind === 'switch') {
         switchNotesOfAuthor(wiring.foreign, operation.authorName, operation.visible);
-        // `A189`: the memory is the truth while the document lives, so the paint pass is
-        // asked for its pass **before** the record is touched, and the record write is
-        // awaited by nobody who renders.
-        repaint();
-        respond(answerOf());
-        void rememberSwitchedAuthor(operation.authorName, operation.visible);
-        return undefined;
+      } else {
+        wiring.foreign.dismiss(operation.authorName);
       }
-      wiring.foreign.dismiss(operation.authorName);
       repaint();
       respond(answerOf());
-      void forgetSwitchedAuthor(operation.authorName);
       return undefined;
     }
 

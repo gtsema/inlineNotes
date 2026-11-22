@@ -27,7 +27,6 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `foreign note` | — | a note the server returned whose `authorName` is not the reader's; it lives in the document's memory only |
 | `own note` | «Вы» | a note whose author is the reader, by core `isSameAuthor` (`A99`) |
 | `memory only` | — | never written to `chrome.storage.local`, never sent in a payload, gone on reload (`A163`) |
-| `off list` | — | the authors the reader switched off on one page, stored as author names per page key under `sync-off:v1` (`A187`); the note itself is never stored |
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
 | `no request rule` | — | switch off **or** empty address means zero network calls and no sync button (`A166`) |
@@ -41,8 +40,8 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 3. **Show the answer.** The rows that come back are decoded into entries, the reader's own are dropped (the store already has them), and the rest are held in memory and painted by one more pass over the same page stream.
 4. **Press sync.** In the popup, the reader's own row carries the sync button beside the delete button. A press turns the arrows green-spinning, sends one `POST` with that author's notes of this page, and answers with green-static (success) or red (failure).
 5. **Read a foreign note.** Hovering a foreign note's highlight shows the usual tooltip, whose header prints the author's stored name **in that author's palette colour**, and whose body is the stored comment. Clicking it opens no editor: a foreign note is read-only.
-6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory) and records the author in the page's `off list`; `Удалить` removes the author's rows from this page's view and drops the author from that list. Neither calls the server.
-7. **Reload.** The memory is gone, the request is made again, and the foreign notes come back as the server holds them — with every author the `off list` names switched off, and everybody else switched on.
+6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory); `Удалить` removes the author's rows from this page's view. Neither calls the server.
+7. **Reload.** The memory is gone, the request is made again, and the foreign notes come back as the server holds them.
 
 ## Rules / Semantics
 
@@ -113,29 +112,9 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 
 ### Hiding and deleting a foreign row (answer 5)
 
-- The popup's checkbox of a foreign author hides that author's highlights on this page: the flag lives in the same memory, because a foreign note has no stored `visible` field. A switched-off foreign note is not painted at all — it is absent from the page, not dimmed (`A186`).
+- The popup's checkbox of a foreign author hides that author's highlights on this page: the flag lives in the same memory, because a foreign note has no stored `visible` field. A switched-off foreign note is still painted — with its underline and without its fill — so switching it back on is one more pass and no request.
 - `Удалить` on a foreign row removes that author's notes from this page's **view**: the memory drops them, the page repaints, and the server is not called. The rows come back on the next page load.
-- Neither control calls the server, and neither writes a note anywhere: what the checkbox records is the next section, and it is a list of author names, not a note.
-
-### The off list (rulings `A187`, `A188`, `A189`)
-
-A switched-off foreign author has to stay switched off across a reload, and `A163` forbids storing the note. The two are reconciled by storing **the fact and not the note**:
-
-> What is stored is the fact «this author is switched off on this page», never the note.
-
-The note still arrives from the server on every load and is still never persisted; `A163` is unchanged in what it protects.
-
-- **The record.** One key, `sync-off:v1`, holding `{ version: 1, pages: { [pageKey]: string[] } }` — author names in first-appearance order, duplicates removed. Nothing else: no note text, no id, no anchor, no comment, no timestamp.
-- **An empty page leaves.** A page key whose list becomes empty is removed from the record, and a record with no page in it is removed from storage altogether.
-- **Who writes it.** The checkbox of a foreign row, and nothing else: the name goes in on uncheck and comes out on check. A row of the reader's own notes keeps writing storage through the entry store, as before.
-- **A delete removes the author from it** (`A188`, the reader's `1a`). `Удалить` on a foreign row means «I do not want this author here», so the author leaves the off list as well and the next load shows them again, checked on. An author switched off, then deleted, then returned by the server with new notes therefore comes back **switched on** — a decision, not a surprise.
-- **The read is defensive.** A value that is not the record reads as an empty list and never throws, and one damaged page does not lose the reader's decisions on the others.
-- **Applied at load, and only then (`A188`).** The automatic load reads the page's list once and starts that author's notes `visible: false` and every other note `visible: true`. A first load therefore shows everybody, a reload keeps what the reader set, and a name the server no longer returns is filtered out by the load itself, so a departed author leaves no stale entry.
-- **The memory stays the truth while the document lives (`A189`).** A press changes the memory first and the record second; neither the paint pass nor the popup re-reads the list, and a reload is the only thing that does.
-
-```
-sync-off:v1 = { version: 1, pages: { "https://example.com/article": ["Вася"] } }
-```
+- Neither control writes to `chrome.storage.local`.
 
 ### A failed load never blocks the page (ruling `A164`)
 
@@ -190,9 +169,6 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 - **A note the reader deleted locally but the server still holds.** The next load returns it as foreign if its author differs from the reader's; the reader's own deleted note comes back in the server's answer only as an own note, which memory drops.
 - **A page with no store.** No `pageKey`, so no request: the automatic load is skipped rather than sent with an empty key.
 - **A foreign note whose text the page has moved.** It is resolved like any entry: unpainted this pass, still in memory, still listed, gone on reload.
-- **An author switched off, then deleted.** The delete takes the author out of the off list, so the next load shows them again, checked on (`A188`).
-- **An author on the off list that the server stops returning.** The load filters the list to the authors it answered with, so the stale name is never applied; the record is rewritten from the reader's next press.
-- **`sync-off:v1` holds something else.** The page reads an empty list, every note starts visible, and nothing throws; the reader's next press overwrites the value.
 
 ## Acceptance Criteria
 
@@ -211,11 +187,6 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 13. Foreign notes are never written to `chrome.storage.local` and never appear in a payload.
 14. A foreign note is not editable, wears its author's palette colour, and its tooltip names the author in that colour.
 15. A foreign row's `Удалить` removes it from view locally without a request; its checkbox hides it in memory.
-19. `sync-off:v1` holds the author names switched off per page key and nothing else; a press of a foreign row writes it, and an empty list removes the page's entry (`A187`).
-20. The automatic load applies the page's off list: a named author's notes start switched off and every other note starts switched on, a first load shows everything, and a name the server no longer returns is filtered out (`A188`).
-21. `Удалить` on a foreign row removes that author from the off list, so the next load shows them again, checked on (`A188`).
-22. A damaged `sync-off:v1` value reads as an empty list and never throws (`A187`).
-23. The page's memory is not re-read from storage on a press: the memory moves first, the record second (`A189`).
 16. A failed automatic load leaves the page working and states the failure with the non-blocking popup notice.
 17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]`, and `fetch` appears in exactly the two transport adapters.
 18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
@@ -229,9 +200,7 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 | 7, 8 | `tests/options-sync-settings.spec.ts`; `tests/options-window-look.spec.ts` |
 | 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
 | 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
-| 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts`, `tests/content-page-notes.spec.ts` |
+| 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
 | 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
 | 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
 | 18 | the gate commands, quoted in the task's engineer report under `docs/state/` |
-| 19, 21, 22, 23 | `tests/core-sync-off-list.spec.ts`, `tests/content-page-notes.spec.ts`, `tests/toolchain-contract.spec.ts` -> "keeps every foreign note out of storage, and names the one key that is stored" |
-| 20 | `tests/core-sync-off-list.spec.ts`, `tests/content-sync-notes.spec.ts` -> "a load applies the page's off list" |

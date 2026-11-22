@@ -10,9 +10,6 @@ import { attachPageNotesChannel } from '../src/content/sync/page-notes-channel';
 import { codeOnly } from './support/build-script-guards';
 import type { ExtraEntry } from '../src/content/paint/paint-plan';
 import type { RemoteNote } from '../src/core/sync-client';
-import type { StoragePort } from '../src/core/storage-port';
-import { SYNC_OFF_KEY } from '../src/core/storage-keys';
-import { MemoryStoragePort } from './support/memory-storage-port';
 
 /**
  * The page's answer to the popup (Stage 17, `t17-02` AC2-AC7; rulings `A167`, `A168`,
@@ -106,10 +103,6 @@ async function settle(): Promise<void> {
 function attach(options: {
   notes?: readonly RemoteNote[];
   outcome?: ForeignLoadOutcome | (() => Promise<ForeignLoadOutcome>);
-  /** The page's key, read by the channel when a press writes the off list (`A187`). */
-  pageKey?: () => string | null;
-  /** The port the off list is written through; absent keeps the memory-only shape. */
-  port?: StoragePort;
 } = {}): {
   memory: ForeignNotes;
   channel: ReturnType<typeof attachPageNotesChannel>;
@@ -141,10 +134,6 @@ function attach(options: {
     announce: (update): void => {
       announced.push(update);
     },
-    // `t17-14`: the off list is written through the port and filed under the page key. A
-    // case that does not care passes neither, and the channel then persists nothing.
-    ...(options.port === undefined ? {} : { port: options.port }),
-    pageKey: options.pageKey ?? ((): string | null => null),
   });
 
   const askNow = (message: unknown): { responded: boolean; value: unknown; returned: boolean | undefined } => {
@@ -290,22 +279,16 @@ describe('AC3 the aggregate switch is one message and one memory write (A168)', 
     expect(a.loads()).toBe(0);
   });
 
-  it('reaches no storage API and writes no note: the record is the off list, not a note (A163, A187)', () => {
+  it('offers no handle for a storage write: the module holds no port at all', () => {
     const source = codeOnly(
       readFileSync(join(projectRoot, 'src', 'content', 'sync', 'page-notes-channel.ts'), 'utf8'),
     );
-    // The structural proof of `A163` for this path: no storage API, no storage key and no
-    // entry-write name is reachable from here. The channel holds a port since `t17-14`,
-    // and what it writes through that port is core's **off list** — author names per page
-    // (`A187`), a decision about a name and never a foreign note. So the pin narrowed to
-    // the two things `A163` really protects: no `chrome.storage` call is made in this
-    // module, and no write of a note is importable from it. The key name appears in prose
-    // only, and the scan reads code.
+    // The structural proof of `A163` for this path: no port in the wiring means no write
+    // can be made, and no storage key or storage API is named here either. The scan reads
+    // code, so the doc block above — which names the key the notes never reach — is prose.
+    expect(source).not.toMatch(/StoragePort/);
     expect(source).not.toContain('chrome.storage');
     expect(source).not.toContain('entry-store-write');
-    for (const noteWrite of ['createEntry', 'updateEntryComment', 'deleteEntry', 'setVisible(\n']) {
-      expect(source, noteWrite).not.toContain(noteWrite);
-    }
   });
 });
 
@@ -508,159 +491,5 @@ describe('the message names are one constant on both sides of the channel', () =
     );
     expect(declarers).toContain("'inlinenotes:page-notes'");
     expect(declarers).toContain("'inlinenotes:page-notes-updated'");
-  });
-});
-/**
- * The off list the press writes (task `t17-14`, rulings `A187`-`A189`).
- *
- * What is asserted here, and each in the reader's terms:
- *
- * - a press of a foreign row leaves the author in `sync-off:v1` under the page's key, a
- *   press back on removes them, and an empty list removes the page's entry (`A187`);
- * - a **delete** removes the author from the record, so the next load shows them again —
- *   the reader's `1a` (`A188`);
- * - the record holds an author name and no note (`A163` unchanged);
- * - the memory is not re-read on a press, and it moves before the record does (`A189`).
- */
-describe('AC1, AC5 a foreign row\'s press writes the off list and its delete clears it (A187, A188)', () => {
-  /** A port holding one page's off list, with its call log. */
-  function offPort(authorNames: readonly string[] = []): MemoryStoragePort {
-    const port = new MemoryStoragePort();
-    if (authorNames.length > 0) {
-      port.seed(SYNC_OFF_KEY, { version: 1, pages: { [PAGE_KEY]: [...authorNames] } });
-    }
-    return port;
-  }
-
-  const PAGE_KEY = 'https://example.com/a';
-
-  it('records the author on the press off, and removes them on the press on', async () => {
-    const port = offPort();
-    const a = attach({ notes: [remote()], port, pageKey: () => PAGE_KEY });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false });
-    await settle();
-    expect(port.snapshot()[SYNC_OFF_KEY]).toEqual({ version: 1, pages: { [PAGE_KEY]: ['Вася'] } });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: true });
-    await settle();
-    // The last name leaves, so the page leaves the record, and then the key itself goes.
-    expect(SYNC_OFF_KEY in port.snapshot()).toBe(false);
-    // The memory followed the press both times (`A189`).
-    expect(a.memory.visibilityOf('their001')).toBe(true);
-  });
-
-  it('writes author names only: the stored value carries no note (A163, A187)', async () => {
-    const port = offPort();
-    const a = attach({ notes: [remote()], port, pageKey: () => PAGE_KEY });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false });
-    await settle();
-
-    const stored = JSON.stringify(port.snapshot()[SYNC_OFF_KEY]);
-    expect(stored).toBe(JSON.stringify({ version: 1, pages: { [PAGE_KEY]: ['Вася'] } }));
-    for (const forbidden of ['their note', 'selected text', 'their001', 'anchor', 'comment']) {
-      expect(stored, forbidden).not.toContain(forbidden);
-    }
-  });
-
-  it('removes the author from the record on delete, so the next load shows them (1a)', async () => {
-    const port = offPort(['Вася', 'Петя']);
-    const a = attach({
-      notes: [remote(), remote({ id: 'petya001', author_id: 'Петя' })],
-      port,
-      pageKey: () => PAGE_KEY,
-    });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'dismiss', authorName: 'Вася' });
-    await settle();
-
-    // The row is gone from this document, and the record no longer names that author, so a
-    // reload brings them back switched on.
-    expect(a.memory.all().map((note) => note.entry.authorName)).toEqual(['Петя']);
-    expect(port.snapshot()[SYNC_OFF_KEY]).toEqual({ version: 1, pages: { [PAGE_KEY]: ['Петя'] } });
-    // Still local: the delete called no server (`A168`).
-    expect(a.loads()).toBe(0);
-  });
-
-  it('writes nothing at all when the deleted author was not switched off', async () => {
-    const port = offPort();
-    const a = attach({ notes: [remote()], port, pageKey: () => PAGE_KEY });
-    const before = port.calls.length;
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'dismiss', authorName: 'Вася' });
-    await settle();
-
-    // One `get` to learn the list, and no write: a delete that changes nothing stores nothing.
-    expect(port.calls.slice(before).map((call) => call.op)).toEqual(['get']);
-    expect(port.snapshot()[SYNC_OFF_KEY]).toBeUndefined();
-  });
-
-  it('keeps the memory as the truth: the press reads the record, it never re-reads the notes (A189)', async () => {
-    const port = offPort();
-    const a = attach({
-      notes: [remote(), remote({ id: 'petya001', author_id: 'Петя' })],
-      port,
-      pageKey: () => PAGE_KEY,
-    });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false });
-    await settle();
-
-    // The press moved the memory and the paint pass followed it, before the record was
-    // touched: the pass saw the switched-off note, and no load ran (`A189`, `A168`).
-    expect(a.memory.visibilityOf('their001')).toBe(false);
-    expect(a.handed[0]).toEqual(a.memory.paintInput());
-    expect(a.loads()).toBe(0);
-    // And the stored list is filtered to the authors the page holds (`A188`): a name the
-    // document does not carry cannot be kept alive by a press.
-    expect(port.snapshot()[SYNC_OFF_KEY]).toEqual({ version: 1, pages: { [PAGE_KEY]: ['Вася'] } });
-  });
-
-  it('drops a stored name the page no longer holds when the reader presses another one', async () => {
-    const port = offPort(['Ушедший']);
-    const a = attach({
-      notes: [remote(), remote({ id: 'petya001', author_id: 'Петя' })],
-      port,
-      pageKey: () => PAGE_KEY,
-    });
-
-    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Петя', visible: false });
-    await settle();
-
-    expect(port.snapshot()[SYNC_OFF_KEY]).toEqual({ version: 1, pages: { [PAGE_KEY]: ['Петя'] } });
-  });
-
-  it('persists nothing, and stays silent, without a port or a page key', async () => {
-    // The port is absent: the module keeps the memory-only shape of `A163`.
-    const noPort = attach({ notes: [remote()] });
-    expect(() => noPort.askNow({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false })).not.toThrow();
-    await settle();
-    expect(noPort.memory.visibilityOf('their001')).toBe(false);
-
-    // A port but no page key: a document that is not a page stores nothing either.
-    const port = offPort();
-    const noKey = attach({ notes: [remote()], port, pageKey: () => null });
-    await noKey.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false });
-    await settle();
-    expect(port.calls).toEqual([]);
-  });
-
-  it('answers the press even when the record cannot be written', async () => {
-    const port = offPort();
-    port.failNextWrite('quota');
-    const a = attach({ notes: [remote()], port, pageKey: () => PAGE_KEY });
-
-    const answer = await a.answerOf({
-      type: NOTES_QUERY_MESSAGE,
-      op: 'switch',
-      authorName: 'Вася',
-      visible: false,
-    });
-
-    // The row already moved in the memory, so the popup's answer says so; what the reader
-    // loses is one reload's worth of the decision, never the note or the page.
-    expect((answer.value as { rows: { allVisible: boolean }[] }).rows[0]?.allVisible).toBe(false);
-    expect(SYNC_OFF_KEY in port.snapshot()).toBe(false);
   });
 });
