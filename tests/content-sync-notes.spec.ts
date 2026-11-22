@@ -392,12 +392,11 @@ describe('AC8 the wiring asks once per page key and hands the answer to the pain
     const sync = attachSyncNotes({ painter: stub.painter, foreign: memory, port, transport });
     await sync.afterPaint();
 
-    // Two reads on the first pass, and both are needed: the settings through core (`A31`) and
-    // the page's off list (`A187`, `A188`). The second pass of the same page asks no question,
-    // so it reads neither — which is what this count is really about.
+    // One settings read, through core, per question actually asked; the second pass of the
+    // same page asks nothing and therefore reads nothing.
     await sync.afterPaint();
     const reads = port.calls.filter((call) => call.op === 'get').length;
-    expect(reads).toBe(2);
+    expect(reads).toBe(1);
     expect(port.calls.filter((call) => call.op !== 'get')).toEqual([]);
   });
 });
