@@ -460,6 +460,18 @@ export class PopupComponent implements OnInit {
   private readonly service = new PageEntriesService(inject(PAGE_ENTRIES_SOURCE));
   private readonly sync = new PopupSyncPress(inject(SYNC_PRESS_SOURCE));
 
+  /**
+   * The destroy hook, read **in the injection context** and not in `ngOnInit`.
+   *
+   * `inject()` is legal only while Angular builds the component — a field initializer runs
+   * there, an `ngOnInit` body does not. Calling it from `ngOnInit` threw `NG0203` during
+   * the popup's own boot, which left the component half-built: `<h1>` rendered with no
+   * text and the list with no rows, because the throw happened before the view settled.
+   * The rule is the framework's and it is absolute: the hook is read here, and `ngOnInit`
+   * only uses it.
+   */
+  private readonly destroyRef = inject(DestroyRef);
+
   /** The whole popup state, as the core reads answered for the active tab. */
   readonly view = signal<PageEntriesView>({
     rows: [],
@@ -524,7 +536,7 @@ export class PopupComponent implements OnInit {
     const stop = this.service.watchPage((view: PageEntriesView): void => {
       this.view.set(view);
     });
-    inject(DestroyRef).onDestroy(stop);
+    this.destroyRef.onDestroy(stop);
   }
 
   /** Wording of one notice line, from the single constants module. */

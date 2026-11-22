@@ -959,3 +959,32 @@ describe('the empty state and the notices take the A125 inks (t14-01 AC7; answer
     expect(button).toMatch(/(?:^|;)\s*cursor:\s*pointer;/);
   });
 });
+/**
+ * `inject()` is legal only while Angular builds the component (`NG0203` otherwise).
+ *
+ * Stage 17 shipped `inject(DestroyRef)` inside `ngOnInit` to register the `A183`
+ * announcement listener, and the popup booted **half-built**: the throw happened before
+ * the view settled, so `<h1 class="title">` rendered empty and the list rendered no rows.
+ * No unit test caught it, because the component is exercised through a prototype stand-in
+ * rather than through Angular's own bootstrap — which is exactly why the rule is pinned
+ * as text here. A field initializer runs in the injection context; a lifecycle method body
+ * does not.
+ */
+describe('the component reads its injected hooks in the injection context (t17-07)', () => {
+  it('calls inject() only in field initializers, never inside a lifecycle method', () => {
+    const code = codeOnly(readSource(COMPONENT));
+    const body = code.slice(code.indexOf('export class PopupComponent'));
+    // Every lifecycle method body, from its `name(): void {` to the first closing brace.
+    for (const method of ['ngOnInit', 'ngOnDestroy', 'ngAfterViewInit']) {
+      const at = body.indexOf(`${method}(): void {`);
+      if (at < 0) {
+        continue;
+      }
+      const end = body.indexOf('\n  }', at);
+      const methodBody = body.slice(at, end < 0 ? undefined : end);
+      expect(methodBody, `${method} must not call inject()`).not.toMatch(/\binject\(/);
+    }
+    // And the hook is read where it belongs: a field initializer of the class.
+    expect(body).toMatch(/private readonly \w+ = inject\(DestroyRef\);/);
+  });
+});
