@@ -63,3 +63,37 @@ he can reach is hidden. A visible-tab measurement needs the reader.
 
 `npm run build` 0, `npm test` 0 — **1273 / 58**, `npm run typecheck` 0,
 `node scripts/check-agent-config.mjs` 0 (207 info).
+
+---
+
+## Closed: the minimum spin ships, with a timer that cannot decide the outcome
+
+The reader's objection settled it: «Сейчас при нажатии пользователь вообще не понимает происходит
+что-то или нет». Feedback is not a detail — it is the whole point of the button.
+
+**Why a timer is allowed here and was not before.** `A162` forbids a timer in this layer because a
+timer that decided the outcome would let the red arrows turn green on their own. The shipped timer
+cannot: it starts **after** a success has been read and only delays the return to green, while the
+failure path returns **before** the timer is reached. `A185` narrows the ban to that one use instead
+of lifting it.
+
+**The pin was rewritten, not deleted.** It now asserts:
+- the service — the half that owns the request — still has **no clock at all**;
+- the component has exactly **one** `setTimeout` and at most two clock reads;
+- the `error` branch is ordered **before** the timer in the shipped text, so red can never be held
+  behind the spin.
+
+**Verified in the reader's Chrome:**
+
+| Press | Class sequence |
+|---|---|
+| server up | `sync--running` for about a second, then `sync` |
+| server stopped | `sync--error`, and it stays |
+
+## The three rejected attempts, kept as the record
+
+1. `setTimeout` deciding the outcome — the forbidden design, and the pin rejected the first attempt.
+2. Whole turns in CSS (`900ms linear 1`) — shipped and useless: a turn count says how many turns to
+   play, not how long the class stays, and the class was removed by the answer after 4 ms.
+3. Ending the state on `animationend` — **hung the button forever**: a hidden tab does not play
+   animations, so the event never arrived. Reverted.
