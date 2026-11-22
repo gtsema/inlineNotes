@@ -164,3 +164,30 @@ the page, so the load succeeded — the popup simply asked before it finished. `
 
 The PM states this as a **diagnosis, not a reproduction**, and the fix must be verified by the reader
 in a Chrome that has the extension loaded.
+
+---
+
+## Part 1 accepted — the server endpoint (commit `b2ef26b`)
+
+Verified by the PM on the real stack, not from the report.
+
+| Gate | Result |
+|---|---|
+| `docker build -t inlinenotes-server ./server` | exit 0 |
+| `go vet ./...` in `golang:1.25-alpine` | clean |
+| `go test ./...` | all three packages `ok` |
+| `docker compose up -d --build` | both services healthy, `/health` 200 |
+| four extension gates | build 0, **1266 tests / 58 files**, typecheck 0, checker 0 (207 info) |
+
+### Live walk-through of the new endpoint
+
+| Step | Result |
+|---|---|
+| `POST` two notes as Ann, one as Boris | `{"saved":2}`, `{"saved":1}` |
+| `DELETE …/author/Ann/note/n1` | **`{"deleted":1}`**; `Ann/n2` and `Boris/n1` left |
+| the same delete again | **`{"deleted":0}`** — a missing row is not an error |
+| `DELETE …/author/Ann` (page-scoped, unchanged) | `{"deleted":1}` |
+| `POST` with only `n1` present, then delete `n2` | `{"deleted":0}` — **`POST` still never deletes** (`A155` holds) |
+| Boris's note throughout | untouched |
+
+The extension is untouched by this part: its four gates are the same numbers as before.
