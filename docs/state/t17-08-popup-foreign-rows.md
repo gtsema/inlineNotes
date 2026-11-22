@@ -111,3 +111,47 @@ the one line no test executed.
 and the popup renders `["Вы — 1", "Ефим — 1"]` — the reader's own row and the foreign one.
 
 The diagnostic seam was removed afterwards; `grep diagnose src/popup/*.ts` answers nothing.
+
+---
+
+## Third defect: the two halves fed each other (still open)
+
+After the channel fix the popup rendered the foreign row — and then the reader's two symptoms
+returned, now with a measurable cause:
+
+| Measurement (reader's Chrome) | Value |
+|---|---|
+| questions the page receives, in 3 s | **1637** |
+| announcements the popup receives, in 3 s | **1638** |
+| announcements the popup itself sends | **0** |
+| stack of one question | `…pageState` → `viewOf` → `send` → `chrome.tabs.sendMessage` |
+
+So the page announces once per question, and each announcement makes the popup rebuild its view,
+which asks again. The reader sees a checkbox that flips straight back and a deleted row that will not
+leave, because the loop re-renders faster than a press can settle.
+
+Two fixes were made towards it and **neither closed it**:
+
+1. `loadOnce` now announces only when the answer moved (`fingerprintOf()`), so a load that changes
+   nothing says nothing. Correct, and not sufficient: the page keeps loading on every question.
+2. `ensureLoaded` remembers that a load finished, so a second question no longer starts a second
+   request. Correct, and still not sufficient.
+
+**What the evidence points at, and what is not yet proven:** the page's own repaint path calls
+`painter.refresh()`, and `src/content/main.ts` wires `painter.refresh().then(sync.afterPaint)` — so a
+repaint runs `afterPaint`, which loads from the server and (through the channel's load) announces.
+The question path calls `repaint()` for the two row operations, and the announcement brings the popup
+back for another question. The exact edge that closes the loop is **not** proven yet: the PM could not
+wrap `chrome.runtime.sendMessage` inside the content script's isolated world to count its sends
+directly.
+
+**Next step, named so it is not another guess:** count the loads inside the content script — the one
+number that separates "the page loads on every question" from "the page announces without loading".
+The cheapest instrument is a temporary counter on the page's load seam, written to
+`chrome.storage.local` through the port the content script already owns, exactly like the diagnostic
+that found the channel defect.
+
+## Gates
+
+`npm run build` 0, `npm test` 0 — **1273 / 58**, `npm run typecheck` 0,
+`node scripts/check-agent-config.mjs` 0. All green, and the loop is still there.

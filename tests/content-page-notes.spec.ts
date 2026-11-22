@@ -384,9 +384,11 @@ describe('AC11 a late list still reaches a popup that is already open (A183, t17
 
     slow.resolve({ ok: true, added: 0 });
     await settle();
-    // One load, and it was announced — which is what wakes the open popup (`A183`).
+    // One load, and **nothing announced**: the answer did not move, and a message saying
+    // what the popup already holds is the one that closes the loop (`t17-08`). The popup
+    // still learns about a load that really changed the rows — the case above pins that.
     expect(a.loads()).toBe(1);
-    expect(a.announced).toEqual([{ rows: [] }]);
+    expect(a.announced).toEqual([]);
   });
 
   it('joins the load already in flight instead of asking the server twice', async () => {
@@ -401,20 +403,31 @@ describe('AC11 a late list still reaches a popup that is already open (A183, t17
     slow.resolve({ ok: true, added: 0 });
     await settle();
     expect(a.loads()).toBe(1);
-    // One announcement for one load, however many questions it answered.
-    expect(a.announced).toHaveLength(1);
+    // **No** announcement: the load changed nothing, and an announcement that repeats what
+    // the popup already holds is the message that made the two halves loop (`t17-08`). What
+    // this case is about is the join — three questions, one request — and that is above.
+    expect(a.announced).toHaveLength(0);
 
-    // A question after the load answered starts the next one: `A164`'s retry is the
-    // reader's next question, and there is still no timer anywhere.
+    // A question after the load answered starts **no** new request (`t17-08`): the answer
+    // is valid for the life of the document, and re-asking on every question is what made
+    // the popup and the page feed each other. The retry belongs to the reader and goes
+    // through `reload()`, which nothing on the question path calls.
     a.askNow({ type: NOTES_QUERY_MESSAGE });
-    expect(a.loads()).toBe(2);
+    expect(a.loads()).toBe(1);
   });
 
   it('announces the rows the load left, in the shape the answer uses', async () => {
-    const a = attach({ outcome: { ok: true, added: 1 } });
-    // A real load writes the memory before it answers; the seam only reports the outcome,
-    // so this case writes what such a load would have written.
-    a.memory.replace([remote()], 'reader-one');
+    // The memory must change **during** the load, the way `loadIntoMemory` changes it, or
+    // there is nothing to announce (`t17-08`: an announcement that says what the popup
+    // already holds is the message that made the two halves feed each other).
+    let memory: ForeignNotes | null = null;
+    const a = attach({
+      outcome: (): Promise<ForeignLoadOutcome> => {
+        memory?.replace([remote()], 'reader-one');
+        return Promise.resolve({ ok: true, added: 1 });
+      },
+    });
+    memory = a.memory;
 
     a.askNow({ type: NOTES_QUERY_MESSAGE });
     await settle();

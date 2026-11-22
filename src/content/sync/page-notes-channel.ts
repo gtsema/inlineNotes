@@ -88,6 +88,14 @@ export interface PageNotesChannel {
   /** The answer the popup would get right now: the memory and the failure flag. */
   result(): PageNotesQueryResult;
   /**
+   * Forgets the finished load, so the next question asks the server again (`A164`).
+   *
+   * The retry belongs to the reader and not to the question path: a press is the one moment
+   * somebody asks for a fresh answer, and calling this from anywhere else is what made the
+   * two halves loop (`t17-08`).
+   */
+  reload(): void;
+  /**
    * Tells an open popup that this page's foreign rows moved (ruling `A183`).
    *
    * It is called by whoever changed the memory through a path that is **not** a popup
@@ -222,6 +230,16 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
   let loading: Promise<void> | null = null;
 
   /**
+   * Whether this document has already asked the server (`t17-08`).
+   *
+   * The answer stays valid for the life of the page: the reader's own notes do not change
+   * behind their back, and the server's copy is only re-read when the reader asks for it.
+   * Without this flag every question started a new request, and the question path is
+   * triggered by the announcement the request itself sends — the loop measured below.
+   */
+  let loaded = false;
+
+  /**
    * One load, remembered (`A169`): a success clears the failure the reader saw.
    *
    * The memory may have changed under the popup's rows, so the answer of a load is
@@ -230,10 +248,30 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
    * failed load is exactly the state the popup's notice line describes.
    */
   async function loadOnce(): Promise<ForeignLoadOutcome> {
+    const before = fingerprintOf();
     const outcome = await wiring.load();
     loadCode = outcome.ok ? null : outcome.code;
-    announce();
+    // Announce **only when the answer actually moved** (`t17-08`). The popup rebuilds its
+    // view by asking this page again, and every question runs `ensureLoaded` — so an
+    // unconditional announcement made the two halves feed each other: question, load,
+    // announcement, rebuild, question, and so on without end. The reader saw a checkbox
+    // that flipped straight back and a row that would not disappear, because the loop kept
+    // re-asking and re-rendering faster than a press could settle.
+    if (fingerprintOf() !== before || loadCode !== null) {
+      announce();
+    }
     return outcome;
+  }
+
+  /**
+   * What the popup would render right now, as one string.
+   *
+   * The rows and the failure flag are the whole answer (`page-notes-query.ts`), so the
+   * fingerprint of the answer is the fingerprint of what an announcement would say: a load
+   * that changes nothing announces nothing, and the loop above cannot form.
+   */
+  function fingerprintOf(): string {
+    return JSON.stringify(answerOf());
   }
 
   /**
@@ -241,15 +279,43 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
    *
    * It is **not** awaited by the ask path: the popup is answered from the memory at the
    * moment it asks, which is what makes a popup opened during a slow load show what the
-   * page holds instead of waiting for nothing. What it awaits is only the shared promise, 
-   * so two callers can never produce two requests.
+   * page holds instead of waiting for nothing.
+   *
+   * **One load per document, unless the reader asks again.** The previous shape cleared the
+   * shared promise when it settled, so the *next* question started a whole new request —
+   * and the popup asks once per view build, which the announcement triggers. The two halves
+   * therefore fed each other without end: measured in the reader's Chrome as **1637
+   * questions and 1638 announcements in three seconds**, with the checkbox flipping back and
+   * the deleted row refusing to leave, because the loop re-rendered faster than a press
+   * could settle.
+   *
+   * A finished load is remembered. A caller that wants a fresh answer — the reader pressing
+   * the sync button, which is `A164`'s retry — calls `reload()`, and nothing else does.
    */
   async function ensureLoaded(): Promise<void> {
+    if (loaded) {
+      return;
+    }
     loading ??= loadOnce().then(
-      () => undefined,
-      () => undefined,
+      () => {
+        loaded = true;
+      },
+      () => {
+        loaded = true;
+      },
     );
     await loading;
+  }
+
+  /**
+   * Forgets that a load happened, so the next question asks the server again.
+   *
+   * This is the retry of `A164`, and it belongs to the reader: the sync press is what calls
+   * it, because a press is the one moment the reader asks for a fresh answer. Nothing on the
+   * question path calls it, which is what keeps the two halves from looping.
+   */
+  function reload(): void {
+    loaded = false;
     loading = null;
   }
 
@@ -316,6 +382,7 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
       return loadCode;
     },
     result: answerOf,
+    reload,
     announce,
   };
 }
