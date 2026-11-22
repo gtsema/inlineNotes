@@ -527,16 +527,23 @@ export class PopupComponent implements OnInit {
   readonly deleteIconViewBox: string = POPUP_DELETE_ICON_VIEW_BOX;
 
   ngOnInit(): void {
-    void this.apply(this.service.open());
     // Ruling `A183`: the popup asks once, and then **listens**. The page announces when
     // its foreign list moved — which is what happens when its automatic load lands after
     // that one question — so a late list still reaches a popup that is already open. No
     // poll, no timer and no second question of this component's own: the announcement is
     // the trigger and the service decides what to render.
+    //
+    // **The subscription comes first, and the order is the whole point.** The page answers
+    // the question in the same turn and starts its server load right after it, so its
+    // announcement can arrive while the first view is still being built. Subscribing after
+    // `open()` — which is what this method did when it shipped — left a window in which
+    // the announcement reached a popup that was not listening yet, and the foreign rows it
+    // carried were lost: the popup rendered «нет записей» and never re-rendered.
     const stop = this.service.watchPage((view: PageEntriesView): void => {
       this.view.set(view);
     });
     this.destroyRef.onDestroy(stop);
+    void this.apply(this.service.open());
   }
 
   /** Wording of one notice line, from the single constants module. */

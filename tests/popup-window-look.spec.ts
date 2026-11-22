@@ -988,3 +988,34 @@ describe('the component reads its injected hooks in the injection context (t17-0
     expect(body).toMatch(/private readonly \w+ = inject\(DestroyRef\);/);
   });
 });
+
+/**
+ * The order of the two lines in `ngOnInit` is a **race**, not a style choice.
+ *
+ * Stage 17 shipped the subscription *after* `open()` (`t17-06`), and the foreign rows
+ * disappeared: the page answers the question in the same turn and starts its server load
+ * right after it, so its `A183` announcement could arrive while the first view was still
+ * being built — reaching a popup that had not subscribed yet. The rows it carried were
+ * lost, and nothing re-rendered them: the popup showed «нет записей» forever.
+ *
+ * A unit test cannot see this, because the component is driven through a prototype
+ * stand-in with no Angular lifecycle. The order is therefore pinned as text.
+ */
+describe('the popup subscribes before it asks (t17-08, A183)', () => {
+  it('registers the announcement listener before the first view is requested', () => {
+    const code = codeOnly(readSource(COMPONENT));
+    const at = code.indexOf('ngOnInit(): void {');
+    expect(at, 'the component has no ngOnInit').toBeGreaterThan(-1);
+    const end = code.indexOf('\n  }', at);
+    const body = code.slice(at, end);
+
+    const subscribe = body.indexOf('watchPage(');
+    const ask = body.indexOf('service.open()');
+    expect(subscribe, 'ngOnInit does not subscribe').toBeGreaterThan(-1);
+    expect(ask, 'ngOnInit does not ask').toBeGreaterThan(-1);
+    expect(
+      subscribe,
+      'watchPage must run before service.open(), or an announcement can be lost',
+    ).toBeLessThan(ask);
+  });
+});
