@@ -285,3 +285,26 @@ func TestRequireValidUTF8NamesTheFieldItWasGiven(t *testing.T) {
 	}
 	requireField(t, model.RequireValidUTF8("custom_field", []byte(notUTF8)), "custom_field")
 }
+
+/* -------------------- A181: the single-note delete path -------------------- */
+
+// The path of the one-note delete names `note_id`, so the id it carries is judged
+// by the same rule as `notes[i].id` while the `400` names the field the client
+// actually sent.
+func TestValidateNoteIDAcceptsRealIDs(t *testing.T) {
+	for _, id := range []string{"aaaa1111", "идентификатор-01", strings.Repeat("a", model.MaxIDRunes)} {
+		if err := model.ValidateNoteID(id); err != nil {
+			t.Fatalf("id %q rejected: %v", id, err)
+		}
+	}
+}
+
+func TestValidateNoteIDRejectsBlankAndOverlong(t *testing.T) {
+	requireField(t, model.ValidateNoteID("   "), "note_id")
+	requireField(t, model.ValidateNoteID(""), "note_id")
+	requireField(t, model.ValidateNoteID(strings.Repeat("a", model.MaxIDRunes+1)), "note_id")
+}
+
+func TestValidateNoteIDRejectsInvalidUTF8(t *testing.T) {
+	requireField(t, model.ValidateNoteID(notUTF8), "note_id")
+}

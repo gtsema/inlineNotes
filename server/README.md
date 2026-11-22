@@ -67,6 +67,7 @@ docker compose run --rm test go test ./internal/store/ -v
 | `GET` | `/notes/page/{page_id}` | — | `200 {"notes":[...]}` |
 | `POST` | `/notes/page/{page_id}` | `{"author_id":"...","notes":[...]}` | `200 {"saved":N}` |
 | `DELETE` | `/notes/page/{page_id}/author/{author_id}` | — | `200 {"deleted":N}` |
+| `DELETE` | `/notes/page/{page_id}/author/{author_id}/note/{note_id}` | — | `200 {"deleted":1}` или `200 {"deleted":0}`, если такой строки нет |
 | `GET` | `/notes/author/{author_id}/all-pages?limit=&offset=` | — | `200 {"notes":[...]}` |
 | `GET` | `/health` | — | `200 {"status":"ok"}`, или `503`, если база недоступна |
 
@@ -106,6 +107,11 @@ curl "http://localhost:8080/notes/page/$PAGE"
 curl -X DELETE "http://localhost:8080/notes/page/$PAGE/author/$(node -e "console.log(encodeURIComponent('Анна'))")"
 # {"deleted":1}
 
+# Удаление ОДНОЙ заметки: та же тройка (page_id, author_id, id) в пути.
+curl -X DELETE "http://localhost:8080/notes/page/$PAGE/author/$(node -e "console.log(encodeURIComponent('Анна'))")/note/aaaa1111"
+# {"deleted":1}   — строка была и удалена
+# {"deleted":0}   — такой строки нет: это не ошибка, повторный запрос отвечает так же
+
 curl "http://localhost:8080/notes/author/$(node -e "console.log(encodeURIComponent('Анна'))")/all-pages?limit=10&offset=0"
 ```
 
@@ -117,6 +123,12 @@ curl "http://localhost:8080/notes/author/$(node -e "console.log(encodeURICompone
   странице, которых нет в запросе, **не удаляются**: для удаления есть отдельный запрос.
 - **`DELETE` удаляет заметки только названного автора** и только на одной странице; другие страницы и другие авторы не
   затрагиваются.
+- **`DELETE .../note/{note_id}` удаляет ровно одну заметку** — ту, что названа тройкой `(page_id, author_id, id)`. Остальные
+  заметки того же автора на этой странице и заметки других авторов остаются байт в байт прежними. Ответ — `{"deleted":1}`,
+  а если такой строки нет — `{"deleted":0}`; отсутствие строки не ошибка, повторное удаление отвечает `0`.
+- **`POST` никогда ничего не удаляет**: это не «заменить всё», а upsert по тройке. Если бы `POST` удалял то, чего нет в теле,
+  каждая синхронизация из устаревшего состояния стирала бы заметки, о которых клиент просто не знает. Для удаления есть два
+  `DELETE`: один — весь набор автора на странице, второй — одна заметка.
 - **`created_at` не меняется** при перезаписи, `updated_at` сдвигается вперёд.
 - **`page_id` сервер не нормализует**: он принимает ключ как есть и возвращает его байт в байт.
 - **`anchor` сервер не разбирает**: он только хранит его в `jsonb` и возвращает как есть.
@@ -127,7 +139,7 @@ curl "http://localhost:8080/notes/author/$(node -e "console.log(encodeURICompone
 
 - `author_id` не пустой (после обрезки пробелов) и не длиннее 64 символов;
 - все строки запроса — корректный UTF-8: и сегменты пути (`page_id`, `author_id`), и поля заметки (`id`, `text`, `comment`), и тело целиком до разбора JSON. Проверка одна (`model.RequireValidUTF8`, на `utf8.Valid`), и она идёт **до** базы: битый запрос не записывает ни одной строки;
-- `id` не пустой и не длиннее 64 символов;
+- `id` не пустой и не длиннее 64 символов (и `notes[i].id` в теле, и `note_id` в пути удаления одной заметки);
 - `comment` не длиннее **256 символов** (считаются кодовые точки, а не байты);
 - `text` не пустой;
 - `anchor` присутствует, является корректным JSON и не равен `null`;

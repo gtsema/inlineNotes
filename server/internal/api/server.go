@@ -37,6 +37,7 @@ type NoteStore interface {
 	NotesForPage(ctx context.Context, pageID string) ([]model.Note, error)
 	NotesForAuthor(ctx context.Context, authorID string, limit, offset int) ([]model.Note, error)
 	DeleteAuthorNotesOnPage(ctx context.Context, pageID, authorID string) (int, error)
+	DeleteOneNote(ctx context.Context, pageID, authorID, noteID string) (int, error)
 }
 
 // Server holds the dependencies of the HTTP layer.
@@ -45,7 +46,7 @@ type Server struct {
 	logger *log.Logger
 }
 
-// New builds the HTTP handler tree: the four note endpoints plus `/health`.
+// New builds the HTTP handler tree: the five note endpoints plus `/health`.
 func New(noteStore NoteStore, logger *log.Logger) http.Handler {
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
@@ -57,6 +58,10 @@ func New(noteStore NoteStore, logger *log.Logger) http.Handler {
 	mux.HandleFunc("GET /notes/page/{page_id}", s.handleGetPageNotes)
 	mux.HandleFunc("POST /notes/page/{page_id}", s.handleSavePageNotes)
 	mux.HandleFunc("DELETE /notes/page/{page_id}/author/{author_id}", s.handleDeleteAuthorNotes)
+	// The single-note delete is registered on the narrower pattern, so the two
+	// DELETEs never compete: a request that names `note/{note_id}` always lands
+	// here, and one that stops at `author/{author_id}` always lands above.
+	mux.HandleFunc("DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}", s.handleDeleteOneNote)
 	mux.HandleFunc("GET /notes/author/{author_id}/all-pages", s.handleAuthorNotes)
 
 	return withCORS(mux)
@@ -154,6 +159,42 @@ func (s *Server) handleDeleteAuthorNotes(w http.ResponseWriter, r *http.Request)
 	deleted, err := s.store.DeleteAuthorNotesOnPage(r.Context(), pageID, strings.TrimSpace(authorID))
 	if err != nil {
 		s.logger.Printf("delete author notes: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "storage failure"})
+		return
+	}
+	writeJSON(w, http.StatusOK, deletedResponse{Deleted: deleted})
+}
+
+// handleDeleteOneNote removes exactly one note (ruling A181) and answers
+// `{"deleted": 1}` when the row existed and `{"deleted": 0}` when it did not.
+//
+// A missing row is a `200`, not a `404`: the request's goal - "this note is not
+// on the server" - is already true, so a retried or duplicated delete is not a
+// failure. That is also why `store.ErrNotFound` and `writeStoreError` play no
+// part here; they belong to a read that names a single row.
+//
+// `POST` is untouched by this endpoint: it stays the non-destructive upsert of
+// ruling A155.
+func (s *Server) handleDeleteOneNote(w http.ResponseWriter, r *http.Request) {
+	pageID := r.PathValue("page_id")
+	if err := model.ValidatePageID(pageID); err != nil {
+		writeValidationError(w, err)
+		return
+	}
+	authorID := r.PathValue("author_id")
+	if err := model.ValidateAuthorID(authorID); err != nil {
+		writeValidationError(w, err)
+		return
+	}
+	noteID := r.PathValue("note_id")
+	if err := model.ValidateNoteID(noteID); err != nil {
+		writeValidationError(w, err)
+		return
+	}
+
+	deleted, err := s.store.DeleteOneNote(r.Context(), pageID, strings.TrimSpace(authorID), strings.TrimSpace(noteID))
+	if err != nil {
+		s.logger.Printf("delete note: %v", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "storage failure"})
 		return
 	}

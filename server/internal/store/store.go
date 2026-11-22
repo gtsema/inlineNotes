@@ -210,6 +210,26 @@ func (s *Store) DeleteAuthorNotesOnPage(ctx context.Context, pageID, authorID st
 	return int(tag.RowsAffected()), nil
 }
 
+// DeleteOneNote removes exactly one row, named by the upsert triple
+// (page_id, author_id, id) of ruling A155, and reports how many were removed:
+// 1 when the row existed, 0 when it did not (ruling A181).
+//
+// A missing row is not an error. Deleting twice is what a retried request looks
+// like, and the second answer must not be a failure.
+//
+// The predicate is the whole primary key, so the reach is one row by
+// construction: the same author's other notes on the same page are not matched,
+// another author's notes are not matched (even on an id collision), and another
+// page is not matched.
+func (s *Store) DeleteOneNote(ctx context.Context, pageID, authorID, noteID string) (int, error) {
+	const query = `DELETE FROM notes WHERE page_id = $1 AND author_id = $2 AND id = $3`
+	tag, err := s.pool.Exec(ctx, query, pageID, authorID, noteID)
+	if err != nil {
+		return 0, fmt.Errorf("delete note %s: %w", noteID, err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // CountNotesOnPage reports how many notes a page holds, regardless of author.
 // Used by tests and by a possible future cap check.
 func (s *Store) CountNotesOnPage(ctx context.Context, pageID string) (int, error) {

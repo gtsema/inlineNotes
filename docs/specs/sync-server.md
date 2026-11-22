@@ -34,6 +34,7 @@ The Russian column is empty for the server itself: the server renders no UI, so 
 4. **Read a page.** `GET /notes/page/{page_id}` returns every author's notes on that page.
 5. **Write one author's set.** `POST /notes/page/{page_id}` validates the body, then upserts `(page_id, author_id, id)` for the author named in the body.
 6. **Delete one author's set.** `DELETE /notes/page/{page_id}/author/{author_id}` removes the rows matching that page and that author.
+6a. **Delete one note.** `DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}` removes exactly one row and answers `{"deleted": 1}`, or `{"deleted": 0}` when that row is not there (ruling `A181`).
 7. **Read across pages.** `GET /notes/author/{author_id}/all-pages` returns one author's notes, newest first.
 
 ## Rules / Semantics
@@ -67,6 +68,16 @@ The Russian column is empty for the server itself: the server renders no UI, so 
 - There is no authentication, so the server cannot verify that the caller really is that author: it deletes whatever the path names. This is an accepted consequence of "no authentication", recorded as a ruling, not an oversight.
 - The delete never crosses the page boundary: another page's rows of the same author are untouched.
 
+### Delete exactly one note (ruling `A181`)
+
+- `DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}` deletes **exactly one row**, named by the upsert triple `(page_id, author_id, id)` of ruling `A155`. The predicate is the whole primary key, so the reach is one row by construction.
+- The answer is `{"deleted": 1}` when the row existed and was removed, and `{"deleted": 0}` when it did not. **A missing row is not an error**: the request's goal - "this note is not on the server" - is already true, so a retried or duplicated delete answers `200` rather than `404`.
+- Removing one note leaves the same author's other notes on that page **byte-identical**, leaves every other author's notes untouched (including a note of another author that carries the same `id`), and never crosses the page boundary.
+- `note_id` in the path is judged by the same rule as `notes[i].id` in a body: non-empty after trimming, valid UTF-8, at most 64 code points. A `400` names the field `note_id`, which is what the client sent.
+- **The existing page-scoped delete of `A156` keeps its behaviour**: `{"deleted": N}` for every row of that author on that page. The two endpoints sit on different patterns and never compete.
+- **This is why `POST` did not change.** Making `POST` delete whatever the body omits would turn every sync into a destructive replace: a client syncing from a stale state would delete notes it simply does not know about. `POST` stays the non-destructive upsert of `A155`.
+- The extension's use of the endpoint (delete the reader's own note locally, then here; no call for a foreign note; no call when synchronization is off) is owned by `docs/specs/sync-integration.md`.
+
 ### All-pages hook (ruling `A157`)
 
 - `GET /notes/author/{author_id}/all-pages` returns one author's notes across all pages, ordered by `updated_at` descending (newest first), then `page_id` and `id` ascending to break ties.
@@ -79,7 +90,7 @@ The server refuses a body that could corrupt the table, with `400` and `{"error"
 
 - every request-derived string is **valid UTF-8** (ruling `A159`): the path segments `page_id` and `author_id`, the note fields `id`, `text` and `comment`, and the whole request body before it is decoded;
 - `author_id` non-empty after trimming, at most 64 code points;
-- `id` non-empty after trimming, at most 64 code points;
+- `id` non-empty after trimming, at most 64 code points (`notes[i].id` in a body, `note_id` in the path of the single-note delete);
 - `comment` at most 256 code points (code points, not bytes: 256 Cyrillic characters are 512 bytes);
 - `text` non-empty after trimming;
 - `anchor` present, valid JSON and not `null`;
@@ -134,6 +145,7 @@ Base path `/notes`. All responses are JSON; errors are `{"error": "..."}` with a
 | `GET` | `/notes/page/{page_id}` | — | `200` `{"notes": [...]}` |
 | `POST` | `/notes/page/{page_id}` | `{"author_id": "...", "notes": [...]}` | `200` `{"saved": N}` |
 | `DELETE` | `/notes/page/{page_id}/author/{author_id}` | — | `200` `{"deleted": N}` |
+| `DELETE` | `/notes/page/{page_id}/author/{author_id}/note/{note_id}` | — | `200` `{"deleted": 1}`, or `{"deleted": 0}` when the row is absent (`A181`) |
 | `GET` | `/notes/author/{author_id}/all-pages?limit=&offset=` | — | `200` `{"notes": [...]}` |
 | `GET` | `/health` | — | `200` `{"status": "ok"}`, or `503` when the database is unreachable |
 
@@ -159,6 +171,9 @@ One note as stored and returned:
 - **`page_id` with reserved characters.** `/`, `?`, `&` and `#` are carried percent-encoded by the client and decoded by the router; a near-miss key (`origin + pathname` of a key that carries a query) is a **different** page, because the server does not normalize (`A153`).
 - **Two authors, one `id`.** Two rows on the same page; the second author's POST does not touch the first author's row (`A155`).
 - **One author re-posting a subset.** Rows absent from the request survive; only the endpoint of `A156` deletes.
+- **Deleting a note that is not there.** `{"deleted": 0}` with `200`, never `404`: deleting twice is not a failure (`A181`).
+- **Deleting one note while the author has more.** Only the named triple goes; the author's other notes on the page and every other author's notes stay as they were (`A181`).
+- **Two authors, one `id`, one delete.** Deleting `(page_id, author_id, id)` reaches that author's row only; the other author's row with the same `id` survives (`A155`, `A181`).
 - **Empty note list.** `{"author_id": "...", "notes": []}` is a valid `200` with `saved: 0`: the author has nothing new to say.
 - **Unknown author or page.** `GET` returns an empty `notes` array with `200`, never `404`. Absence of notes is not an error.
 - **Database down at startup.** The server retries for up to 60 seconds and then exits non-zero; `docker compose` restarts it.
@@ -181,6 +196,7 @@ One note as stored and returned:
 6. Two authors posting the same `id` on the same page produce two rows (`A155`).
 7. `GET /notes/page/{page_id}` returns both authors' notes and only that page's notes.
 8. `DELETE /notes/page/{page_id}/author/{author_id}` removes exactly that author's rows on that page and leaves the other author's rows, and other pages, untouched (`A156`).
+8a. `DELETE /notes/page/{page_id}/author/{author_id}/note/{note_id}` deletes exactly that one row and answers `{"deleted": 1}`, or `{"deleted": 0}` when no such row exists, while the same author's other notes on the page and every other author's notes stay byte-identical (`A181`).
 9. `GET /notes/author/{author_id}/all-pages` returns that author's notes across pages, newest first, honoring `limit` and `offset` (`A157`).
 10. A body with a `comment` longer than 256 characters, an empty `author_id`, more than 20 notes, or an invalid `anchor` is rejected with `400` and a JSON error, and nothing is written.
 11. A `page_id` containing `/`, `?`, `&` and `#` survives the round trip through the path segment (`A153`).
@@ -197,10 +213,11 @@ One note as stored and returned:
 | 6 | `store.TestTwoAuthorsMayShareOneNoteID` |
 | 7 | `store.TestNotesForPageReturnsBothAuthorsAndOnlyThatPage`, `api.TestPostThenGetRoundTrip` |
 | 8 | `store.TestDeleteRemovesOnlyTheNamedAuthorsRows`, `api.TestDeleteReportsTheAuthorsRowCount` |
+| 8a | `store.TestDeleteOneNoteRemovesExactlyThatRow`, `store.TestDeleteOneNoteAnswersZeroWhenTheRowIsAbsentAndIsRepeatable`, `store.TestDeleteOneNoteLeavesTheAuthorsOtherRows`, `store.TestDeleteOneNoteLeavesOtherAuthorsAndOtherPages`, `store.TestPageDeleteStillRemovesEveryRowOfTheAuthor`, `api.TestDeleteOneNoteReportsOneWhenTheRowExisted`, `api.TestDeleteOneNoteAnswersZeroForAMissingRowAndIsRepeatable`, `api.TestDeleteOneNoteLeavesEveryOtherRowAlone`, `api.TestPageDeleteStillReportsEveryRowOfTheAuthor`, `api.TestDeleteOneNoteValidatesItsThreeSegments`, `api.TestDeleteOneNoteSurvivesTheReservedCharactersInThePath`, `api.TestPostStillDoesNotDeleteAfterTheSingleNoteEndpoint`, `model.TestValidateNoteID*` |
 | 9 | `store.TestNotesForAuthorAllPagesNewestFirstWithLimitAndOffset`, `api.TestAllPagesHonoursLimitAndOffset`, `api.TestAllPagesDefaultsLimitAndRejectsBadPaging` |
 | 10 | `api.TestValidationRejectsBadBodies`, `api.TestValidationAcceptsExactlyTheCaps`, `model.TestValidateSaveRequest*` |
 | 11 | `api.TestPageIDWithReservedCharactersSurvivesThePath`, `api.TestPageIDIsNotNormalized`, `store.TestPageIDSurvivesVerbatimThroughTheStore` |
-| 12 | `docker compose run --rm test` → `go test ./...`, 56 tests, 0 skips |
+| 12 | `docker compose run --rm test` → `go test ./...`, 103 tests, 0 skips |
 
 ### Test mapping — the UTF-8 rule (`A159`-`A161`, brief `t16-02`)
 

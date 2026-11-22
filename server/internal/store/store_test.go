@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -441,5 +442,193 @@ func TestSaveNotesDoesNotDeleteRowsMissingFromTheRequest(t *testing.T) {
 	}
 	if len(stored) != 2 {
 		t.Fatalf("rows = %d, want 2 (POST must not delete; A155)", len(stored))
+	}
+}
+
+/* ------------------ A181: one note is deleted, one row goes ---------------- */
+
+// seedTwoAuthorsOnOnePage writes the fixture every A181 store test starts from:
+// two of Анна's notes and two of Борис's on one page, plus one of Анна's notes on
+// another page under a shared id. It returns nothing: the assertions read the
+// table through NotesForPage.
+func seedTwoAuthorsOnOnePage(t *testing.T, s *store.Store) {
+	t.Helper()
+	ctx := context.Background()
+
+	if _, err := s.SaveNotes(ctx, pageArticle, authorAnna, []model.NoteInput{
+		noteInput("aaaa1111", "first", "заметка Анны 1"),
+		noteInput("aaaa2222", "second", "заметка Анны 2"),
+	}); err != nil {
+		t.Fatalf("save anna: %v", err)
+	}
+	if _, err := s.SaveNotes(ctx, pageArticle, authorBoris, []model.NoteInput{
+		noteInput("bbbb1111", "third", "заметка Бориса 1"),
+		noteInput("aaaa1111", "fourth", "заметка Бориса с тем же id"),
+	}); err != nil {
+		t.Fatalf("save boris: %v", err)
+	}
+	if _, err := s.SaveNotes(ctx, pageOther, authorAnna, []model.NoteInput{
+		noteInput("aaaa1111", "fifth", "заметка Анны на другой странице"),
+	}); err != nil {
+		t.Fatalf("save other page: %v", err)
+	}
+}
+
+// commentsBy reports the comment of every row of a page, keyed "author id", so a
+// test can compare the WHOLE table state byte for byte instead of counting rows.
+func commentsBy(t *testing.T, s *store.Store, pageID string) map[string]string {
+	t.Helper()
+	ctx := context.Background()
+	notes, err := s.NotesForPage(ctx, pageID)
+	if err != nil {
+		t.Fatalf("read page: %v", err)
+	}
+	byKey := make(map[string]string, len(notes))
+	for _, note := range notes {
+		byKey[note.AuthorID+" "+note.ID] = note.Comment
+	}
+	return byKey
+}
+
+// AC 1: an existing triple is removed and the answer is 1.
+func TestDeleteOneNoteRemovesExactlyThatRow(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoAuthorsOnOnePage(t, s)
+
+	deleted, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa1111")
+	if err != nil {
+		t.Fatalf("delete one: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", deleted)
+	}
+
+	rows := commentsBy(t, s, pageArticle)
+	if _, ok := rows[authorAnna+" aaaa1111"]; ok {
+		t.Fatalf("the named row survived: %#v", rows)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows left = %d, want 3: %#v", len(rows), rows)
+	}
+}
+
+// AC 1, second half: a triple that is not in the table is `0`, not an error, and
+// deleting the same row twice answers 1 then 0.
+func TestDeleteOneNoteAnswersZeroWhenTheRowIsAbsentAndIsRepeatable(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoAuthorsOnOnePage(t, s)
+
+	for _, missing := range []struct{ page, author, id string }{
+		{pageArticle, authorAnna, "gone0000"},
+		{pageArticle, "Неизвестный", "aaaa1111"},
+		{"https://example.com/never-saved", authorAnna, "aaaa1111"},
+	} {
+		deleted, err := s.DeleteOneNote(ctx, missing.page, missing.author, missing.id)
+		if err != nil {
+			t.Fatalf("delete a missing row %v: %v", missing, err)
+		}
+		if deleted != 0 {
+			t.Fatalf("deleted = %d for %v, want 0", deleted, missing)
+		}
+	}
+	if rows := commentsBy(t, s, pageArticle); len(rows) != 4 {
+		t.Fatalf("a missing row removed something: %#v", rows)
+	}
+
+	first, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa2222")
+	if err != nil {
+		t.Fatalf("first delete: %v", err)
+	}
+	second, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa2222")
+	if err != nil {
+		t.Fatalf("second delete: %v", err)
+	}
+	if first != 1 || second != 0 {
+		t.Fatalf("repeat delete answered %d then %d, want 1 then 0", first, second)
+	}
+}
+
+// AC 2: the same author's other notes on the same page stay byte-identical.
+func TestDeleteOneNoteLeavesTheAuthorsOtherRows(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoAuthorsOnOnePage(t, s)
+	before := commentsBy(t, s, pageArticle)
+
+	if _, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa1111"); err != nil {
+		t.Fatalf("delete one: %v", err)
+	}
+
+	after := commentsBy(t, s, pageArticle)
+	for _, key := range []string{authorAnna + " aaaa2222", authorBoris + " bbbb1111", authorBoris + " aaaa1111"} {
+		if after[key] != before[key] {
+			t.Fatalf("row %q changed: %q -> %q", key, before[key], after[key])
+		}
+	}
+}
+
+// AC 3: another author's notes are out of reach, including a note that carries
+// the deleted id (A155: the triple is the identity) and the same author on
+// another page.
+func TestDeleteOneNoteLeavesOtherAuthorsAndOtherPages(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoAuthorsOnOnePage(t, s)
+
+	if _, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa1111"); err != nil {
+		t.Fatalf("delete one: %v", err)
+	}
+
+	page := commentsBy(t, s, pageArticle)
+	// Борис holds a note with the very same id `aaaa1111`: it must survive.
+	if comment, ok := page[authorBoris+" aaaa1111"]; !ok || comment != "заметка Бориса с тем же id" {
+		t.Fatalf("the other author's same-id note was touched: %#v", page)
+	}
+	if comment, ok := page[authorBoris+" bbbb1111"]; !ok || comment != "заметка Бориса 1" {
+		t.Fatalf("the other author's row was touched: %#v", page)
+	}
+
+	other := commentsBy(t, s, pageOther)
+	if len(other) != 1 {
+		t.Fatalf("other page rows = %d, want 1: %#v", len(other), other)
+	}
+	if comment := other[authorAnna+" aaaa1111"]; comment != "заметка Анны на другой странице" {
+		t.Fatalf("the delete crossed the page boundary: %#v", other)
+	}
+}
+
+// AC 4: the page-scoped delete keeps its behaviour beside the new one and counts
+// every row of the author on that page.
+func TestPageDeleteStillRemovesEveryRowOfTheAuthor(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoAuthorsOnOnePage(t, s)
+
+	// A single-note delete first, so the leftover count is not the seeded one.
+	if _, err := s.DeleteOneNote(ctx, pageArticle, authorAnna, "aaaa1111"); err != nil {
+		t.Fatalf("delete one: %v", err)
+	}
+
+	deleted, err := s.DeleteAuthorNotesOnPage(ctx, pageArticle, authorAnna)
+	if err != nil {
+		t.Fatalf("page delete: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1 (the row not already gone)", deleted)
+	}
+
+	page := commentsBy(t, s, pageArticle)
+	if len(page) != 2 {
+		t.Fatalf("rows left = %d, want the other author's 2: %#v", len(page), page)
+	}
+	for key := range page {
+		if strings.HasPrefix(key, authorAnna+" ") {
+			t.Fatalf("the page delete missed the author's row %q", key)
+		}
+	}
+	if other := commentsBy(t, s, pageOther); len(other) != 1 {
+		t.Fatalf("the page delete crossed the page boundary: %#v", other)
 	}
 }

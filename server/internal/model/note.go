@@ -123,6 +123,18 @@ func ValidateAuthorID(authorID string) error {
 	return nil
 }
 
+// ValidateNoteID checks a note id from a path. It applies the same rules the
+// body validator applies to `notes[i].id` (`validateRequiredRunes` with
+// `MaxIDRunes`), so the id in a path and the id in a body are judged by one
+// rule: non-empty after trimming, valid UTF-8, at most 64 code points.
+//
+// The path is the reason it exists as its own function instead of a call to
+// `validateRequiredRunes`: the field name in a `400` must be `note_id`, which is
+// what the client sent, not `id`, which it never sent.
+func ValidateNoteID(noteID string) error {
+	return validateRequiredRunes("note_id", noteID, MaxIDRunes)
+}
+
 // ValidateSaveRequest checks a whole POST body: the author, the note count and
 // every note. It returns the first failure, so one bad note cannot slip past.
 //

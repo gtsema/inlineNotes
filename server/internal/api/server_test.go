@@ -42,6 +42,14 @@ type deleteCall struct {
 	authorID string
 }
 
+// deleteOneCall records one single-note delete: the whole upsert triple plus the
+// row count the fake answered.
+type deleteOneCall struct {
+	pageID   string
+	authorID string
+	noteID   string
+}
+
 type authorCall struct {
 	authorID string
 	limit    int
@@ -58,6 +66,8 @@ type fakeStore struct {
 	saves   []savedCall
 	deletes []deleteCall
 	reads   []authorCall
+
+	deleteOneCalls []deleteOneCall
 }
 
 func newFakeStore() *fakeStore {
@@ -143,6 +153,24 @@ func (f *fakeStore) DeleteAuthorNotesOnPage(_ context.Context, pageID, authorID 
 	removed := len(f.rows[key])
 	delete(f.rows, key)
 	return removed, nil
+}
+
+func (f *fakeStore) DeleteOneNote(_ context.Context, pageID, authorID, noteID string) (int, error) {
+	if f.deleteErr != nil {
+		return 0, f.deleteErr
+	}
+	f.deleteOneCalls = append(f.deleteOneCalls, deleteOneCall{pageID: pageID, authorID: authorID, noteID: noteID})
+
+	key := pageID + "\x00" + authorID
+	rows := f.rows[key]
+	for i, row := range rows {
+		if row.ID != noteID {
+			continue
+		}
+		f.rows[key] = append(rows[:i:i], rows[i+1:]...)
+		return 1, nil
+	}
+	return 0, nil
 }
 
 /* -------------------------------- helpers ---------------------------------- */
@@ -819,5 +847,263 @@ func TestWrongMethodIsRejected(t *testing.T) {
 	rec := do(t, newTestServer(newFakeStore()), http.MethodPut, pagePath("https://example.com/a"), bodyFor("Анна"))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+/* ------------- A181: DELETE one note, and the page delete beside it ---------- */
+
+// notePath is the target of the single-note delete. Each segment is escaped the
+// way the extension escapes it: the page key is a URL, the author and the note id
+// may hold Cyrillic.
+func notePath(pageID, authorID, noteID string) string {
+	return "/notes/page/" + url.PathEscape(pageID) + "/author/" +
+		url.PathEscape(authorID) + "/note/" + url.PathEscape(noteID)
+}
+
+// AC 1: one existing row is removed and the answer is `{"deleted": 1}`.
+func TestDeleteOneNoteReportsOneWhenTheRowExisted(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "первая"), note("aaaa2222", "second", "вторая")))
+
+	rec := do(t, handler, http.MethodDelete, notePath("https://example.com/a", "Анна", "aaaa1111"), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if got := decodeCount(t, rec, "deleted"); got != 1 {
+		t.Fatalf("deleted = %d, want 1", got)
+	}
+	if len(store.deleteOneCalls) != 1 {
+		t.Fatalf("single-note delete calls = %d, want 1", len(store.deleteOneCalls))
+	}
+	call := store.deleteOneCalls[0]
+	if call.pageID != "https://example.com/a" || call.authorID != "Анна" || call.noteID != "aaaa1111" {
+		t.Fatalf("the triple did not reach the store verbatim: %#v", call)
+	}
+	// The page-scoped delete must not have been used: its own answer is `N`, which
+	// would have been 2 here and would have hidden the reach of this endpoint.
+	if len(store.deletes) != 0 {
+		t.Fatalf("the single-note delete went through the page-scoped call: %#v", store.deletes)
+	}
+
+	rec = do(t, handler, http.MethodGet, pagePath("https://example.com/a"), "")
+	remaining := decodeNotes(t, rec)
+	if len(remaining) != 1 || remaining[0].ID != "aaaa2222" {
+		t.Fatalf("wrong row removed: %#v", remaining)
+	}
+}
+
+// AC 1, second half: deleting a row that is not there is `{"deleted": 0}` with
+// `200`, and deleting twice is not a failure.
+func TestDeleteOneNoteAnswersZeroForAMissingRowAndIsRepeatable(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	rec := do(t, handler, http.MethodDelete, notePath("https://example.com/a", "Анна", "nope0000"), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("missing row status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if got := decodeCount(t, rec, "deleted"); got != 0 {
+		t.Fatalf("deleted = %d, want 0", got)
+	}
+
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "первая")))
+	for attempt := 1; attempt <= 2; attempt++ {
+		rec = do(t, handler, http.MethodDelete, notePath("https://example.com/a", "Анна", "aaaa1111"), "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d status = %d, want 200", attempt, rec.Code)
+		}
+		want := 1
+		if attempt == 2 {
+			want = 0
+		}
+		if got := decodeCount(t, rec, "deleted"); got != want {
+			t.Fatalf("attempt %d deleted = %d, want %d", attempt, got, want)
+		}
+	}
+}
+
+// AC 2, AC 3: the same author's other notes on the page and every note of another
+// author survive, and another page is out of reach even for the same triple.
+func TestDeleteOneNoteLeavesEveryOtherRowAlone(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "Анна 1"), note("aaaa2222", "second", "Анна 2")))
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Борис", note("bbbb1111", "third", "Борис 1"), note("bbbb2222", "fourth", "Борис 2")))
+	do(t, handler, http.MethodPost, pagePath("https://example.com/b"),
+		bodyFor("Анна", note("aaaa1111", "first", "Анна на другой странице")))
+
+	rec := do(t, handler, http.MethodDelete, notePath("https://example.com/a", "Анна", "aaaa1111"), "")
+	if got := decodeCount(t, rec, "deleted"); got != 1 {
+		t.Fatalf("deleted = %d, want 1", got)
+	}
+
+	rec = do(t, handler, http.MethodGet, pagePath("https://example.com/a"), "")
+	remaining := decodeNotes(t, rec)
+	if len(remaining) != 3 {
+		t.Fatalf("rows left on the page = %d, want 3: %#v", len(remaining), remaining)
+	}
+	seen := map[string]string{}
+	for _, row := range remaining {
+		seen[row.AuthorID+" "+row.ID] = row.Comment
+	}
+	for _, wanted := range []string{"Анна aaaa2222", "Борис bbbb1111", "Борис bbbb2222"} {
+		if _, ok := seen[wanted]; !ok {
+			t.Fatalf("row %q was removed: %#v", wanted, seen)
+		}
+	}
+	if _, ok := seen["Анна aaaa1111"]; ok {
+		t.Fatalf("the named row survived: %#v", seen)
+	}
+
+	// The other page's row shares the author and the note id, so only the page in
+	// the path protects it.
+	rec = do(t, handler, http.MethodGet, pagePath("https://example.com/b"), "")
+	otherPage := decodeNotes(t, rec)
+	if len(otherPage) != 1 || otherPage[0].PageID != "https://example.com/b" {
+		t.Fatalf("the delete crossed the page boundary: %#v", otherPage)
+	}
+
+	// Another author's row with the very same id is a different row (A155).
+	if _, ok := seen["Борис bbbb1111"]; !ok {
+		t.Fatalf("author collision: %#v", seen)
+	}
+}
+
+// AC 4: the page-scoped delete keeps its behaviour and its answer is the count of
+// the author's rows, not `1`.
+func TestPageDeleteStillReportsEveryRowOfTheAuthor(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "1"), note("aaaa2222", "second", "2"), note("aaaa3333", "third", "3")))
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Борис", note("bbbb1111", "fourth", "4")))
+
+	rec := do(t, handler, http.MethodDelete,
+		"/notes/page/"+url.PathEscape("https://example.com/a")+"/author/"+url.PathEscape("Анна"), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := decodeCount(t, rec, "deleted"); got != 3 {
+		t.Fatalf("deleted = %d, want 3", got)
+	}
+	if len(store.deleteOneCalls) != 0 {
+		t.Fatalf("the page delete went through the single-note call: %#v", store.deleteOneCalls)
+	}
+	if len(store.deletes) != 1 || store.deletes[0].authorID != "Анна" {
+		t.Fatalf("the page delete did not reach the page-scoped call: %#v", store.deletes)
+	}
+}
+
+// POST stays the non-destructive upsert of A155: the new endpoint did not make it
+// delete anything, and it does not count deletes as saves.
+func TestPostStillDoesNotDeleteAfterTheSingleNoteEndpoint(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "1"), note("aaaa2222", "second", "2")))
+	rec := do(t, handler, http.MethodPost, pagePath("https://example.com/a"),
+		bodyFor("Анна", note("aaaa1111", "first", "1 переписана")))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := decodeCount(t, rec, "saved"); got != 1 {
+		t.Fatalf("saved = %d, want 1", got)
+	}
+
+	remaining := decodeNotes(t, do(t, handler, http.MethodGet, pagePath("https://example.com/a"), ""))
+	if len(remaining) != 2 {
+		t.Fatalf("rows = %d, want 2 (A155: POST never deletes)", len(remaining))
+	}
+}
+
+// The validation boundary of A158 covers the new path segment too: an invalid
+// `author_id` or `note_id` is a `400` naming the field, and the store is not
+// reached. The `500` branch stays for a genuine storage failure (A161).
+func TestDeleteOneNoteValidatesItsThreeSegments(t *testing.T) {
+	cases := []struct {
+		name   string
+		target string
+		field  string
+	}{
+		{
+			name:   "invalid author",
+			target: "/notes/page/" + url.PathEscape("https://example.com/a") + "/author/" + notUTF8Encoded + "/note/aaaa1111",
+			field:  "author_id",
+		},
+		{
+			name:   "invalid note id",
+			target: "/notes/page/" + url.PathEscape("https://example.com/a") + "/author/" + url.PathEscape("Анна") + "/note/" + notUTF8Encoded,
+			field:  "note_id",
+		},
+		{
+			name:   "note id over the cap",
+			target: notePath("https://example.com/a", "Анна", strings.Repeat("a", model.MaxIDRunes+1)),
+			field:  "note_id",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			store.deleteErr = errors.New("database is gone")
+			rec := do(t, newTestServer(store), http.MethodDelete, tc.target, "")
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (body %s)", rec.Code, rec.Body.String())
+			}
+			if message := decodeError(t, rec); !strings.Contains(message, tc.field) {
+				t.Fatalf("error = %q, want it to name %s", message, tc.field)
+			}
+			if len(store.deleteOneCalls) != 0 {
+				t.Fatalf("a rejected target reached the store: %#v", store.deleteOneCalls)
+			}
+		})
+	}
+
+	store := newFakeStore()
+	store.deleteErr = errors.New("database is gone")
+	rec := do(t, newTestServer(store), http.MethodDelete, notePath("https://example.com/a", "Анна", "aaaa1111"), "")
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("storage failure status = %d, want 500", rec.Code)
+	}
+	if message := decodeError(t, rec); message != "storage failure" {
+		t.Fatalf("error = %q, want \"storage failure\"", message)
+	}
+}
+
+// A page key with `/`, `?`, `&` and `#` survives the longer path (A153), and the
+// Cyrillic author and note id arrive verbatim.
+func TestDeleteOneNoteSurvivesTheReservedCharactersInThePath(t *testing.T) {
+	store := newFakeStore()
+	handler := newTestServer(store)
+
+	pageID := "https://example.com/a/b?b=2&a=1#frag"
+	do(t, handler, http.MethodPost, pagePath(pageID), bodyFor("Борис", note("заметка-01", "x", "заметка")))
+
+	rec := do(t, handler, http.MethodDelete, notePath(pageID, "Борис", "заметка-01"), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if got := decodeCount(t, rec, "deleted"); got != 1 {
+		t.Fatalf("deleted = %d, want 1", got)
+	}
+	call := store.deleteOneCalls[0]
+	if call.pageID != pageID || call.authorID != "Борис" || call.noteID != "заметка-01" {
+		t.Fatalf("path segments mangled: %#v", call)
+	}
+
+	// `author/{author_id}` alone is still the page delete, and `note/{note_id}`
+	// must not be reachable with another method.
+	if rec := do(t, handler, http.MethodGet, notePath(pageID, "Борис", "заметка-01"), ""); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET on the single-note path = %d, want 405", rec.Code)
 	}
 }
