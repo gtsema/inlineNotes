@@ -98,20 +98,6 @@ export interface PaintedEntry {
    */
   readonly paintSlot: PaintSlot;
   /**
-   * `true` for a note whose entry record says `visible: false` (ruling `A40`) even
-   * though the pass painted it — a state only a foreign note can reach (Stage 17,
-   * ruling `A163`).
-   *
-   * A foreign note lives in this document's memory, so its display flag is that memory
-   * and not a stored field: the source hands the pass the record **and** the flag it
-   * now has, and this module paints it either way, because a switched-off foreign note
-   * still has to be paintable again once the reader switches it on — with no storage
-   * write and no re-read of the page. The one visible consequence is the declaration
-   * `paint-style.ts` drops for such a note; a stored entry is never dimmed, because a
-   * hidden stored entry is not painted at all (`A40`).
-   */
-  readonly dimmed: boolean;
-  /**
    * Every fragment of the span, in document order (ruling `A36`).
    *
    * The node and the two node-local offsets are what the `caret hit-test` of
@@ -200,13 +186,19 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
   }
 
   for (const entry of [...input.entries, ...(input.extra ?? []).map((extra) => extra.entry)]) {
-    if (!entry.visible) {
-      // Ruling `A40` and ruling `A1`: a hidden entry is simply absent from the page.
-      // It is not dimmed, not greyed, and it is still in the popup list. The one note
-      // that reaches the page switched off is a foreign note whose flag travels beside
-      // its record (`PaintPlanInput.extra`), never through `visible` — so this branch
-      // keeps its meaning for every entry the store holds, and a `visible: false`
-      // record is skipped here whatever list it arrived in.
+    // Ruling `A40` and ruling `A1`: a hidden entry is simply **absent** from the page. It is not
+    // dimmed, not greyed, and it is still in the popup list.
+    //
+    // `A186` closes the split this loop used to have: a stored entry's flag is the record's own
+    // `visible`, while a foreign note's flag travels beside its record (`PaintPlanInput.extra`),
+    // because a foreign note has no stored field at all (`A163`). Both are the same control on the
+    // same row, so both hide the note. Before `A186` the foreign half only dropped the fill and
+    // kept the underline, which meant one checkbox did two different things depending on whose
+    // note it was.
+    const switchedOff = extraVisible.has(entry.id)
+      ? extraVisible.get(entry.id) !== true
+      : entry.visible !== true;
+    if (switchedOff) {
       skipped.push({ entryId: entry.id, reason: 'hidden' });
       continue;
     }
@@ -228,7 +220,6 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
       entry,
       name: highlightNameOf(entry.id),
       paintSlot: paintSlotOf(entry.authorName),
-      dimmed: extraVisible.has(entry.id) ? extraVisible.get(entry.id) !== true : false,
       fragments,
     });
   }

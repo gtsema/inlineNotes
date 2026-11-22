@@ -64,19 +64,6 @@ export interface PaintStyleRule {
   readonly name: string;
   /** The palette slot its `authorName` maps to (ruling `A102`). */
   readonly slot: PaintSlot;
-  /**
-   * `true` for a note from the sync server that the reader has switched off in the
-   * popup (Stage 17, ruling `A163`).
-   *
-   * A foreign note lives in this document's memory and never in the store, so its
-   * display flag cannot be a stored field; the write that hides it is the memory that
-   * holds it. The paint pass states that answer here rather than the flag being a
-   * second look at memory inside this module, and the only declaration it changes is
-   * the painted `background-color` — the underline stays, so a hidden note reads as
-   * present-but-switched-off rather than as gone. The reader's own hidden notes are
-   * not painted at all (ruling `A40`), which is why this flag is never set for them.
-   */
-  readonly dimmed?: boolean;
 }
 
 /**
@@ -95,22 +82,16 @@ export function isStyleableHighlightName(name: string): boolean {
   return STYLEABLE_NAME.test(name);
 }
 
-/** The rule that paints one named highlight, with the declarations of its slot. */
-export function paintRuleOf(name: string, slot: PaintSlot, dimmed = false): string {
-  const declarations = dimmed
-    ? paintDeclarationsOfSlot(slot).filter(
-        (declaration: string) => !declaration.trimStart().startsWith(DIMMED_HIDDEN_PROPERTY),
-        )
-    : paintDeclarationsOfSlot(slot);
-  return `::highlight(${name}) {\n  ${declarations.join('\n  ')}\n}`;
-}
-
 /**
- * The one property a switched-off foreign note drops: its fill. Named, because the
- * rule below is what makes "hidden" mean one thing — the underline of the `highlight
- * frame` stays as the mark that there is a note here.
+ * The rule that paints one named highlight, with the declarations of its slot.
+ *
+ * `A186` removed the `dimmed` variant this function used to carry. A note the reader switched off is
+ * **absent** from the page, exactly like a hidden stored entry (`A40`), so there is no rule to write
+ * for it and no second meaning of "hidden" to keep in step.
  */
-const DIMMED_HIDDEN_PROPERTY = 'background-color:';
+export function paintRuleOf(name: string, slot: PaintSlot): string {
+  return `::highlight(${name}) {\n  ${paintDeclarationsOfSlot(slot).join('\n  ')}\n}`;
+}
 
 /**
  * The rules of the current page, one per painted entry, unsafe names dropped.
@@ -123,7 +104,7 @@ export function paintRulesOf(rules: readonly PaintStyleRule[]): string[] {
   const written: string[] = [];
   for (const rule of rules) {
     if (isStyleableHighlightName(rule.name)) {
-      written.push(paintRuleOf(rule.name, rule.slot, rule.dimmed === true));
+      written.push(paintRuleOf(rule.name, rule.slot));
     }
   }
   return written;

@@ -80,7 +80,7 @@ describe('AC7 the paint plan paints a foreign note beside the stored ones', () =
     expect(plan.skipped).toEqual([]);
   });
 
-  it('paints a switched-off foreign note and dims it, while a hidden stored note is skipped (A40)', () => {
+  it('skips a switched-off foreign note exactly as it skips a hidden stored one (A40, A186)', () => {
     const root = article('selected text and another note here');
     const hiddenStored = entryOf({
       id: 'stored0001',
@@ -97,10 +97,16 @@ describe('AC7 the paint plan paints a foreign note beside the stored ones', () =
       rangeFor,
     });
 
-    expect(plan.painted.map((painted) => [painted.entry.id, painted.dimmed])).toEqual([
-      ['their00001', true],
+    // `A186`: one control, one meaning. The row's checkbox hides a note whether the note is the
+    // reader's own (a stored record, `A40`) or another reader's (a foreign note, whose flag travels
+    // beside its record). Before `A186` the foreign half only lost its fill and kept its underline,
+    // so the same checkbox did two different things depending on whose note it was.
+    expect(plan.painted).toEqual([]);
+    // The walk keeps the input's own order: the stored list first, then the foreign notes.
+    expect(plan.skipped).toEqual([
+      { entryId: 'stored0001', reason: 'hidden' },
+      { entryId: 'their00001', reason: 'hidden' },
     ]);
-    expect(plan.skipped).toEqual([{ entryId: 'stored0001', reason: 'hidden' }]);
   });
 
   it('answers `anchor_not_found` for a foreign note the page no longer holds, and keeps the rest', () => {
@@ -130,26 +136,27 @@ describe('AC7 the paint plan paints a foreign note beside the stored ones', () =
   });
 });
 
-describe('AC9 a switched-off foreign note keeps its underline and loses its fill', () => {
-  it('writes the one rule with the fill dropped, and the same rule otherwise', () => {
+describe('AC9 a switched-off foreign note has no rule at all (A186)', () => {
+  it('writes one rule per painted note, with nothing to vary per state', () => {
     const slot = paintSlotOf('Вася');
     const painted = paintRuleOf('inlinenotes-their00001', slot);
-    const dimmed = paintRuleOf('inlinenotes-their00001', slot, true);
 
+    // The rule carries its slot's declarations and no state of its own: a note that is off is
+    // not painted, so there is no second spelling of this rule for the paint pass to choose.
     expect(painted).toContain('background-color:');
-    expect(dimmed).not.toContain('background-color:');
-    // The underline stays, so the reader still sees that there is a note here.
-    expect(dimmed).toContain('text-decoration:');
-    expect(dimmed).toContain('::highlight(inlinenotes-their00001)');
+    expect(painted).toContain('text-decoration:');
+    expect(painted).toContain('::highlight(inlinenotes-their00001)');
+    // The builder takes two arguments and no third: the state is not its business any more.
+    expect(paintRuleOf.length).toBe(2);
   });
 
-  it('threads the flag through the rules list, and leaves the stored rules alone', () => {
+  it('threads every rule through the list unchanged, stored and foreign alike', () => {
     const rules = paintRulesOf([
       { name: 'inlinenotes-stored0001', slot: 0 },
-      { name: 'inlinenotes-their00001', slot: 1, dimmed: true },
+      { name: 'inlinenotes-their00001', slot: 1 },
     ]);
     expect(rules[0]).toContain('background-color:');
-    expect(rules[1]).not.toContain('background-color:');
+    expect(rules[1]).toContain('background-color:');
   });
 });
 

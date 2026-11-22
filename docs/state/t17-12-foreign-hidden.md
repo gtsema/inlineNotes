@@ -79,3 +79,42 @@ the note is still in this document's memory (`A163`).
 The reader's Chrome, with the article active: uncheck the foreign row, then read
 `CSS.highlights` on the page. Expected: the foreign note's name is **gone** from the registry, the
 popup still lists the row with `checked: false`, and checking it again brings the name back.
+
+---
+
+## Fixed and verified
+
+`buildPaintPlan` now answers one question for every entry, whatever list it arrived in:
+
+```ts
+const switchedOff = extraVisible.has(entry.id)
+  ? extraVisible.get(entry.id) !== true
+  : entry.visible !== true;
+```
+
+The `dimmed` flag is gone from `PaintedEntry`, from `PaintStyleRule`, from `paintRuleOf` and from the
+stylesheet, together with the `DIMMED_HIDDEN_PROPERTY` constant that existed only to drop a fill.
+
+### Verified in the reader's Chrome
+
+| Step | `CSS.highlights` on the page |
+|---|---|
+| after the page load | `zjd4g7p6gvt1`, `n8adnkaly3sj`, **`m5gnxrq27zna`** |
+| after unchecking the foreign row | `zjd4g7p6gvt1`, `n8adnkaly3sj` — the foreign note is **gone** |
+| after checking it again | all three — the note is back |
+
+The popup keeps the row with its checkbox off throughout, and nothing is written to
+`chrome.storage.local` (`A163`) and nothing is sent to the server (`A168`).
+
+### The two tests that changed
+
+- `tests/content-foreign-notes.spec.ts` — the case that asserted a dimmed plan now asserts the note
+  is **skipped** with reason `hidden`, in the same walk order as a hidden stored entry; and the case
+  that asserted «keeps its underline and loses its fill» now asserts there is one rule per painted
+  note and that `paintRuleOf` takes two arguments.
+- `tests/content-contained-own-selection.spec.ts` — the test helper stopped setting `dimmed`.
+
+### Gates
+
+`npm run build` 0, `npm test` 0 — **1273 / 58**, `npm run typecheck` 0,
+`node scripts/check-agent-config.mjs` 0 (207 info).
