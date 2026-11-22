@@ -110,6 +110,8 @@ function attach(options: {
   refreshes: () => number;
   loads: () => number;
   announced: PageNotesUpdate[];
+  flags: { authorName: string; hidden: boolean }[];
+  removals: string[];
   answerOf: (message: unknown) => Promise<{ responded: boolean; value: unknown; returned: boolean | undefined }>;
   askNow: (message: unknown) => { responded: boolean; value: unknown; returned: boolean | undefined };
 } {
@@ -120,6 +122,8 @@ function attach(options: {
   const stub = painterStub();
   const announced: PageNotesUpdate[] = [];
   let loads = 0;
+  const flags: { authorName: string; hidden: boolean }[] = [];
+  const removals: string[] = [];
   const answer = options.outcome ?? { ok: false, code: 'network' };
   const channel = attachPageNotesChannel({
     foreign: memory,
@@ -133,6 +137,13 @@ function attach(options: {
     },
     announce: (update): void => {
       announced.push(update);
+    },
+    // Ruling `A184`: the recorder of the two persisted statements.
+    persistAuthorFlag: (authorName: string, hidden: boolean): void => {
+      flags.push({ authorName, hidden });
+    },
+    persistAuthorRemoval: (authorName: string): void => {
+      removals.push(authorName);
     },
   });
 
@@ -153,6 +164,8 @@ function attach(options: {
     refreshes: stub.refreshes,
     loads: (): number => loads,
     announced,
+    flags,
+    removals,
     askNow,
     answerOf: async (message: unknown) => {
       const first = askNow(message);
@@ -289,6 +302,52 @@ describe('AC3 the aggregate switch is one message and one memory write (A168)', 
     expect(source).not.toMatch(/StoragePort/);
     expect(source).not.toContain('chrome.storage');
     expect(source).not.toContain('entry-store-write');
+  });
+});
+
+describe('A184 the press of a foreign row persists its statement', () => {
+  it('a press to hidden adds the author flag, a press to visible removes it', async () => {
+    const a = attach({ notes: [remote()] });
+
+    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false });
+    expect(a.flags).toEqual([{ authorName: 'Вася', hidden: true }]);
+
+    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: true });
+    expect(a.flags).toEqual([
+      { authorName: 'Вася', hidden: true },
+      { authorName: 'Вася', hidden: false },
+    ]);
+  });
+
+  it('the `Удалить` press clears the flag with the same press (AC15)', async () => {
+    const a = attach({ notes: [remote()] });
+
+    await a.answerOf({ type: NOTES_QUERY_MESSAGE, op: 'dismiss', authorName: 'Вася' });
+
+    expect(a.removals).toEqual(['Вася']);
+    expect(a.flags).toEqual([]);
+  });
+
+  it('a wiring without the seams is memory only, and still answers (A163 unchanged)', async () => {
+    const memory = createForeignNotes();
+    memory.replace([remote()], 'reader-one');
+    const stub = painterStub();
+    const channel = attachPageNotesChannel({
+      foreign: memory,
+      painter: stub.painter,
+      load: async (): Promise<ForeignLoadOutcome> => ({ ok: false, code: 'network' }),
+    });
+    let answered = false;
+    channel.onMessage(
+      { type: NOTES_QUERY_MESSAGE, op: 'switch', authorName: 'Вася', visible: false },
+      {},
+      (): void => {
+        answered = true;
+      },
+    );
+
+    expect(answered).toBe(true);
+    expect(memory.visibilityOf('their001')).toBe(false);
   });
 });
 

@@ -22,6 +22,13 @@ export const SETTINGS_KEY = 'settings:v1';
 /** Single index key holding `{ version: 1, pageKeys: string[] }`. */
 export const PAGE_INDEX_KEY = 'pages:v1';
 
+/**
+ * Single record holding the foreign authors the reader hid per page (`A184`):
+ * `{ version: 1, pages: Record<pageKey, string[]> }`. No slot, no index — the
+ * page key lives inside the one record verbatim.
+ */
+export const FOREIGN_HIDDEN_KEY = 'foreign-hidden:v1';
+
 /** Builds the storage key of the entry list for an already normalized `pageKey`. */
 export function entryStorageKey(pageKey: string): string {
   return `${ENTRY_KEY_PREFIX}${slotKeyFor(pageKey)}`;

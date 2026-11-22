@@ -133,6 +133,24 @@ export interface PageNotesChannelWiring {
    * without a browser, and the wiring stays four lines in `src/content/main.ts`.
    */
   readonly announce?: (message: PageNotesUpdate) => void;
+  /**
+   * Persists the `A184` author flag: the checkbox press of a foreign row is what
+   * the reader's statement "this author is hidden on this page" is stored from.
+   * A press to hidden adds the flag, a press to visible removes it.
+   *
+   * It is a fire-and-forget seam, and the shipped value swallows its own write
+   * failure (`A164` posture): the in-memory switch already answered the popup,
+   * and the persistence is a shadow of it, never a gate. A test drives this with
+   * a recorder; a wiring without the seam is a page that switches in memory only.
+   */
+  readonly persistAuthorFlag?: (authorName: string, hidden: boolean) => void;
+  /**
+   * Clears the `A184` author flag of one author: the row delete press of a foreign
+   * row is the reader's statement that this author starts over, so the next load
+   * shows them again. Fire-and-forget and failure-swallowing like the switch's
+   * seam above.
+   */
+  readonly persistAuthorRemoval?: (authorName: string) => void;
 }
 
 /** One row operation the popup may send. */
@@ -349,8 +367,15 @@ export function attachPageNotesChannel(wiring: PageNotesChannelWiring): PageNote
     if (operation !== null) {
       if (operation.kind === 'switch') {
         switchNotesOfAuthor(wiring.foreign, operation.authorName, operation.visible);
+        // `A184`: the press is also the persisted statement. The memory switch
+        // above already answered the popup; this call is its shadow, and a
+        // failure in it never reaches the reader.
+        wiring.persistAuthorFlag?.(operation.authorName, !operation.visible);
       } else {
         wiring.foreign.dismiss(operation.authorName);
+        // `A184` again: deleting is the statement that this author starts over,
+        // so the stored hidden flag is cleared with the same press.
+        wiring.persistAuthorRemoval?.(operation.authorName);
       }
       repaint();
       respond(answerOf());

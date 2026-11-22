@@ -62,8 +62,18 @@ export interface ForeignNotes {
    * Replaces the list with what one load returned, keeping nothing of the old one:
    * a note the server no longer has is gone from this page too, and a note it has
    * again is one note, not two.
+   *
+   * `hiddenAuthors` is the persisted half of the checkbox (`A184`): a note whose
+   * author is in that list arrives `visible: false`, so an author the reader hid
+   * stays hidden across a reload. A first-ever load (an empty record) and a load
+   * after the row's delete press (which cleared the flag) pass nothing, so every
+   * author arrives visible.
    */
-  replace(notes: readonly RemoteNote[], authorName: string | null): void;
+  replace(
+    notes: readonly RemoteNote[],
+    authorName: string | null,
+    hiddenAuthors?: readonly string[],
+  ): void;
   /** The shape the paint pass takes (`page-painter.ts` -> `setExtraEntries`). */
   paintInput(): readonly ExtraEntry[];
   /** The display flag of one note, by entry id, `null` when this page holds no such note. */
@@ -114,7 +124,11 @@ export function createForeignNotes(): ForeignNotes {
       return notes;
     },
 
-    replace(incoming: readonly RemoteNote[], authorName: string | null): void {
+    replace(
+      incoming: readonly RemoteNote[],
+      authorName: string | null,
+      hiddenAuthors?: readonly string[],
+    ): void {
       const mine = authorName === null ? null : authorName;
       const next: ForeignNote[] = [];
       const seen = new Set<string>();
@@ -139,7 +153,10 @@ export function createForeignNotes(): ForeignNotes {
           continue;
         }
         seen.add(key);
-        next.push({ entry, visible: true });
+        const hidden =
+          hiddenAuthors !== undefined &&
+          hiddenAuthors.some((name) => isSameAuthor(name, entry.authorName));
+        next.push({ entry, visible: !hidden });
       }
       notes = next;
     },
@@ -204,6 +221,12 @@ export interface ForeignLoadRequest {
   /** `fetch` in the page; a recorder in a test. */
   readonly transport: SyncTransport;
   /**
+   * The persisted hidden authors of this page (`A184`), read by the caller from
+   * core `loadHiddenAuthorsOfPage`; `undefined` is a first-ever load and means
+   * every author arrives visible.
+   */
+  readonly hiddenAuthors?: readonly string[];
+  /**
    * The configured address, from core `syncTargetOf`; `null` means "do not call"
    * (ruling `A166`) — the same `null` the popup reads before it renders a sync button.
    */
@@ -238,7 +261,7 @@ export async function loadIntoMemory(
       return { ok: false, code: answer.code };
     }
     const summary: SyncLoadSummary = answer.value;
-    memory.replace(summary.notes, request.currentName);
+    memory.replace(summary.notes, request.currentName, request.hiddenAuthors);
     return { ok: true, added: memory.all().length };
   } catch {
     // A transport that throws instead of rejecting its promise is still one answer to

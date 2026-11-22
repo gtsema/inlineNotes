@@ -31,6 +31,7 @@
 
 import type { SettingsReadResult } from '../../core/settings-store';
 import { loadSettings } from '../../core/settings-store';
+import { loadHiddenAuthorsOfPage } from '../../core/foreign-hidden-store';
 import type { StoragePort } from '../../core/storage-port';
 import type { SyncTransport } from '../../core/sync-client';
 import { syncTargetOf } from '../../core/sync-settings';
@@ -159,6 +160,10 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
     target: NonNullable<ReturnType<typeof syncTargetOf>>,
     name: string,
   ): Promise<ForeignLoadOutcome> {
+    // The persisted half of the checkbox (`A184`): the authors the reader hid on
+    // this page arrive hidden. The read never throws (core answers `[]`), so the
+    // load cannot be gated by it.
+    const hiddenAuthors = await loadHiddenAuthorsOfPage(wiring.port, pageKey);
     const outcome = await loadIntoMemory(wiring.foreign, {
       transport: wiring.transport ?? missingTransport,
       target,
@@ -167,6 +172,7 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
       // notes come from the store, and a second copy of them would register two paint
       // names over one span.
       currentName: name === '' ? null : name,
+      hiddenAuthors,
     });
     try {
       wiring.onLoad?.(outcome);

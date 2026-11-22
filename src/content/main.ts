@@ -53,6 +53,10 @@ import { attachPageNotesChannel } from './sync/page-notes-channel';
 import type { ForeignLoadOutcome } from './sync/foreign-notes';
 import { loadIntoMemory } from './sync/foreign-notes';
 import { createSyncTransport } from './sync/fetch-transport';
+import {
+  loadHiddenAuthorsOfPage,
+  setForeignAuthorHidden,
+} from '../core/foreign-hidden-store';
 import { PAGE_NOTES_UPDATED_MESSAGE } from '../core/page-notes-query';
 
 function boot(): void {
@@ -208,13 +212,46 @@ function boot(): void {
       // `A166` again, at the door the reader knocked on: nothing is called.
       return { ok: false, code: 'sync_off' };
     }
-    return await loadIntoMemory(foreign, { transport, target, pageKey: key, currentName });
+    // The persisted half of the checkbox (`A184`): a reader's press (the row delete press or a
+    // sync reload) re-asks the server, and the authors the reader hid on this page
+    // must arrive hidden. The read never throws, so the load cannot be gated by it.
+    const hiddenAuthors = await loadHiddenAuthorsOfPage(port, key);
+    return await loadIntoMemory(foreign, {
+      transport,
+      target,
+      pageKey: key,
+      currentName,
+      hiddenAuthors,
+    });
+  };
+
+  // The persisted half of a foreign row's controls (`A184`). The flag lives in the
+  // `foreign-hidden:v1` record under the page key the pass resolved — the same key
+  // the load is asked about — and a failed write is swallowed here, because the
+  // in-memory switch already answered the popup (`A164` posture): the persistence is
+  // a best-effort shadow of the memory, never a gate.
+  const persistAuthorFlag = (authorName: string, hidden: boolean): void => {
+    void (async (): Promise<void> => {
+      const key = painter.pageKeyOfPass();
+      if (key === null) {
+        return;
+      }
+      try {
+        await setForeignAuthorHidden(port, { pageKey: key, authorName, hidden });
+      } catch {
+        // The memory switch is the answer the reader sees; the shadow is best effort.
+      }
+    })();
   };
 
   const notesChannel = attachPageNotesChannel({
     foreign,
     painter,
     load: loadPageNotes,
+    // Ruling `A184`: the checkbox press and the row delete press of a foreign row are
+    // the two writers of the persisted author flag, through the one core API.
+    persistAuthorFlag,
+    persistAuthorRemoval: (authorName: string): void => persistAuthorFlag(authorName, false),
     // Ruling `A183`: a load that lands after the popup's one question has to reach a
     // popup that is already open, so the page **announces** that its foreign list moved.
     // The popup answers it with the same question as before (`src/popup/page-notes-

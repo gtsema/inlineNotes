@@ -7,6 +7,8 @@ import type { ExtraEntry } from '../src/content/paint/paint-plan';
 import { createForeignNotes, loadIntoMemory } from '../src/content/sync/foreign-notes';
 import { attachSyncNotes } from '../src/content/sync/sync-notes';
 import { MemoryStoragePort, indexValue, slotValue, storedEntry } from './support/memory-storage-port';
+import { setForeignAuthorHidden } from '../src/core/foreign-hidden-store';
+import { FOREIGN_HIDDEN_KEY } from '../src/core/storage-keys';
 
 /**
  * The foreign notes and the automatic load (Stage 17, `t17-01` AC7, AC8, AC10, AC11).
@@ -165,6 +167,66 @@ describe('AC7 foreign notes are memory only, and their rows are this document\'s
     memory.setNoteVisible('their002', false);
 
     expect(memory.authors()).toEqual([{ authorName: 'Вася', count: 2, allVisible: false }]);
+  });
+});
+
+describe('A184 the hidden author flag survives a reload', () => {
+  it('a note of a persisted-hidden author arrives visible: false', () => {
+    const memory = createForeignNotes();
+    memory.replace([remote(), remote({ id: 'petya001', author_id: 'Петя' })], 'reader-one', [
+      'Вася',
+    ]);
+
+    expect(memory.visibilityOf('their001')).toBe(false);
+    expect(memory.visibilityOf('petya001')).toBe(true);
+    expect(memory.authors()).toEqual([
+      { authorName: 'Вася', count: 1, allVisible: false },
+      { authorName: 'Петя', count: 1, allVisible: true },
+    ]);
+  });
+
+  it('a first-ever load passes no list, so every author arrives visible', () => {
+    const memory = createForeignNotes();
+    memory.replace([remote()], 'reader-one');
+
+    expect(memory.visibilityOf('their001')).toBe(true);
+  });
+
+  it('the automatic load reads the flags of the page it asks about and applies them', async () => {
+    const port = portOf();
+    port.seed(FOREIGN_HIDDEN_KEY, {
+      version: 1,
+      pages: { [PAGE_KEY]: ['Вася'] },
+    });
+    const { transport } = transportOf({
+      body: {
+        notes: [remote(), remote({ id: 'petya001', author_id: 'Петя' })],
+      },
+    });
+    const memory = createForeignNotes();
+    const stub = painterStub();
+    const sync = attachSyncNotes({ painter: stub.painter, foreign: memory, port, transport });
+    await sync.afterPaint();
+
+    expect(memory.visibilityOf('their001')).toBe(false);
+    expect(memory.visibilityOf('petya001')).toBe(true);
+    // The write path is untouched by a load: the flags are read, never written here.
+    expect(port.calls.filter((call) => call.op !== 'get')).toEqual([]);
+  });
+
+  it('a press to hidden persists the flag, and the next load arrives hidden', async () => {
+    const port = portOf();
+    await setForeignAuthorHidden(port, {
+      pageKey: PAGE_KEY,
+      authorName: 'Вася',
+      hidden: true,
+    });
+    const memory = createForeignNotes();
+
+    const record = port.snapshot()[FOREIGN_HIDDEN_KEY] as { pages: Record<string, string[]> };
+    memory.replace([remote()], 'reader-one', record.pages[PAGE_KEY]);
+
+    expect(memory.visibilityOf('their001')).toBe(false);
   });
 });
 
@@ -392,11 +454,16 @@ describe('AC8 the wiring asks once per page key and hands the answer to the pain
     const sync = attachSyncNotes({ painter: stub.painter, foreign: memory, port, transport });
     await sync.afterPaint();
 
-    // One settings read, through core, per question actually asked; the second pass of the
-    // same page asks nothing and therefore reads nothing.
+    // One settings read and one foreign-hidden read (`A184`), through core, per question
+    // actually asked; the second pass of the same page asks nothing and therefore reads
+    // nothing.
     await sync.afterPaint();
     const reads = port.calls.filter((call) => call.op === 'get').length;
-    expect(reads).toBe(1);
+    expect(reads).toBe(2);
     expect(port.calls.filter((call) => call.op !== 'get')).toEqual([]);
+    expect(port.calls.filter((call) => call.op === 'get').map((call) => call.keys)).toEqual([
+      ['settings:v1'],
+      ['foreign-hidden:v1'],
+    ]);
   });
 });

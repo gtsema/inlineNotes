@@ -26,7 +26,8 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `automatic load` | — | one `GET /notes/page/{page_id}` per page key per document, at page open (`A163`) |
 | `foreign note` | — | a note the server returned whose `authorName` is not the reader's; it lives in the document's memory only |
 | `own note` | «Вы» | a note whose author is the reader, by core `isSameAuthor` (`A99`) |
-| `memory only` | — | never written to `chrome.storage.local`, never sent in a payload, gone on reload (`A163`) |
+| `memory only` | — | never written to `chrome.storage.local`, never sent in a payload (the note itself: `A163`; the hidden flag: `A184`) |
+| `hidden author flag` | — | a stored `{ pageKey, authorName }` pair saying the popup checkbox of that foreign author was last pressed to hidden on that page; keyed and applied by `A184` |
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
 | `no request rule` | — | switch off **or** empty address means zero network calls and no sync button (`A166`) |
@@ -40,8 +41,8 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 3. **Show the answer.** The rows that come back are decoded into entries, the reader's own are dropped (the store already has them), and the rest are held in memory and painted by one more pass over the same page stream.
 4. **Press sync.** In the popup, the reader's own row carries the sync button beside the delete button. A press turns the arrows green-spinning, sends one `POST` with that author's notes of this page, and answers with green-static (success) or red (failure).
 5. **Read a foreign note.** Hovering a foreign note's highlight shows the usual tooltip, whose header prints the author's stored name **in that author's palette colour**, and whose body is the stored comment. Clicking it opens no editor: a foreign note is read-only.
-6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory); `Удалить` removes the author's rows from this page's view. Neither calls the server.
-7. **Reload.** The memory is gone, the request is made again, and the foreign notes come back as the server holds them.
+6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory, and the hidden state of that author is persisted by `A184`); `Удалить` removes the author's rows from this page's view and clears that author's persisted hidden state. Neither calls the server.
+7. **Reload.** The memory is gone, the request is made again, and the foreign notes come back as the server holds them — except an author whose `hidden author flag` is stored, whose notes load hidden (`A184`).
 
 ## Rules / Semantics
 
@@ -110,11 +111,22 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 - The tooltip's `ownership header` prints the author's stored name (§ "Own entries and foreign entries … only in the tooltip header" of `content-overlay-ui.md`) and, for a foreign note, prints it **in that author's palette colour**, as an inline style on one span inside the shadow root. The reader's own header keeps the stylesheet's ink.
 - The colour is read from the same palette literal the highlight rule writes (`paintColourOfSlot`), so the underline on the page and the name in the tooltip cannot disagree. A slot with no fill answers the empty string, and the header keeps the stylesheet's ink rather than rendering an invalid colour.
 
-### Hiding and deleting a foreign row (answer 5)
+### Hiding and deleting a foreign row (answer 5, as amended by ruling `A184`)
 
 - The popup's checkbox of a foreign author hides that author's highlights on this page: the flag lives in the same memory, because a foreign note has no stored `visible` field. A switched-off foreign note is still painted — with its underline and without its fill — so switching it back on is one more pass and no request.
-- `Удалить` on a foreign row removes that author's notes from this page's **view**: the memory drops them, the page repaints, and the server is not called. The rows come back on the next page load.
-- Neither control writes to `chrome.storage.local`.
+- `Удалить` on a foreign row removes that author's notes from this page's **view**: the memory drops them, the page repaints, and the server is not called.
+
+### The hidden author flag survives a reload (ruling `A184`, task `t18-01`)
+
+Before `A184` a hidden foreign author came back visible on the next page load, because the whole foreign list was memory (`A163`), and the reader had to press the checkbox again on every reload. The note itself is still memory only; what is now persisted is **one flag per foreign author per page**, not the notes:
+
+- The store is one record under the single key `foreign-hidden:v1`: `{ version: 1, pages: Record<pageKey, string[]> }`, where the array holds the author names the reader has hidden on that page. The `pageKey` is the key the paint pass resolved — the same key the automatic load asked about — never an address derived in the content layer. The slot-key machinery of `notes:v1:` is deliberately not reused, because this record needs no per-page key and no index; the page key lives inside the one record verbatim.
+- The record lives in `src/core/foreign-hidden-store.ts` and is reached **only through the core API**: `loadHiddenAuthorsOfPage` answers the array for one page (an absent or malformed record answers `[]`, never a throw), and `setForeignAuthorHidden` writes the flag with the same guarded-read shape every other core write uses. A malformed record is overwritten by the next write, not preserved; a read that throws answers `[]` and a write that throws is swallowed by the page, which keeps the in-memory answer it already gave (`A164` posture: the persistence is a best-effort shadow of the memory, never a gate).
+- The checkbox press of a foreign row is the only writer through the message path: a press to hidden adds that author to the page's array, a press to visible removes it. The `Удалить` press of a foreign row **removes** the author's flag in the same turn, so the next load shows that author again — deleting is the reader's statement that this author should start over, not a way to keep them hidden.
+- The flag is applied where the memory is filled: every `replace` of a load passes the page's stored author names and marks a note whose author is in that list `visible: false` on arrival. First-ever load (empty record) and a load after a `Удалить` therefore load every author visible.
+- Own notes are untouched: their visibility is the per-entry stored `visible` (`A1`, `A108`), and this flag is written by the foreign-row message path only.
+- The flags of a page with no foreign notes linger and are harmless: nothing reads them until the server returns that author again, and nothing in the reader's view depends on a flag whose author has no notes on the page.
+- The note is never written to `chrome.storage.local` by either control; the only write the message path makes is the `A184` author flag.
 
 ### A failed load never blocks the page (ruling `A164`)
 
@@ -184,9 +196,12 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 10. The sync button sends `POST /notes/page/{page_id}` with only the current author's entries and `author_id` equal to the settings name.
 11. The three states are driven by the request outcome: `running` while it stands, `idle` on success, `error` on failure, with no timer anywhere.
 12. On page open, with synchronization on and a valid address, the content script calls `GET /notes/page/{page_id}` once per page key and paints the returned foreign notes beside the stored ones.
-13. Foreign notes are never written to `chrome.storage.local` and never appear in a payload.
+13. Foreign notes are never written to `chrome.storage.local` and never appear in a payload; the one stored thing a foreign row writes is the `A184` author flag under `foreign-hidden:v1`.
 14. A foreign note is not editable, wears its author's palette colour, and its tooltip names the author in that colour.
-15. A foreign row's `Удалить` removes it from view locally without a request; its checkbox hides it in memory.
+15. A foreign row's `Удалить` removes it from view locally without a request, clears that author's `A184` flag, and its checkbox hides it in memory and stores the flag.
+19. (`A184`) A foreign author unchecked in the popup is still hidden after a full page reload; the notes come back visible after the row's `Удалить` or after a checkbox press to visible; a first-ever load with an empty or malformed `foreign-hidden:v1` shows every author visible.
+20. (`A184`) A malformed or unreadable `foreign-hidden:v1` record answers `[]` on read, is overwritten by the next write, and never breaks a load or a paint; a failed flag write leaves the in-memory behaviour intact.
+21. (`A184`) Own rows and the stored `visible` field are untouched by the flag: a stored row's checkbox still runs `setVisibleForAuthor` and never writes `foreign-hidden:v1`.
 16. A failed automatic load leaves the page working and states the failure with the non-blocking popup notice.
 17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]`, and `fetch` appears in exactly the two transport adapters.
 18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
@@ -198,6 +213,7 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 | 1, 2, 3, 4 | `tests/core-settings-store.spec.ts` -> the Stage 17 describe; `tests/options-sync-settings.spec.ts` |
 | 5, 6 | `tests/core-sync-client.spec.ts` -> "server address", "synchronization needs a switch" |
 | 7, 8 | `tests/options-sync-settings.spec.ts`; `tests/options-window-look.spec.ts` |
+| 19, 20, 21 | `tests/core-foreign-hidden-store.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A184` describes |
 | 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
 | 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |

@@ -110,7 +110,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
   });
 
-  it('is exactly the pinned set of seventeen sites, so a new catch breaks the build', () => {
+  it('is exactly the pinned set of eighteen sites, so a new catch breaks the build', () => {
     // Stage 17 (`t17-01`) adds the fifteenth: `sync/foreign-notes.ts` answers a
     // transport that throws as the same code a rejected transport produces, which is
     // what makes `A164` ("a failed load never blocks the page") unconditional.
@@ -129,7 +129,10 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
       'create/create-note.ts': 1,
       // `t17-02`: the entry point subscribes the popup's question listener (`A167`) inside
       // one guard, so a frame without `chrome.runtime` answers nothing instead of breaking.
-      'main.ts': 2,
+      // `t18-01` (`A184`) adds the third: the persisted author flag is written inside one
+      // guard, because the in-memory switch already answered the popup and the shadow
+      // write is best effort (`A164` posture).
+      'main.ts': 3,
       'editor/edit-entry.ts': 1,
       'overlay/create-card-controller.tsx': 2,
       'overlay/editor-controller.tsx': 1,
@@ -148,7 +151,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(18);
+    expect(total).toBe(19);
   });
 });
 
