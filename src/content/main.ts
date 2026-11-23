@@ -45,6 +45,7 @@ import { createTooltipController } from './overlay/tooltip-controller';
 import { attachTooltipEvents } from './overlay/tooltip-events';
 import { createEditorController } from './overlay/editor-controller';
 import { attachEditorEvents } from './overlay/editor-events';
+import { attachKeyboardIsolation } from './overlay/keyboard-isolation';
 import { attachUrlChangeWatch } from './refresh/url-change-watch';
 import { attachStorageChangeWatch } from './refresh/storage-change-watch';
 import { createForeignNotes } from './sync/foreign-notes';
@@ -193,6 +194,12 @@ function boot(): void {
   });
 
   attachTooltipEvents(tooltip, document, window, overlay.host);
+
+  // Ruling `A193`: the page never sees a keystroke the overlay produced. The host
+  // page runs global keyboard shortcuts (measured on YouTrack), and a note typed
+  // into the field must not fire them; the card's and the editor's own `Esc` and
+  // `Ctrl/Cmd+Enter` run inside the shadow root, before this bubble-phase stop.
+  attachKeyboardIsolation(overlay.host);
 
   // The popup's question (`A167`, `A168`, `A169`), wired here and answered by
   // `attachPageNotesChannel`.

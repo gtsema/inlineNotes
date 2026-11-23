@@ -233,6 +233,17 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Two authors whose names land on one `paint slot`: both paint in that slot's colour, the two rules are identical apart from their `::highlight()` name, and nothing else changes — no re-mapping, no search for a free slot, no warning. The collision is a property of hashing into six slots and is accepted with the ruling that fixed the palette size (`A94`, `A102`).
 - Own and foreign ranges overlap on the page: both `paint name`s are registered and the CSS Highlight API blends them; the extension invents no z-order, no priority and no per-author registry, and the `overlap` refusal of rulings `A93`/`A100` stays a rule of `src/core/` asked at the write moment, never a paint-time one.
 
+### Keyboard isolation of the overlay host (ruling `A193`, task `t19-02`)
+
+The reader measured the defect on YouTrack: the host page runs global keyboard shortcuts from document-level listeners, and every keystroke typed into the note field reached them — the field swallowed the character **and** the page fired its shortcut. The `A112` rule ("the handler never calls `preventDefault()` and never stops propagation") was a rule about the **typing door**, the keystroke that moves the caret into the card; the rule below is about the opposite direction, a keystroke the overlay already owns:
+
+- The mechanism is one bubble-phase listener per keyboard event (`keydown`, `keyup`, `keypress`) **on the host element itself**, whose only action is `stopPropagation()`. By the time the event bubbles out of the shadow root, the card's and the editor's own handlers — `Esc`, `Ctrl/Cmd+Enter`, the cap — have already run inside the shadow root, so nothing the overlay needs is lost; what is stopped is only the event's further path to the page's `document` and `window` listeners.
+- The capture phase is deliberately untouched, and that is a stated limit, not an oversight: a page that listens in the **capture** phase sees the keystroke before the shadow handlers, and blocking there would mean stopping the event before the card's own keys — which would break `Esc` and `Ctrl/Cmd+Enter`. Document- and window-level **bubble** listeners — the shape global shortcut layers (YouTrack included) use — are fully covered.
+- The `A112` typing door is untouched: its keystroke starts on the page (a caret standing on the article), never passes through the host, and the door handler never prevents or stops anything.
+- The listeners are never torn down in a content script — the same rule the url watch states (`A59`); the teardown they return exists for tests only.
+
+Pinned by `tests/content-keyboard-isolation.spec.ts`, which drives the propagation path behaviourally: a keydown from inside the overlay host reaches neither `document` nor `window`; an event aimed at the host itself is stopped; a keystroke from the page outside the host is untouched; all three event types are covered; and the teardown restores the page's keyboard.
+
 ## Page-boundary throws
 
 The content layer is the only layer that calls code it does not own. Any of those calls
