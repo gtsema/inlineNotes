@@ -1406,9 +1406,10 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     expect(template).toMatch(/\(input\)="onInput\(\$event\)"/);
     expect(template).toMatch(/<p class="counter">\{\{ counter\(\) \}\}<\/p>/);
     expect(template).toMatch(/<button class="save" type="button" \[disabled\]="!draft\(\)\.canSave" \(click\)="onSave\(\)">/);
-    // `A179` (`t17-05`) merged the two message blocks into one, so the condition and the
-    // single node moved; the binding shape is unchanged.
-    expect(template).toMatch(/@if \(hasConfirmation\(\)\) \{/);
+    // `A179` (`t17-05`) merged the two message blocks into one; `A185` (`t18-02`) made
+    // the slot unconditional and the warning its `@if` arm, so the shape below is the
+    // one `@if`/`@else` pair that owns the bottom slot.
+    expect(template).toMatch(/@if \(renameConfirm\(\)\) \{/);
     expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
   });
 
@@ -1876,38 +1877,23 @@ describe('the gap is 24px split 12/12 (A177, t17-05 AC1, AC2)', () => {
 });
 
 /**
- * Ruling `A178` (`t17-05` AC3, AC4): a block that appears after a press must fit inside the
- * dialog box the page already has, so the page must not need more vertical room than the
- * layout before this task already needed.
+ * Ruling `A185` (`t18-02`), which supersedes the gap-budget shape of `A178` (`t17-05`): the
+ * reader measured the dialog box growing whenever the confirmation or the rename warning
+ * appeared, and chose the reserved slot over the freed gap. The two appearing blocks now
+ * declare the **same** `min-height`, so the declared vertical extent of the page is constant
+ * whether a refusal, the confirmation or nothing at all is showing — the space is spent
+ * permanently, and an appearance can only fill it, never add to it.
  *
- * The dialog box is sized by Chrome and the page fills it (`options_ui.open_in_fab: false`,
- * `:host { min-height: 100vh }`, `body { margin: 0 }`), so "no scrollbar" is the statement
- * that the page's **declared** vertical extent did not grow. The pin makes that arithmetic
- * explicit rather than trusting the eye:
+ * The pin makes that arithmetic explicit rather than trusting the eye:
  *
- * - `A177` withdraws `48 + 48` px of margins around this neighbourhood and adds back
- *   `12 + 12`, freeing **72 px** of declared vertical space;
- * - `A179` removes one duplicate message line, which was a whole second block
- *   (`margin` + `padding` + one 13px line) — counted here as the block it was;
- * - the appearing blocks add back only their own declared space, and the assertion is that
- *   each of them fits inside the space the two rulings freed. A block that declares a
- *   `height`, a `min-height`, a bigger `padding` or a return of a `48px` margin is red.
+ * - both blocks declare the same `min-height`, so no block is taller than the reserve;
+ * - the empty arm of the message slot declares **no** band (no background, no vertical
+ *   padding), because an empty reserve is not a visible box;
+ * - the message is rendered from one node by one source, unchanged (`A179`), and the
+ *   warning replaces the message in the same slot rather than stacking under it.
  */
-const OFFERED_BY_A177_PX = 48 + 48 - (12 + 12);
-describe('an appearing block does not grow the page (A178, t17-05 AC3, AC4)', () => {
-  /** Declared vertical space one appearing block adds: outer margins, padding, borders. */
-  function declaredExtentPx(selector: string): number {
-    const code = componentCodeStyles(OPTIONS_COMPONENT);
-    const rule = ruleBody(code, selector);
-    const margin = declaredMargin(rule) ?? [0, 0, 0, 0];
-    // `padding: 8px` and `padding: 6px 8px` are both legal spellings and both appear on
-    // this surface, so the vertical half is read from the first value in either shape.
-    const padding = /(?:^|;)\s*padding:\s*([0-9.]+)px/.exec(rule);
-    const paddingY = padding === null ? 0 : 2 * Number.parseFloat(padding[1] as string);
-    const border = /(?:^|;)\s*border:\s*1px /.test(rule) ? 2 : 0;
-    return margin[0] + margin[2] + paddingY + border;
-  }
-
+const RESERVED_SLOT_MIN_HEIGHT_PX = 40;
+describe('the message slots are reserved, so an appearance never grows the page (A185, t18-02)', () => {
   it('states the page\'s declared vertical budget: one box, box-sizing border-box, no scroll state', () => {
     const styles = componentCodeStyles(OPTIONS_COMPONENT);
     // The budget is one dialog box: a full viewport, and the insets are inside it.
@@ -1920,31 +1906,41 @@ describe('an appearing block does not grow the page (A178, t17-05 AC3, AC4)', ()
     expect(styles).not.toMatch(/overflow/);
   });
 
-  it('gives neither appearing block a height of its own', () => {
+  it('both appearing blocks declare the same reserved min-height', () => {
     const code = componentCodeStyles(OPTIONS_COMPONENT);
     for (const selector of ['.message', '.rename']) {
-      expect(ruleBody(code, selector), selector).not.toMatch(/(?:^|;)\s*(?:min-)?height:/);
+      expect(ruleBody(code, selector), selector).toMatch(
+        new RegExp(`(?:^|;)\\s*min-height:\\s*${RESERVED_SLOT_MIN_HEIGHT_PX}px;`),
+      );
+      // The reserve is a content-box reserve, and no block carries a height of its own.
+      expect(ruleBody(code, selector), selector).not.toMatch(/(?:^|;)\s*height:/);
     }
   });
 
-  it('fits each appearing block inside the 72px the gap ruling frees', () => {
-    expect(OFFERED_BY_A177_PX).toBe(72);
-    // The confirmation: 12px above + 12px below + 12px of padding + one 13px line box.
-    const message = declaredExtentPx('.message') + 13 * 1.45;
-    expect(message).toBeLessThanOrEqual(OFFERED_BY_A177_PX);
-    // The rename warning is the taller block (a sentence plus a row of two buttons). It
-    // replaces the confirmation while it stands — `A179`'s merge means the two are never
-    // rendered together — and `A179` also removes the duplicate confirmation line the
-    // pre-fix page drew beside it, so it too lands inside the freed space.
-    const rename = declaredExtentPx('.rename') + 13 * 1.45 + 8 + 13 * 1.45 + 8;
-    expect(rename).toBeLessThanOrEqual(OFFERED_BY_A177_PX + 13 * 1.45 + 12 + 12);
+  it('the empty arm of the message slot paints no band', () => {
+    const code = componentCodeStyles(OPTIONS_COMPONENT);
+    const rule = ruleBody(code, '.message--empty');
+    expect(rule).toMatch(/background:\s*transparent;/);
+    expect(rule).toMatch(/padding:\s*0 8px;/);
+    // The reserve keeps its vertical padding on the filled variants only: an empty slot
+    // is the same box the filled one occupies, minus the paint.
+    expect(rule).not.toMatch(/(?:^|;)\s*padding:\s*6px/);
+  });
+
+  it('the warning replaces the message in the same slot, and neither stacks under the other', () => {
+    const template = componentTemplate(OPTIONS_COMPONENT);
+    // `A179`'s merge, kept: the two blocks share one slot through `@if` / `@else`.
+    expect(template).toMatch(/@if \(renameConfirm\(\)\) \{[\s\S]*@else \{/);
+    expect(template).toMatch(/\[class\]="messageClass\(\)">{{ message\(\) }}<\/p>/);
+    expect(template.match(/class="rename"/g) ?? []).toHaveLength(1);
   });
 
   it('renders at most one appearing block at a time', () => {
-    // `A179`: the warning clears the ordinary message when it is raised, so the two blocks
-    // cannot stack and the budget above covers the worst case.
+    // `A179`: the warning clears the ordinary message when it is raised, so the two bottom-slot
+    // blocks cannot stack. `A185` keeps the count at two message paragraphs: the bottom slot
+    // and the reserved server-address slot, each one node.
     const template = componentTemplate(OPTIONS_COMPONENT);
-    expect(template.match(/class="message"/g) ?? []).toHaveLength(1);
+    expect(template.match(/class="message"/g) ?? []).toHaveLength(2);
     expect(template.match(/class="rename"/g) ?? []).toHaveLength(1);
   });
 });
@@ -1954,9 +1950,12 @@ describe('the confirmation renders once, on every path (A179, t17-05 AC3)', () =
 
   it('renders the message from one block and one source, not two', () => {
     // The defect of Run 16: two `@if` blocks rendered the same line, so a rename save
-    // printed «Сохранено» twice. One node, one condition, one accessor.
-    expect(template.match(/<p class="message"/g) ?? []).toHaveLength(1);
-    expect(template).toMatch(/@if \(hasConfirmation\(\)\) \{/);
+    // printed «Сохранено» twice. One bottom-slot node, one condition, one accessor.
+    // The server-address refusal is a different source on its own reserved slot
+    // (`A185`), so it is the second and last `<p class="message">` on the page.
+    expect(template.match(/<p class="message"/g) ?? []).toHaveLength(2);
+    // `A185` made the slot unconditional: the one condition left is the warning's `@if`.
+    expect(template).toMatch(/@if \(renameConfirm\(\)\) \{/);
     expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
     // The second block that answered `saved` is gone by name, not just by shape.
     expect(template).not.toMatch(/renameOutcomeMessage\(\)/);

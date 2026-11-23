@@ -139,9 +139,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         <label class="label" for="sync-enabled">{{ syncLabel }}</label>
       </p>
 
-      @if (serverMessage() !== null) {
-        <p class="message message--refusal">{{ serverMessage() }}</p>
-      }
+      <p class="message" [class]="serverMessageClass()">{{ serverMessage() }}</p>
 
       <button class="save" type="button" [disabled]="!draft().canSave" (click)="onSave()">
         {{ save }}
@@ -159,9 +157,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
             </button>
           </div>
         </div>
-      }
-
-      @if (hasConfirmation()) {
+      } @else {
         <p class="message" [class]="messageClass()">{{ message() }}</p>
       }
     </main>
@@ -291,11 +287,24 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       cursor: default;
     }
 
+    /*
+     * The message slot is permanently reserved (ruling A185, task t18-02): both
+     * appearing blocks declare the same min-height, so the dialog box the reader
+     * opened is the box that keeps its size whether a refusal, the confirmation or
+     * nothing at all is showing. An empty slot paints no band: background and the
+     * vertical padding live on the filled variants only.
+     */
     .message {
       margin: 12px 0 12px;
+      min-height: 40px;
       padding: 6px 8px;
       border-radius: 6px;
       background: #eef4f7;
+    }
+
+    .message--empty {
+      background: transparent;
+      padding: 0 8px;
     }
 
     .message--saved {
@@ -307,21 +316,27 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .rename {
-      margin: 12px 0 0;
-      padding: 8px;
+      margin: 12px 0 12px;
+      min-height: 40px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
       border: 1px solid #a6cbdc;
       border-radius: 6px;
       background: #eef4f7;
     }
 
     .rename-warning {
-      margin: 0 0 8px;
+      margin: 0;
+      flex: 1 1 auto;
       color: #8a1a14;
     }
 
     .rename-actions {
       display: flex;
       gap: 8px;
+      flex: none;
     }
 
     .rename-cancel {
@@ -432,6 +447,15 @@ export class OptionsComponent implements OnInit {
   }
 
   /**
+   * The palette role of the server-address slot (`A185`): a refusal keeps the
+   * refusal ink on its band, an empty slot renders as the reserved space with no
+   * band and no ink — the same reserve the confirmation line keeps.
+   */
+  serverMessageClass(): string {
+    return this.serverMessage() === null ? 'message message--empty' : 'message message--refusal';
+  }
+
+  /**
    * Which palette role the message line wears (`A125`): the confirmation is the
    * accent on the pale band, a refusal keeps the color this page shipped with
    * before the palette existed. This chooses a class and no wording — the wording
@@ -441,8 +465,15 @@ export class OptionsComponent implements OnInit {
    * completed wears the confirmation role, a partial deletion the refusal one — the
    * class `renameOutcomeClass()` used to carry, now decided in the one place the
    * sentence is decided, so wording and colour cannot disagree.
+   *
+   * Ruling `A185` adds the empty arm: the slot renders with no text and no band,
+   * because the space it occupies is reserved (`A178`'s goal, kept by a fixed
+   * slot rather than by a freed gap).
    */
   messageClass(): string {
+    if (this.message() === '') {
+      return 'message message--empty';
+    }
     const rename = this.renameOutcome();
     if (rename !== null && rename.outcome === 'sweep_failed') {
       return 'message message--refusal';
