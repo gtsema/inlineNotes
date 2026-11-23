@@ -297,7 +297,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
      */
     .message {
       margin: 12px 0 0;
-      min-height: 38px;
+      min-height: 72px;
       padding: 6px 8px;
       display: flex;
       align-items: center;
@@ -318,26 +318,27 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     /*
-     * The warning fills the same reserve as the message line (A187), and it ships
-     * **no** border of its own: its two-line sentence at 13px/1.45 measures 37.7px of
-     * content, and the 2px a decorative border added would overflow the 38px reserve
-     * the reader fixed — the reader named exactly this overflow. The pale band and
-     * the radius keep the block legible as one unit without the edge.
+     * The warning fills the same reserve as the message line (A188, measured in the
+     * reader's dialog): the sentence is measured wide enough that only a full-width
+     * line box gives it two lines, so the text stands first and the two answers
+     * follow on the row below — a side-by-side row squeezed the text to three or
+     * four lines and grew the dialog past the reserve, which the reader saw as a
+     * scrollbar. The 72px reserve holds text plus the button row, measured, with slack.
      */
     .rename {
       margin: 12px 0 0;
-      min-height: 38px;
+      min-height: 72px;
       padding: 6px 8px;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
       border-radius: 6px;
       background: #eef4f7;
     }
 
     .rename-warning {
       margin: 0;
-      flex: 1 1 auto;
       color: #8a1a14;
     }
 

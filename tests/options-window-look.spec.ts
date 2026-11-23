@@ -1875,12 +1875,14 @@ describe('the gap above the switch row (A177, amended by A186: the reserve below
     expect(ruleBody(code, '.save')).toMatch(/background:\s*#b8480d;/);
   });
 
-  it('keeps the rename warning on the same 12px scale, not 48px (t17-05 AC5)', () => {
+  it('keeps the rename warning on the same 12px margin scale (t17-05 AC5, reserve amended by A188)', () => {
     const code = componentCodeStyles(OPTIONS_COMPONENT);
     const rename = declaredMargin(ruleBody(code, '.rename'));
     expect(rename?.[0]).toBe(12);
-    // The withdrawn 48px cannot come back through the row's neighbour either.
-    expect(ruleBody(code, '.rename')).not.toMatch(/48px/);
+    // `A188`: the reserve is 48px (the warning's two-line sentence measured in the
+    // reader's dialog), so 48px appears there — but not as a margin.
+    expect(ruleBody(code, '.rename')).toMatch(/min-height:\s*72px;/);
+    expect(rename?.[0]).not.toBe(48);
   });
 });
 
@@ -1900,7 +1902,7 @@ describe('the gap above the switch row (A177, amended by A186: the reserve below
  * - the message is rendered from one node by one source, unchanged (`A179`), and the
  *   warning replaces the message in the same slot rather than stacking under it.
  */
-const RESERVED_SLOT_MIN_HEIGHT_PX = 38;
+const RESERVED_SLOT_MIN_HEIGHT_PX = 72;
 describe('the message slots are reserved, so an appearance never grows the page (A185, t18-02)', () => {
   it('states the page\'s declared vertical budget: one box, box-sizing border-box, no scroll state', () => {
     const styles = componentCodeStyles(OPTIONS_COMPONENT);
