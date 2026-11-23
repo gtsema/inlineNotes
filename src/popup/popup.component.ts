@@ -650,7 +650,7 @@ export class PopupComponent implements OnInit {
   onOpenAllNotes(event: Event): void {
     event.preventDefault();
     try {
-      void chrome.tabs.create({ url: chrome.runtime.getURL('notes.html') });
+      void chrome.tabs.create({ url: chrome.runtime.getURL('all-notes/index.html') });
     } catch {
       // No runtime API in this document: nobody to navigate, nothing else changes.
     }
