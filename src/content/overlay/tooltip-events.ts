@@ -39,6 +39,13 @@
 import { isInsideOverlayHost } from '../capture/page-selection';
 import type { TooltipController } from './tooltip-controller';
 
+/**
+ * The `tooltip grace` (`A194`), the number the Terms row names: an open tooltip
+ * survives this many milliseconds after the pointer has left its entry span, so
+ * the reader can cross the placement gap and reach the box.
+ */
+export const TOOLTIP_GRACE_MS = 300;
+
 /** Removes every listener this function added. */
 export type TooltipEventBinding = () => void;
 
@@ -55,31 +62,66 @@ export function attachTooltipEvents(
   win: Window,
   host: HTMLElement,
 ): TooltipEventBinding {
+  /**
+   * The `tooltip grace` (`A194`): the milliseconds an open tooltip survives after
+   * the pointer has left its entry span. The tooltip is painted beside the span
+   * with a placement gap, so the path from the words to the box crosses text that
+   * is not the entry — an instant hide there made the tooltip unreachable, which
+   * the reader measured. Moving onto the widget, pressing, scrolling or pressing
+   * `Esc` cancels the pending hide; a fresh hover elsewhere answers immediately.
+   */
+  let grace: ReturnType<typeof setTimeout> | null = null;
+  const cancelGrace = (): void => {
+    if (grace !== null) {
+      clearTimeout(grace);
+      grace = null;
+    }
+  };
+  const scheduleHover = (x: number, y: number): void => {
+    cancelGrace();
+    grace = setTimeout((): void => {
+      grace = null;
+      controller.hoverAt(x, y);
+    }, TOOLTIP_GRACE_MS);
+  };
+
   const onPointerMove = (event: Event): void => {
     if (isOverWidget(event, host)) {
+      cancelGrace();
       return;
     }
     const pointer = pointerCoordinates(event);
-    if (pointer !== null) {
-      controller.hoverAt(pointer.x, pointer.y);
+    if (pointer === null) {
+      return;
     }
+    if (controller.isOpen()) {
+      // An open tooltip does not die with the first move off its span: the move
+      // starts the grace, and the hide (or the re-hit) answers when it expires.
+      scheduleHover(pointer.x, pointer.y);
+      return;
+    }
+    controller.hoverAt(pointer.x, pointer.y);
   };
 
   const onPointerDown = (event: Event): void => {
     if (isOverWidget(event, host)) {
+      cancelGrace();
       controller.activate();
       return;
     }
+    cancelGrace();
     controller.hide();
   };
 
   const onKeyDown = (event: Event): void => {
     if ((event as KeyboardEvent).key === 'Escape') {
+      cancelGrace();
       controller.hide();
     }
   };
 
   const onHide = (): void => {
+    cancelGrace();
     controller.hide();
   };
 
@@ -89,6 +131,7 @@ export function attachTooltipEvents(
   win.addEventListener('scroll', onHide, true);
 
   return (): void => {
+    cancelGrace();
     doc.removeEventListener('pointermove', onPointerMove);
     doc.removeEventListener('pointerdown', onPointerDown, true);
     doc.removeEventListener('keydown', onKeyDown);

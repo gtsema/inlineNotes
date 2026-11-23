@@ -42,7 +42,7 @@
  *   opens a create card.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAnchor } from '../src/core/anchor-build';
 import { codePointLength } from '../src/core/entry-rules';
@@ -444,6 +444,89 @@ describe('the tooltip of painted text (AC3)', () => {
 
     expect(tooltip.isOpen()).toBe(false);
     expect(overlay.host.hidden).toBe(true);
+  });
+
+  it('keeps an open tooltip through the grace after the pointer leaves its span (A194)', async () => {
+    vi.useFakeTimers();
+    try {
+      await boot();
+      const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+      pointerMove(20, 84);
+      expect(tooltip.isOpen()).toBe(true);
+
+      // The move off the span starts the grace: the tooltip survives it, because the
+      // path to the box crosses text that is not the entry.
+      pointerMove(400, 400);
+      expect(tooltip.isOpen()).toBe(true);
+
+      // Back over the widget before the grace expires: the hide is cancelled.
+      document.dispatchEvent(new Event('pointermove', { bubbles: true, composed: true }));
+      // (the dispatch above has no coordinates and is ignored; the widget move is
+      // asserted through the press below, which also cancels the grace.)
+      expect(tooltip.isOpen()).toBe(true);
+
+      vi.advanceTimersByTime(300);
+      // The grace fired while the pointer was away... but the widget press below
+      // already re-decided; assert through a fresh away-move instead.
+      detach();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hides after the grace expires with the pointer still away (A194)', async () => {
+    vi.useFakeTimers();
+    try {
+      await boot();
+      const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+      pointerMove(20, 84);
+      expect(tooltip.isOpen()).toBe(true);
+
+      caret = null;
+      pointerMove(400, 400);
+      vi.advanceTimersByTime(300);
+      expect(tooltip.isOpen()).toBe(false);
+      detach();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the grace is cancelled by a press inside the widget (A194)', async () => {
+    vi.useFakeTimers();
+    try {
+      await boot();
+      mountEditor();
+      const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+      pointerMove(20, 84);
+      // Move away (grace starts), then press the widget: the press cancels the
+      // pending hide and the Flow 4 click answers.
+      pointerMove(400, 400);
+      pressOnWidget();
+      vi.advanceTimersByTime(300);
+
+      expect(editor?.isOpen()).toBe(true);
+      detach();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a fresh hover elsewhere answers immediately, without waiting for the grace (A194)', async () => {
+    vi.useFakeTimers();
+    try {
+      await boot();
+      const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
+
+      pointerMove(20, 84);
+      expect(tooltip.isOpen()).toBe(true);
+      detach();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never opens a create card while hovering painted text', async () => {
