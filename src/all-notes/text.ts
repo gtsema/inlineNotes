@@ -38,3 +38,13 @@ export function rowDateText(iso: string): string {
   }
   return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+
+/**
+ * The readable page label for a row without a stored title (`A190` fallback): the
+ * page key without its scheme — `example.com/a/b` reads, `https://` prefixes do
+ * not. The page key is already the normalized URL, so nothing else is rewritten
+ * here and the full address stays the link's `href`.
+ */
+export function pageLabelText(pageKey: string): string {
+  return pageKey.replace(/^https?:\/\//, '');
+}

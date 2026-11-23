@@ -11,7 +11,7 @@ import type { SyncTransport } from '../core/sync-client';
 import { deleteRemoteAuthorNotes } from '../core/sync-client';
 import type { StoragePort } from '../core/storage-port';
 import { createChromeLocalStoragePort } from '../content/store/chrome-storage-port';
-import { ALL_NOTES_STRINGS, noteCountText, rowDateText } from './text';
+import { ALL_NOTES_STRINGS, noteCountText, pageLabelText, rowDateText } from './text';
 import { createAllNotesSyncTransport } from './fetch-transport';
 
 /**
@@ -295,7 +295,7 @@ export class AllNotesComponent implements OnInit {
 function rowOf(row: AuthorPageRow): AllNotesRow {
   return {
     pageKey: row.pageKey,
-    label: row.title ?? row.pageKey,
+    label: row.title ?? pageLabelText(row.pageKey),
     count: noteCountText(row.count),
     date: rowDateText(row.latest),
   };

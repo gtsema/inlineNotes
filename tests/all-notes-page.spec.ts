@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AllNotesComponent } from '../src/all-notes/all-notes.component';
-import { ALL_NOTES_STRINGS, noteCountText, rowDateText } from '../src/all-notes/text';
+import { ALL_NOTES_STRINGS, noteCountText, pageLabelText, rowDateText } from '../src/all-notes/text';
 import type { SyncTransport } from '../src/core/sync-client';
 import { authorPagesOf } from '../src/core/author-pages';
 import type { AuthorPageRow } from '../src/core/author-pages';
@@ -114,6 +114,9 @@ describe('the wording module (A189)', () => {
     expect(noteCountText(11)).toBe('11 заметок');
     expect(noteCountText(21)).toBe('21 заметка');
     expect(rowDateText('2026-03-01T00:00:00.000Z')).toMatch(/^\d{2}\.\d{2}\.\d{4}$/);
+    // The `A190` fallback reads without the scheme (`A189`): the href keeps the full key.
+    expect(pageLabelText('https://example.com/a/b?q=1')).toBe('example.com/a/b?q=1');
+    expect(pageLabelText('http://example.com/')).toBe('example.com/');
   });
 });
 
