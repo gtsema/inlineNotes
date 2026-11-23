@@ -317,6 +317,13 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       color: #b3261e;
     }
 
+    /*
+     * The warning fills the same reserve as the message line (A187), and it ships
+     * **no** border of its own: its two-line sentence at 13px/1.45 measures 37.7px of
+     * content, and the 2px a decorative border added would overflow the 38px reserve
+     * the reader fixed — the reader named exactly this overflow. The pale band and
+     * the radius keep the block legible as one unit without the edge.
+     */
     .rename {
       margin: 12px 0 0;
       min-height: 38px;
@@ -324,7 +331,6 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: flex;
       align-items: center;
       gap: 8px;
-      border: 1px solid #a6cbdc;
       border-radius: 6px;
       background: #eef4f7;
     }
