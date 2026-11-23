@@ -666,18 +666,33 @@ describe('the colour of a highlight follows its author (t5-02 AC1, AC5, AC7, AC8
 
     expect(outcome.painted).toHaveLength(6);
     expect(outcome.skipped).toEqual([]);
-    expect(surface.writes).toEqual(ids.map((id) => `inlinenotes-${id}`));
+    // `A196`: the registry paints a later registration on top, so the plan answers
+    // the current author's entry first (`reader-one` -> `d4e5f6a1b2c3`) and every
+    // other author's entry after, in the store's order — a foreign note is always
+    // over an own one where the ranges overlap.
+    expect(surface.writes).toEqual([
+      'inlinenotes-d4e5f6a1b2c3',
+      'inlinenotes-a1b2c3d4e5f6',
+      'inlinenotes-b2c3d4e5f6a1',
+      'inlinenotes-c3d4e5f6a1b2',
+      'inlinenotes-e5f6a1b2c3d4',
+      'inlinenotes-f6a1b2c3d4e5',
+    ]);
 
     const rules = styleRules();
     expect(rules).toHaveLength(6);
-    expect(rules.map(ruleNameOf)).toEqual(ids.map((id) => `inlinenotes-${id}`));
+    expect(rules.map(ruleNameOf)).toEqual(surface.writes);
     // Six distinct authors on six distinct slots answer six distinct bodies: the palette
     // is the only source, and it is not walked to make extra rules.
     expect(new Set(rules.map(ruleBodyOf)).size).toBe(6);
     // The slot-0 author keeps the frame that shipped before ruling `A94`, character for
-    // character, so a one-author page can look unchanged after this task.
-    expect(rules[0]).toContain('background-color: rgba(122, 162, 247, 0.26);');
-    expect(rules[0]).toContain('text-decoration: underline solid rgba(31, 111, 235, 0.7);');
+    // character, so a one-author page can look unchanged after this task. `A196`
+    // moved the registration order (the current author first), so the slot-0 rule is
+    // found by name, not by position.
+    const slotZero = rules.find((rule) => ruleNameOf(rule) === 'inlinenotes-a1b2c3d4e5f6');
+    expect(slotZero).toBeDefined();
+    expect(slotZero).toContain('background-color: rgba(122, 162, 247, 0.26);');
+    expect(slotZero).toContain('text-decoration: underline solid rgba(31, 111, 235, 0.7);');
   });
 
   it('paints two entries of one author with the same declarations (AC1)', async () => {

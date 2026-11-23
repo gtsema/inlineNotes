@@ -268,7 +268,15 @@ export function createPagePainter(doc: Document, input: PagePainterInput): PageP
       plan =
         root === null
           ? emptyPlan()
-          : buildPaintPlan({ entries: page.entries, extra, root, rangeFor });
+          : buildPaintPlan({
+              entries: page.entries,
+              extra,
+              root,
+              rangeFor,
+              // `A196`: the pass already read the settings name; the registry paints
+              // foreign notes over own ones wherever the ranges overlap.
+              authorName,
+            });
       registerPlan(surface, style, plan);
     } catch {
       clearPaint();

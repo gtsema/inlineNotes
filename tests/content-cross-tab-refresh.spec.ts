@@ -353,7 +353,9 @@ describe('AC2 — a write elsewhere repaints this page, with no reload', () => {
     const OWN_ONE = `${PAINT_NAME_PREFIX}-a1b2c3d4e5f6`;
     const FOREIGN = `${PAINT_NAME_PREFIX}-b2c3d4e5f6a1`;
     const OWN_TWO = `${PAINT_NAME_PREFIX}-c3d4e5f6a1b2`;
-    expect(wiring.surface.heldNames()).toEqual([OWN_ONE, FOREIGN, OWN_TWO]);
+    // `A196`: the plan answers own entries first, foreign after — the registry
+    // paints a later registration on top.
+    expect(wiring.surface.heldNames()).toEqual([OWN_ONE, OWN_TWO, FOREIGN]);
 
     const hidden = await setVisibleForAuthor(wiring.port, {
       url: PAGE_URL,
@@ -385,10 +387,11 @@ describe('AC2 — a write elsewhere repaints this page, with no reload', () => {
     await wiring.fire([entryStorageKey(PAGE_KEY)]);
 
     expect(wiring.repaintCount()).toBe(2);
+    // `A196`: own first, foreign last — the paint order the registry reads.
     expect(wiring.paintedEntries().map((p) => p.entry.id)).toEqual([
       'a1b2c3d4e5f6',
-      'b2c3d4e5f6a1',
       'c3d4e5f6a1b2',
+      'b2c3d4e5f6a1',
     ]);
     // The recording surface is a `Map` keyed by highlight name, so a re-painted name
     // keeps its old position: the set is what this pin is about, not the paint order.

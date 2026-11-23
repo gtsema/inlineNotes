@@ -235,6 +235,16 @@ Out of scope: storage layout, caps, authorship, anchoring rules (`inline-comment
 - Two authors whose names land on one `paint slot`: both paint in that slot's colour, the two rules are identical apart from their `::highlight()` name, and nothing else changes — no re-mapping, no search for a free slot, no warning. The collision is a property of hashing into six slots and is accepted with the ruling that fixed the palette size (`A94`, `A102`).
 - Own and foreign ranges overlap on the page: both `paint name`s are registered and the CSS Highlight API blends them; the extension invents no z-order, no priority and no per-author registry, and the `overlap` refusal of rulings `A93`/`A100` stays a rule of `src/core/` asked at the write moment, never a paint-time one.
 
+### Foreign notes paint over own ones (ruling `A196`, task `t19-05`)
+
+The CSS Highlight registry paints a **later registration on top**, so what covers what where two ranges overlap is a property of the plan's order. The reader's rule: wherever an own note and a foreign note overlap, the foreign note is visible. The change:
+
+- `buildPaintPlan` takes the settings name the pass already read (`page-painter.ts` reads it for `authorNameOfPass`; a second settings read would be a second reader of `A31`) and answers its `painted` list **partitioned**: every entry the `author identity` rule (`A99`) accepts as the current author first, every other author's entry after them. The partition is stable inside each half — the store's own order — so no other pin about order moves beyond the halves' boundary.
+- `null` or an unusable name is the "everyone is foreign" state: the partition degenerates to the input order, which is what the pins below assert for a page read without a name.
+- No palette, slot or rule-count change: the same `paint name` per entry, the same six rules; only the registration order moved. A page whose entries never overlap paints identically to before.
+
+Pinned by `tests/content-page-painter.spec.ts` (a six-author page registers the current author's name first and the others after, in store order; the slot-0 rule is found by name, not by position) and by `tests/content-cross-tab-refresh.spec.ts` (an own author's aggregate hide leaves only the foreign name standing, and the re-show answers own-first, foreign-last).
+
 ### Late content: the DOM change watch (ruling `A195`, task `t19-04`)
 
 The reader measured the defect on YouTrack: the article is an SPA whose content renders **after** `document_idle`, so the boot paint pass built its `page text stream` from an article that was still empty, resolved no anchors and painted nothing — and nothing re-ran it, because the `A59` url watch answers only an address change and the `A60` storage watch only a write. The observable shape was exactly the one the reader reported: the highlight was visible right after a save (the save's repaint ran on a rendered article), gone after a page reload, back after a checkbox press (a storage write repaints), gone again on the next reload — and only on that site, because a static article is complete before `document_idle`. The rule:

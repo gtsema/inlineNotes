@@ -55,6 +55,7 @@
  */
 
 import type { Entry } from '../../core/entry';
+import { isSameAuthor } from '../../core/entry-rules';
 import { locateAnchorInStream } from '../anchor/locate-anchor';
 import { buildTextStream } from '../anchor/text-stream';
 import type { TextFragment } from '../anchor/text-stream';
@@ -140,6 +141,14 @@ export interface PaintPlan {
 export interface PaintPlanInput {
   /** The entries of this page, in the order the store returned them. */
   readonly entries: readonly Entry[];
+  /**
+   * The settings name the pass already read (`A196`): the entries whose author it
+   * accepts paint **first**, and every other author's entry paints after them, so
+   * the highlight registry — which paints a later registration on top — renders a
+   * foreign note over an own one wherever the two ranges overlap. `null` or an
+   * unusable name is the "everyone is foreign" state and needs no partition.
+   */
+  readonly authorName?: string | null;
   /** The subtree the stream is built from: `document.body`, the capture's own root. */
   readonly root: Node;
   /** The measurement seam of `fragment-rect.ts`; a test injects a recorder. */
@@ -224,7 +233,23 @@ export function buildPaintPlan(input: PaintPlanInput): PaintPlan {
     });
   }
 
-  return { painted, skipped };
+  // `A196` (`all notes over own`): the registry paints a later registration on top,
+  // so the plan answers own entries first and every foreign author's entry after
+  // them. The partition is stable inside each half — the store's own order — and
+  // the comparison is the one `author identity` rule (`A99`), never a local one.
+  const ownFirst = painted.filter(
+    (item) =>
+      input.authorName !== undefined &&
+      input.authorName !== null &&
+      isSameAuthor(item.entry.authorName, input.authorName),
+  );
+  const foreignLast = painted.filter(
+    (item) =>
+      input.authorName === undefined ||
+      input.authorName === null ||
+      !isSameAuthor(item.entry.authorName, input.authorName),
+  );
+  return { painted: [...ownFirst, ...foreignLast], skipped };
 }
 
 /**
