@@ -139,8 +139,6 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
         <label class="label" for="sync-enabled">{{ syncLabel }}</label>
       </p>
 
-      <p class="message" [class]="serverMessageClass()">{{ serverMessage() }}</p>
-
       <button class="save" type="button" [disabled]="!draft().canSave" (click)="onSave()">
         {{ save }}
       </button>
@@ -179,7 +177,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: block;
       box-sizing: border-box;
       min-height: 100vh;
-      padding: 16px;
+      padding: 12px 16px;
       background: #fdf7ee;
     }
 
@@ -201,7 +199,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin: 0 0 8px;
+      margin: 0 0 4px;
     }
 
     .mascot {
@@ -222,7 +220,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .label-line {
-      margin: 0 0 4px;
+      margin: 0 0 2px;
     }
 
     .label {
@@ -248,19 +246,19 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .counter {
-      margin: 4px 0 12px;
+      margin: 4px 0 0;
       color: #7b6a55;
     }
 
     .sync-line {
-      margin: 0 0 4px;
+      margin: 0;
     }
 
     .toggle-line {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 12px 0 12px;
+      margin: 12px 0 0;
     }
 
     .sync-toggle {
@@ -295,8 +293,8 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
      * vertical padding live on the filled variants only.
      */
     .message {
-      margin: 12px 0 12px;
-      min-height: 40px;
+      margin: 12px 0 0;
+      min-height: 38px;
       padding: 6px 8px;
       border-radius: 6px;
       background: #eef4f7;
@@ -316,8 +314,8 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     .rename {
-      margin: 12px 0 12px;
-      min-height: 40px;
+      margin: 12px 0 0;
+      min-height: 38px;
       padding: 6px 8px;
       display: flex;
       align-items: center;
@@ -423,6 +421,12 @@ export class OptionsComponent implements OnInit {
    * The rename **rule** is untouched (`A173`, `A174`): this is the render half only.
    */
   message(): string {
+    // The address refusal joins the one slot (`A186`): the reader measured the
+    // page reserving two slots and asked for the reserve under the button only.
+    const server = this.serverMessage();
+    if (server !== null) {
+      return server;
+    }
     const rename = this.renameOutcome();
     if (rename !== null && rename.outcome !== null) {
       return renameOutcomeText(rename.outcome);
@@ -447,15 +451,6 @@ export class OptionsComponent implements OnInit {
   }
 
   /**
-   * The palette role of the server-address slot (`A185`): a refusal keeps the
-   * refusal ink on its band, an empty slot renders as the reserved space with no
-   * band and no ink — the same reserve the confirmation line keeps.
-   */
-  serverMessageClass(): string {
-    return this.serverMessage() === null ? 'message message--empty' : 'message message--refusal';
-  }
-
-  /**
    * Which palette role the message line wears (`A125`): the confirmation is the
    * accent on the pale band, a refusal keeps the color this page shipped with
    * before the palette existed. This chooses a class and no wording — the wording
@@ -473,6 +468,9 @@ export class OptionsComponent implements OnInit {
   messageClass(): string {
     if (this.message() === '') {
       return 'message message--empty';
+    }
+    if (this.serverMessage() !== null) {
+      return 'message message--refusal';
     }
     const rename = this.renameOutcome();
     if (rename !== null && rename.outcome === 'sweep_failed') {

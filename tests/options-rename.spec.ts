@@ -456,7 +456,13 @@ function componentOver(port: MemoryStoragePort): {
       },
     }),
   };
-  Object.assign(surface, { service, ...signals });
+  Object.assign(surface, {
+    service,
+    ...signals,
+    // `A186`: the one-slot message reads the address refusal first; the stand-in
+    // answers "no refusal" so the rename paths are the only subject here.
+    serverMessage: (): null => null,
+  });
   // The prototype-backed object is what the component's own methods bind to, so it is
   // returned as `raw` for the accessor helper below: a plain wrapper object has the
   // signals but not `message()`, and calling one on it is `this.message is not a

@@ -822,10 +822,11 @@ describe('the header (t9-02 AC3, ruling A124; the centred column of t12-01 AC1, 
     expect(headerCode).toMatch(/(?:^|;)\s*flex-direction:\s*column;/);
     expect(headerCode).not.toMatch(/flex-direction:\s*row/);
     expect(headerCode).toMatch(/(?:^|;)\s*align-items:\s*center;/);
-    // The gap that separated the two in the row is the same 12 px, now vertical, and the
-    // header's own bottom margin is unchanged (`t12-01` AC4, answer `Q2`).
+    // The gap that separated the two in the row is the same 12 px, now vertical. The
+    // header's bottom margin is the `A186` reclaim: the reserve under the button is
+    // paid for here, so the header releases 4 of its 8 (`t12-01` AC4, amended).
     expect(headerCode).toMatch(/(?:^|;)\s*gap:\s*12px;/);
-    expect(headerCode).toMatch(/(?:^|;)\s*margin:\s*0 0 8px;/);
+    expect(headerCode).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
 
     // The art carries no information, so it stays out of the accessibility tree
     // rather than gaining a second Russian string (AC4 allows exactly one).
@@ -1465,7 +1466,7 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     expect(ruleBody(stylesCode, '.hint')).toMatch(new RegExp(`color: ${PALETTE.hint};`));
     // The label line is the element that owns the space under the label, so the input keeps
     // the 4 px it always had (`Q4`).
-    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
+    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 2px;/);
     expect(ruleBody(stylesCode, '.label')).toMatch(/display: inline/);
   });
 
@@ -1538,7 +1539,7 @@ describe('the field, the counter, the button and the message line (t9-02 AC6; th
     // margin, the label keeps `display: inline`, and the input still comes immediately after
     // the line. The surface's base size is unchanged, so only `.hint` steps down.
     expect(template).toMatch(/<label class="label" for="author-name">\{\{ nameLabel \}\}<\/label>/);
-    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
+    expect(ruleBody(stylesCode, '.label-line')).toMatch(/(?:^|;)\s*margin:\s*0 0 2px;/);
     expect(ruleBody(stylesCode, '.label')).toMatch(/display: inline/);
     expect(stylesCode.match(new RegExp(`font-size:\\s*${SURFACE_BASE_SIZE}`, 'g')) ?? []).toHaveLength(0);
     expect(stylesCode.match(new RegExp(`font-size:\\s*${HINT_SIZE}`, 'g')) ?? []).toHaveLength(1);
@@ -1591,10 +1592,14 @@ describe('the message line wears the palette role the code chose (t9-02 AC6; t9-
     const surface = Object.create(OptionsComponent.prototype) as {
       view: () => { message: string | null };
       renameOutcome: () => { outcome: string | null } | null;
+      serverMessage: () => null;
       messageClass: () => string;
     };
     surface.view = () => ({ message: code });
     surface.renameOutcome = () => null;
+    // `A186`: the class decision reads the address refusal first, so the stand-in
+    // answers "no refusal" the way the shipped record does.
+    surface['serverMessage'] = (): null => null;
     return surface.messageClass();
   };
 
@@ -1836,11 +1841,13 @@ function splitGapPx(): { inputToRow: number; rowToButton: number } {
   };
 }
 
-describe('the gap is 24px split 12/12 (A177, t17-05 AC1, AC2)', () => {
-  it('declares margin: 12px 0 12px on .toggle-line and no vertical margin on .save', () => {
+describe('the gap above the switch row (A177, amended by A186: the reserve below the button is paid for here)', () => {
+  it('declares margin: 12px 0 0 on .toggle-line and no vertical margin on .save', () => {
     const code = componentCodeStyles(OPTIONS_COMPONENT);
     // Both halves on the row: 12 above (input -> row) and 12 below (row -> button).
-    expect(ruleBody(code, '.toggle-line')).toMatch(/(?:^|;)\s*margin:\s*12px 0 12px;/);
+    // The `A186` reclaim: the reserve below the button is paid for above it, so the
+    // switch row keeps its 12px top and releases its 12px bottom.
+    expect(ruleBody(code, '.toggle-line')).toMatch(/(?:^|;)\s*margin:\s*12px 0 0;/);
     // `A177`: the button carries no vertical margin of its own. The declaration is gone
     // from the shipped rule, not merely narrowed.
     const save = ruleBody(code, '.save');
@@ -1848,12 +1855,11 @@ describe('the gap is 24px split 12/12 (A177, t17-05 AC1, AC2)', () => {
     expect(save).toMatch(/padding:\s*6px 14px;/);
   });
 
-  it('reads exactly the two 12px halves out of those declarations', () => {
-    // The mutation that turns this red is *any* edit that moves the split silently: the
-    // withdrawn `margin: 48px 0 0` on the row (gap in the wrong place), a `24px 0 0`
-    // (one half instead of two), a `12px 0 0` (both halves above the row), or a
-    // reintroduced vertical margin on the save button.
-    expect(splitGapPx()).toEqual({ inputToRow: 12, rowToButton: 12 });
+  it('keeps the 12px above the row, and the row releases its bottom half to the reserve', () => {
+    // The mutation that turns this red is *any* edit that moves the split silently: a
+    // reintroduced vertical margin on the save button, a second margin above the row, or
+    // a return of the row's bottom margin (which would stack on the reserved slot).
+    expect(splitGapPx()).toEqual({ inputToRow: 12, rowToButton: 0 });
   });
 
   it('moves nothing else on the row, the checkbox or the button', () => {
@@ -1892,7 +1898,7 @@ describe('the gap is 24px split 12/12 (A177, t17-05 AC1, AC2)', () => {
  * - the message is rendered from one node by one source, unchanged (`A179`), and the
  *   warning replaces the message in the same slot rather than stacking under it.
  */
-const RESERVED_SLOT_MIN_HEIGHT_PX = 40;
+const RESERVED_SLOT_MIN_HEIGHT_PX = 38;
 describe('the message slots are reserved, so an appearance never grows the page (A185, t18-02)', () => {
   it('states the page\'s declared vertical budget: one box, box-sizing border-box, no scroll state', () => {
     const styles = componentCodeStyles(OPTIONS_COMPONENT);
@@ -1940,7 +1946,7 @@ describe('the message slots are reserved, so an appearance never grows the page 
     // blocks cannot stack. `A185` keeps the count at two message paragraphs: the bottom slot
     // and the reserved server-address slot, each one node.
     const template = componentTemplate(OPTIONS_COMPONENT);
-    expect(template.match(/class="message"/g) ?? []).toHaveLength(2);
+    expect(template.match(/class="message"/g) ?? []).toHaveLength(1);
     expect(template.match(/class="rename"/g) ?? []).toHaveLength(1);
   });
 });
@@ -1951,9 +1957,9 @@ describe('the confirmation renders once, on every path (A179, t17-05 AC3)', () =
   it('renders the message from one block and one source, not two', () => {
     // The defect of Run 16: two `@if` blocks rendered the same line, so a rename save
     // printed «Сохранено» twice. One bottom-slot node, one condition, one accessor.
-    // The server-address refusal is a different source on its own reserved slot
-    // (`A185`), so it is the second and last `<p class="message">` on the page.
-    expect(template.match(/<p class="message"/g) ?? []).toHaveLength(2);
+    // The server-address refusal answers through the same single slot since `A186`,
+    // so the page ships exactly one `<p class="message">` node again.
+    expect(template.match(/<p class="message"/g) ?? []).toHaveLength(1);
     // `A185` made the slot unconditional: the one condition left is the warning's `@if`.
     expect(template).toMatch(/@if \(renameConfirm\(\)\) \{/);
     expect(template).toMatch(/\[class\]="messageClass\(\)">\{\{ message\(\) \}\}<\/p>/);
