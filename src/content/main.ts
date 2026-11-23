@@ -47,6 +47,7 @@ import { createEditorController } from './overlay/editor-controller';
 import { attachEditorEvents } from './overlay/editor-events';
 import { attachKeyboardIsolation } from './overlay/keyboard-isolation';
 import { attachUrlChangeWatch } from './refresh/url-change-watch';
+import { attachDomChangeWatch } from './refresh/dom-change-watch';
 import { attachStorageChangeWatch } from './refresh/storage-change-watch';
 import { createForeignNotes } from './sync/foreign-notes';
 import { attachSyncNotes } from './sync/sync-notes';
@@ -326,6 +327,12 @@ function boot(): void {
     url: pageUrl,
     onUrlChange: refreshThenSync,
   });
+
+  // Ruling `A195`: content that arrives after `document_idle` (the reader measured
+  // YouTrack, an SPA whose article renders late) gets the same repaint the other
+  // watches ask for. The pass writes nothing into the page DOM (`A41`), so this
+  // watch observes the page changing under the notes, never the extension's work.
+  attachDomChangeWatch(document, { onDomChange: refreshThenSync });
 
   // `A60`: a cross-tab write is a repaint, not a merge. The key decision is core's
   // (`storageChangeConcernsPage`), so a change to another page's slot or to the page
