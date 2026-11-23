@@ -177,7 +177,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: block;
       box-sizing: border-box;
       min-height: 100vh;
-      padding: 12px 16px;
+      padding: 10px 16px;
       background: #fdf7ee;
     }
 
@@ -199,7 +199,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin: 0 0 4px;
+      margin: 0;
     }
 
     .mascot {
@@ -258,7 +258,7 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 12px 0 0;
+      margin: 12px 0 12px;
     }
 
     .sync-toggle {
@@ -286,23 +286,27 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
     }
 
     /*
-     * The message slot is permanently reserved (ruling A185, task t18-02): both
-     * appearing blocks declare the same min-height, so the dialog box the reader
-     * opened is the box that keeps its size whether a refusal, the confirmation or
-     * nothing at all is showing. An empty slot paints no band: background and the
-     * vertical padding live on the filled variants only.
+     * The message slot is permanently reserved (ruling A185, task t18-02, amended by
+     * A186): both appearing blocks declare the same min-height, so the dialog box the
+     * reader opened is the box that keeps its size whether a refusal, the confirmation
+     * or nothing at all is showing. The empty arm paints no band, and it keeps the
+     * same padding, because the reader measured the filled band growing the window by
+     * exactly its own vertical padding — the reserve is one box, and the paint is the
+     * only thing that appears inside it. The box is a flex row so the sentence sits
+     * centred in the reserve, not on its top line.
      */
     .message {
       margin: 12px 0 0;
       min-height: 38px;
       padding: 6px 8px;
+      display: flex;
+      align-items: center;
       border-radius: 6px;
       background: #eef4f7;
     }
 
     .message--empty {
       background: transparent;
-      padding: 0 8px;
     }
 
     .message--saved {

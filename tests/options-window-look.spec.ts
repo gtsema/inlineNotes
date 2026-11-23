@@ -823,10 +823,11 @@ describe('the header (t9-02 AC3, ruling A124; the centred column of t12-01 AC1, 
     expect(headerCode).not.toMatch(/flex-direction:\s*row/);
     expect(headerCode).toMatch(/(?:^|;)\s*align-items:\s*center;/);
     // The gap that separated the two in the row is the same 12 px, now vertical. The
-    // header's bottom margin is the `A186` reclaim: the reserve under the button is
-    // paid for here, so the header releases 4 of its 8 (`t12-01` AC4, amended).
+    // header's bottom margin is the `A186`/`A187` reclaim: the reserve under the button
+    // and the equal row gaps are paid for here, so the header releases its whole 8
+    // (`t12-01` AC4, amended twice).
     expect(headerCode).toMatch(/(?:^|;)\s*gap:\s*12px;/);
-    expect(headerCode).toMatch(/(?:^|;)\s*margin:\s*0 0 4px;/);
+    expect(headerCode).toMatch(/(?:^|;)\s*margin:\s*0;/);
 
     // The art carries no information, so it stays out of the accessibility tree
     // rather than gaining a second Russian string (AC4 allows exactly one).
@@ -1845,9 +1846,11 @@ describe('the gap above the switch row (A177, amended by A186: the reserve below
   it('declares margin: 12px 0 0 on .toggle-line and no vertical margin on .save', () => {
     const code = componentCodeStyles(OPTIONS_COMPONENT);
     // Both halves on the row: 12 above (input -> row) and 12 below (row -> button).
-    // The `A186` reclaim: the reserve below the button is paid for above it, so the
-    // switch row keeps its 12px top and releases its 12px bottom.
-    expect(ruleBody(code, '.toggle-line')).toMatch(/(?:^|;)\s*margin:\s*12px 0 0;/);
+    // `A186`/`A187`: the row's two 12px halves are the gaps the reader named — the one
+    // above the row equals the one to the save button, because the reader asked for
+    // them to be equal. The reserve below the button is paid for by the header and the
+    // host padding, not here.
+    expect(ruleBody(code, '.toggle-line')).toMatch(/(?:^|;)\s*margin:\s*12px 0 12px;/);
     // `A177`: the button carries no vertical margin of its own. The declaration is gone
     // from the shipped rule, not merely narrowed.
     const save = ruleBody(code, '.save');
@@ -1855,11 +1858,10 @@ describe('the gap above the switch row (A177, amended by A186: the reserve below
     expect(save).toMatch(/padding:\s*6px 14px;/);
   });
 
-  it('keeps the 12px above the row, and the row releases its bottom half to the reserve', () => {
+  it('keeps the two 12px halves equal, as the reader asked (A187)', () => {
     // The mutation that turns this red is *any* edit that moves the split silently: a
-    // reintroduced vertical margin on the save button, a second margin above the row, or
-    // a return of the row's bottom margin (which would stack on the reserved slot).
-    expect(splitGapPx()).toEqual({ inputToRow: 12, rowToButton: 0 });
+    // reintroduced vertical margin on the save button, or unequal halves.
+    expect(splitGapPx()).toEqual({ inputToRow: 12, rowToButton: 12 });
   });
 
   it('moves nothing else on the row, the checkbox or the button', () => {
@@ -1923,14 +1925,18 @@ describe('the message slots are reserved, so an appearance never grows the page 
     }
   });
 
-  it('the empty arm of the message slot paints no band', () => {
+  it('the empty arm of the message slot paints no band, and is the same box as the filled one', () => {
     const code = componentCodeStyles(OPTIONS_COMPONENT);
     const rule = ruleBody(code, '.message--empty');
     expect(rule).toMatch(/background:\s*transparent;/);
-    expect(rule).toMatch(/padding:\s*0 8px;/);
-    // The reserve keeps its vertical padding on the filled variants only: an empty slot
-    // is the same box the filled one occupies, minus the paint.
-    expect(rule).not.toMatch(/(?:^|;)\s*padding:\s*6px/);
+    // `A187`: the empty arm declares **no** padding of its own, so the filled band is
+    // exactly the box the empty slot already occupied — the reader measured the first
+    // build growing the window by the band's own vertical padding.
+    expect(rule).not.toMatch(/padding/);
+    // The sentence sits centred in the reserve, not on its top line.
+    const message = ruleBody(code, '.message');
+    expect(message).toMatch(/display:\s*flex;/);
+    expect(message).toMatch(/align-items:\s*center;/);
   });
 
   it('the warning replaces the message in the same slot, and neither stacks under the other', () => {
