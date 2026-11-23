@@ -1264,7 +1264,13 @@ describe('layer boundaries', () => {
       const tabUsers = popupFiles()
         .filter((file) => codeOnly(file.text).includes('chrome.tabs'))
         .map((file) => file.path);
-      expect(tabUsers).toEqual(['src/popup/active-tab.ts', 'src/popup/page-notes-channel.ts']);
+      // `A189` (`all-notes-page.md`): the popup's entry point to the all-notes page is
+      // the third user — a `chrome.tabs.create` navigation, never an address read.
+      expect(tabUsers).toEqual([
+        'src/popup/active-tab.ts',
+        'src/popup/page-notes-channel.ts',
+        'src/popup/popup.component.ts',
+      ]);
 
       const address = codeOnly(
         readFileSync(join(projectRoot, 'src', 'popup', 'active-tab.ts'), 'utf8'),
@@ -1553,7 +1559,10 @@ describe('layer boundaries', () => {
       // `Укажите имя в настройках` is the one sentence for the settings-gate state on
       // the two surfaces that name it: the page card and the popup. The options page
       // keeps its own `Имя обязательно`, and a third variant is forbidden.
+      // `A189` (`all-notes-page.md`): the all-notes page carries the same sentence for
+      // the same state — its own constants module is the layer's wording owner.
       expect(holderPaths('Укажите имя в настройках')).toEqual([
+        'src/all-notes/text.ts',
         'src/content/text.ts',
         'src/popup/text.ts',
       ]);
@@ -1625,16 +1634,17 @@ describe('no network in shipped source', () => {
   /** The popup bundle's own five-line adapter (a second bundle cannot import the first). */
   const POPUP_TRANSPORT = 'src/popup/sync-transport.ts';
 
-  it('src names a network API in exactly two modules: one transport per bundle', () => {
-    // The popup and the content script are **separate bundles** of an MV3 extension, so
-    // they cannot share a module: each half ships its own five-line `fetch` adapter
-    // (`src/content/sync/fetch-transport.ts`, `src/popup/sync-transport.ts`) and the
-    // shared wire logic sits in core, where both can import it. Two files, one call.
+  it('src names a network API in exactly three modules: one transport per bundle (A189)', () => {
+    // The content script, the popup and the all-notes page are **separate bundles** of
+    // an MV3 extension, so they cannot share a module: each half ships its own five-line
+    // `fetch` adapter and the shared wire logic sits in core, where all of them can
+    // import it. Three files, one call each.
     const pattern = NETWORK_SHAPE;
     const offenders = sourceFiles('src')
       .filter((file) => pattern.test(codeOnly(file.text)))
       .map((file) => file.path);
     expect(offenders).toEqual([
+      'src/all-notes/fetch-transport.ts',
       'src/content/sync/fetch-transport.ts',
       'src/popup/sync-transport.ts',
     ]);

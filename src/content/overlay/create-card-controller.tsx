@@ -111,6 +111,11 @@ export interface CreateCardOptions {
   pageUrl: () => string;
   /** One ISO stamp per create (ruling `A9`). */
   clock: () => string;
+  /**
+   * The page title (`A190` of `all-notes-page.md`), read per create; an absent
+   * seam is an entry without the field (an old-shape record).
+   */
+  pageTitle?: () => string;
   /** Random source for the entry id. */
   rng: RandomSource;
   /** Test seam: which selection to open a card for. */
@@ -196,6 +201,7 @@ export function createCreateCardController(
       authorName: session.authorName,
       now: options.clock(),
       rng: options.rng,
+      ...(options.pageTitle !== undefined ? { pageTitle: options.pageTitle() } : {}),
     });
     if (result.ok) {
       close();

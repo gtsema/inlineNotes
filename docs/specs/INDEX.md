@@ -10,6 +10,7 @@ Owner = the role that must keep the spec current. Covered paths are the real dir
 | `docs/specs/code-review-flow.md` | `project-manager` | `docs/state/`, `.pi/agents/code-reviewer.md`, `.pi/skills/code-review-checklist/SKILL.md`, `scripts/check-agent-config.mjs` |
 | `docs/specs/sync-server.md` | `extension-engineer` | `server/` |
 | `docs/specs/sync-integration.md` | `extension-engineer` | `src/core/sync-client.ts`, `src/core/sync-settings.ts`, `src/content/sync/`, `src/popup/sync-button-service.ts`, `src/popup/sync-transport.ts`, `src/manifest.json` (`host_permissions`), `tests/` (the sync suites) |
+| `docs/specs/all-notes-page.md` | `extension-engineer` | `src/all-notes/`, `src/core/author-pages.ts`, the `title` field of `src/core/entry.ts`, the entry points in `src/popup/` and `src/options/`, `angular.json` (the third surface), `tests/` |
 
 Rules:
 - A code change that alters specified behavior edits its spec in the same commit; the owner role makes the edit.

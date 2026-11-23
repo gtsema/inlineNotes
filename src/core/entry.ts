@@ -60,6 +60,13 @@ export interface Entry {
   createdAt: string;
   /** ISO timestamp of the last save; equals `createdAt` on creation. */
   updatedAt: string;
+  /**
+   * Optional display metadata (`A190` of `all-notes-page.md`): the page's
+   * `document.title`, trimmed, at most 100 code points, captured at the create
+   * moment. Display only — no identity, no caps, no anchor, no wire field. An entry
+   * created by an older build or mapped from the server decodes without it.
+   */
+  title?: string;
 }
 
 /** Input of `createEntry`: every field of `Entry`, with `visible` optional. */
@@ -74,6 +81,8 @@ export interface EntryDraft {
   updatedAt: string;
   /** Defaults to `true` when omitted (PM ruling `A1`). */
   visible?: boolean;
+  /** Optional page title (`A190`); an absent or empty one stores no field. */
+  title?: string;
 }
 
 /**
@@ -97,5 +106,6 @@ export function createEntry(draft: EntryDraft): Entry {
     visible: draft.visible ?? true,
     createdAt: draft.createdAt,
     updatedAt: draft.updatedAt,
+    ...(draft.title !== undefined && draft.title !== '' ? { title: draft.title } : {}),
   };
 }

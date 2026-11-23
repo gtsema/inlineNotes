@@ -137,6 +137,10 @@ export function decodeEntry(value: unknown): Entry | null {
   }
 
   const visible = value['visible'];
+  // `A190` (`all-notes-page.md`): the optional display title is kept when it is a
+  // non-empty string and dropped otherwise, so an old record and a server row
+  // decode without it and the reader's list falls back to the page key.
+  const title = value['title'];
   return {
     id,
     pageKey,
@@ -147,6 +151,7 @@ export function decodeEntry(value: unknown): Entry | null {
     visible: typeof visible === 'boolean' ? visible : true,
     createdAt,
     updatedAt,
+    ...(typeof title === 'string' && title !== '' ? { title } : {}),
   };
 }
 

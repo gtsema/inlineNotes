@@ -97,6 +97,11 @@ export interface CreateNoteInput {
   now: string;
   /** Random source for the entry id. */
   rng: RandomSource;
+  /**
+   * Optional page title (`A190` of `all-notes-page.md`), captured by the caller at
+   * the save moment; stored trimmed and capped by the caller.
+   */
+  pageTitle?: string;
 }
 
 /**
@@ -165,6 +170,7 @@ export async function createNote(input: CreateNoteInput): Promise<CreateNoteResu
     spans,
     now: input.now,
     rng: input.rng,
+    ...(input.pageTitle !== undefined ? { pageTitle: input.pageTitle } : {}),
   });
 
   return write.ok ? { ok: true, entry: write.entry } : { ok: false, code: write.code };

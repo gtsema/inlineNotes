@@ -255,6 +255,55 @@ export function noteDeleteUrl(
 }
 
 /**
+ * `<serverUrl>/notes/page/<pageKey>/author/<authorName>` (`A192` of
+ * `all-notes-page.md`): the page-scoped route plus the author — the author-scoped
+ * delete endpoint the server spec already owns (`A156` of `sync-server.md`).
+ *
+ * The author name travels percent-encoded exactly as it does on the one-note
+ * route: the reader's own Russian text must not be read as a path separator. This
+ * is the only place the extension spells this route.
+ */
+export function authorDeleteUrl(
+  target: SyncTarget,
+  pageKey: string,
+  authorName: string,
+): string {
+  return `${notesPageUrl(target, pageKey)}/author/${encodeURIComponent(authorName)}`;
+}
+
+/**
+ * One `DELETE /notes/page/{page_id}/author/{author_id}` (`A192`): removes every row
+ * of one author on one page — the server half of the «Мои заметки» row delete.
+ *
+ * `{"deleted": N}` with `N = 0` is a **success** (`A181` posture, generalized from
+ * the one-note delete): the server held no copy, so the reader's goal is already
+ * true. The refusal codes are the transport's. The local write happens first and
+ * this call second (`A192` keeps `A182`'s order), so a failure here can never undo
+ * the reader's action — it only decides which sentence the page shows.
+ */
+export async function deleteRemoteAuthorNotes(
+  transport: SyncTransport,
+  target: SyncTarget,
+  pageKey: string,
+  authorName: string,
+): Promise<SyncCallResult<SyncDeleteSummary>> {
+  const answer = await request(
+    transport,
+    authorDeleteUrl(target, pageKey, authorName),
+    null,
+    DELETE_VERB,
+  );
+  if (!answer.ok) {
+    return answer;
+  }
+  const deleted = deletedCountOf(answer.value);
+  if (deleted === null) {
+    return { ok: false, code: 'response_invalid' };
+  }
+  return { ok: true, value: { deleted } };
+}
+
+/**
  * One `POST /notes/page/{page_id}`: saves **one author's** notes.
  *
  * `!payload.ok` is decided by the caller through `syncTargetOf`; passing a target is
@@ -339,6 +388,7 @@ export async function deleteRemoteNote(
   const answer = await request(
     transport,
     noteDeleteUrl(target, pageKey, authorName, noteId),
+    null,
     DELETE_VERB,
   );
   if (!answer.ok) {

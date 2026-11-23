@@ -29,6 +29,22 @@ const ENTRY_FIELDS: readonly string[] = [
   'updatedAt',
 ];
 
+describe('the optional stored title (A190 of all-notes-page.md)', () => {
+  it('keeps a non-empty string title and drops everything else', () => {
+    const withTitle = decodeEntry(storedEntry({ title: 'Статья про якоря' }));
+    expect(withTitle?.title).toBe('Статья про якоря');
+
+    // An old-shape record carries no field at all.
+    expect(decodeEntry(storedEntry())?.title).toBeUndefined();
+    // Anything that is not a non-empty string is dropped, never guessed.
+    expect(decodeEntry(storedEntry({ title: '' }))?.title).toBeUndefined();
+    expect(decodeEntry(storedEntry({ title: 42 }))?.title).toBeUndefined();
+    // Unknown fields are already dropped by the guard; the title joins that rule.
+    const record = storedEntry({ title: 'Статья' }) as Record<string, unknown>;
+    expect(decodeEntry({ ...record, extra: 'x' })?.title).toBe('Статья');
+  });
+});
+
 describe('decodeEntry accepts the stored shape (AC3)', () => {
   it('decodes a complete record unchanged', () => {
     const entry = decodeEntry(storedEntry());

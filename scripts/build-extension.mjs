@@ -34,6 +34,7 @@ const angularCli = join(projectRoot, 'node_modules', '@angular', 'cli', 'bin', '
 const angularApps = [
   { project: 'popup', html: 'popup/index.html' },
   { project: 'options', html: 'options/index.html' },
+  { project: 'all-notes', html: 'all-notes/index.html' },
 ];
 
 function fail(message) {

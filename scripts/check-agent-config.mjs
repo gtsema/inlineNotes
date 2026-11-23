@@ -334,7 +334,7 @@ if (constitution == null) {
 /* --------------------------------- specs ---------------------------------- */
 
 const specFiles = walk(specsDir).filter((f) => f.endsWith('.md') && basename(f) !== 'INDEX.md');
-if (specFiles.length < 2 || specFiles.length > 5) err(rel(specsDir), `expected 2-5 spec files, got ${specFiles.length}`);
+if (specFiles.length < 2 || specFiles.length > 7) err(rel(specsDir), `expected 2-7 spec files, got ${specFiles.length}`);
 if (!specFiles.some((f) => basename(f) === 'code-review-flow.md')) err(rel(specsDir), 'code-review-flow.md is mandatory');
 
 const SPEC_SECTIONS = ['Purpose / Goal', 'Scope', 'Terms / Aliases', 'Flow / Sequence', 'Rules / Semantics', 'Edge Cases', 'Acceptance Criteria'];

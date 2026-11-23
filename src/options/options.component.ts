@@ -17,6 +17,8 @@ import {
   renameOutcomeText,
   serverAddressText,
 } from './text';
+import { ALL_NOTES_STRINGS } from '../all-notes/text';
+const ALL_NOTES_ENTRY_LABEL = ALL_NOTES_STRINGS.open;
 
 /**
  * What the page runs on: the storage seam and the randomness. A token with a root
@@ -142,6 +144,12 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       <button class="save" type="button" [disabled]="!draft().canSave" (click)="onSave()">
         {{ save }}
       </button>
+
+      <!-- A189 (all-notes-page.md): the second entry point to the all-notes
+           page. One navigation, nothing written, no state. -->
+      <p class="all-notes-line">
+        <a class="all-notes" href="#" (click)="onOpenAllNotes($event)">{{ allNotesLabel }}</a>
+      </p>
 
       @if (renameConfirm()) {
         <div class="rename" role="alert">
@@ -278,6 +286,15 @@ export const AUTHOR_NAME_SOURCE = new InjectionToken<AuthorNameServiceSource>(
       font: inherit;
     }
 
+    /* A189: the entry-point line under the save button, one link, no state. */
+    .all-notes-line {
+      margin: 12px 0 0;
+    }
+
+    .all-notes {
+      color: inherit;
+    }
+
     .save:disabled {
       color: #1b2a33;
       background: #e3c3aa;
@@ -393,6 +410,7 @@ export class OptionsComponent implements OnInit {
   readonly serverLabel: string = OPTIONS_STRINGS.serverLabel;
   readonly serverHint: string = OPTIONS_STRINGS.serverHint;
   readonly syncLabel: string = OPTIONS_STRINGS.syncLabel;
+  readonly allNotesLabel: string = ALL_NOTES_ENTRY_LABEL;
   readonly renameWarning: string = OPTIONS_STRINGS.renameWarning;
   readonly renameCancel: string = OPTIONS_STRINGS.renameCancel;
   readonly renameContinue: string = OPTIONS_STRINGS.renameContinue;
@@ -551,6 +569,21 @@ export class OptionsComponent implements OnInit {
    */
   onServerCommit(): void {
     void this.commitServerUrl();
+  }
+
+  /**
+   * The entry point to the all-notes page (`A189` of `all-notes-page.md`): one
+   * navigation to the extension page, nothing written. A press that cannot create
+   * the tab does nothing, the same degradation the settings page shows everywhere
+   * else it has no runtime API.
+   */
+  onOpenAllNotes(event: Event): void {
+    event.preventDefault();
+    try {
+      void chrome.tabs.create({ url: chrome.runtime.getURL('notes.html') });
+    } catch {
+      // No runtime API in this document: nobody to navigate, nothing else changes.
+    }
   }
 
   /** The synchronization switch (`A166`): written the moment it is pressed. */

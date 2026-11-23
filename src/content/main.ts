@@ -81,6 +81,9 @@ function boot(): void {
     port,
     pageUrl,
     clock: (): string => new Date().toISOString(),
+    // `A190` (`all-notes-page.md`): the page title is display metadata the all-notes
+    // page (`A189`) falls back on; trimmed and capped here, once per create.
+    pageTitle: (): string => document.title.trim().slice(0, 100),
     rng: (): number => Math.random(),
     // Flow 2 of the overlay spec: a saved note gets its highlight and its frame at the
     // moment it is saved, not at the next reload. That is the same paint pass, run

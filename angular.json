@@ -96,6 +96,50 @@
           "defaultConfiguration": "production"
         }
       }
+    },
+    "all-notes": {
+      "projectType": "application",
+      "root": "src/all-notes",
+      "sourceRoot": "src/all-notes",
+      "prefix": "inl",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/all-notes/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "index": "src/all-notes/index.html",
+            "baseHref": "./",
+            "polyfills": [],
+            "styles": [],
+            "scripts": [],
+            "outputPath": {
+              "base": "dist/all-notes",
+              "browser": ""
+            },
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "400kB",
+                "maximumError": "800kB"
+              },
+              {
+                "type": "anyComponentStyle",
+                "maximumWarning": "4kB",
+                "maximumError": "8kB"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "sourceMap": false,
+              "namedChunks": false
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
     }
   }
 }

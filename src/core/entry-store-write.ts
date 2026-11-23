@@ -121,6 +121,12 @@ export interface CreateEntryOnPageInput {
   now: string;
   /** Injected random source for the entry id. */
   rng: RandomSource;
+  /**
+   * Optional page title (`A190` of `all-notes-page.md`): the caller's
+   * `document.title`, already trimmed and capped by the content layer. An absent
+   * or empty one stores no field.
+   */
+  pageTitle?: string;
 }
 
 /** Input of `updateEntryComment`. */
@@ -246,6 +252,7 @@ export async function createEntryOnPage(
     createdAt: input.now,
     updatedAt: input.now,
     visible: true,
+    ...(input.pageTitle !== undefined && input.pageTitle !== '' ? { title: input.pageTitle } : {}),
   };
 
   const record = canonicalRecord(draft);

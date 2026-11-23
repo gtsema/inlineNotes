@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { createEntry } from '../src/core/entry';
 import type { Entry } from '../src/core/entry';
 import {
+  authorDeleteUrl,
+  deleteRemoteAuthorNotes,
+  deleteRemoteNote,
   entryFromRemoteNote,
   loadForeignNotes,
   notesPageUrl,
@@ -314,6 +317,55 @@ describe('the wire calls (A161, A164)', () => {
   it('builds the url from the configured address and the route and nothing else', () => {
     expect(notesPageUrl(TARGET, 'https://example.com/a')).toBe(
       'http://localhost:8080/notes/page/https%3A%2F%2Fexample.com%2Fa',
+    );
+  });
+});
+
+describe('the author-scoped delete (A192 of all-notes-page.md)', () => {
+  it('sends DELETE to /notes/page/<key>/author/<encoded name> and reads deleted', async () => {
+    const { transport, calls } = transportOf({ body: { deleted: 2 } });
+
+    const result = await deleteRemoteAuthorNotes(transport, TARGET, PAGE_KEY, 'Анна');
+    expect(result).toEqual({ ok: true, value: { deleted: 2 } });
+    const [call] = calls;
+    expect(call?.method).toBe('DELETE');
+    expect(call?.url).toBe(
+      `http://localhost:8080/notes/page/${encodeURIComponent(PAGE_KEY)}/author/${encodeURIComponent('Анна')}`,
+    );
+  });
+
+  it('a deleted: 0 answer is a success (A181 posture)', async () => {
+    const { transport } = transportOf({ body: { deleted: 0 } });
+
+    const result = await deleteRemoteAuthorNotes(transport, TARGET, PAGE_KEY, 'Анна');
+    expect(result).toEqual({ ok: true, value: { deleted: 0 } });
+  });
+
+  it('a non-2xx and a malformed body answer the code, never a throw', async () => {
+    const refused = transportOf({ ok: false, status: 500, body: {} });
+    expect((await deleteRemoteAuthorNotes(refused.transport, TARGET, PAGE_KEY, 'Анна')).ok).toBe(false);
+
+    const broken = transportOf({ body: { nope: 1 } });
+    expect((await deleteRemoteAuthorNotes(broken.transport, TARGET, PAGE_KEY, 'Анна'))).toEqual({
+      ok: false,
+      code: 'response_invalid',
+    });
+  });
+
+  it('the shipped one-note delete sends the DELETE verb too (the POST regression fixed)', async () => {
+    const { transport, calls } = transportOf({ body: { deleted: 1 } });
+
+    const result = await deleteRemoteNote(transport, TARGET, PAGE_KEY, 'Анна', 'note000001');
+    expect(result).toEqual({ ok: true, value: { deleted: 1 } });
+    expect(calls[0]?.method).toBe('DELETE');
+    expect(calls[0]?.url).toBe(
+      `http://localhost:8080/notes/page/${encodeURIComponent(PAGE_KEY)}/author/${encodeURIComponent('Анна')}/note/note000001`,
+    );
+  });
+
+  it('spells the route once, beside the one-note delete it extends', () => {
+    expect(authorDeleteUrl(TARGET, 'https://example.com/a?q', 'Анна')).toBe(
+      'http://localhost:8080/notes/page/https%3A%2F%2Fexample.com%2Fa%3Fq/author/%D0%90%D0%BD%D0%BD%D0%B0',
     );
   });
 });

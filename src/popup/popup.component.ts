@@ -9,6 +9,8 @@ import type { SyncPressSource } from './sync-button-service';
 import { PopupSyncPress } from './sync-button-service';
 import { createPopupSyncTransport } from './sync-transport';
 import { POPUP_STRINGS, authorRowLabel, popupNoticeText } from './text';
+import { ALL_NOTES_STRINGS } from '../all-notes/text';
+const ALL_NOTES_ENTRY_LABEL = ALL_NOTES_STRINGS.open;
 
 /**
  * What the popup runs on: the one storage port adapter, the active-tab address read
@@ -306,6 +308,12 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
           }
         </ul>
       }
+
+      <!-- A189 (all-notes-page.md): the entry point to the all-notes page. A
+           plain link, no state and no write: the page is a tab of its own. -->
+      <p class="all-notes-line">
+        <a class="all-notes" href="#" (click)="onOpenAllNotes($event)">{{ allNotesLabel }}</a>
+      </p>
     </main>
   `,
   styles: `
@@ -392,6 +400,15 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    /* A189: the entry point line under the list, one link, no state. */
+    .all-notes-line {
+      margin: 12px 0 0;
+    }
+
+    .all-notes {
+      color: inherit;
     }
 
     .delete {
@@ -502,6 +519,7 @@ export class PopupComponent implements OnInit {
   readonly deleteLabel: string = POPUP_STRINGS.delete;
   /** Accessible name of the sync control: its `aria-label` and its `title` (`A162`). */
   readonly syncLabel: string = POPUP_STRINGS.sync;
+  readonly allNotesLabel: string = ALL_NOTES_ENTRY_LABEL;
 
   /**
    * The state of the one sync button this popup can show (ruling `A162`).
@@ -621,6 +639,21 @@ export class PopupComponent implements OnInit {
   /** Ruling `A83`: the name-required line is the navigation to the options page. */
   openSettings(): void {
     this.service.openSettings();
+  }
+
+  /**
+   * The entry point to the all-notes page (`A189` of `all-notes-page.md`).
+   * One navigation, nothing written: the page is a tab of its own, reached through
+   * the one runtime URL. A press that cannot create the tab (no runtime API) does
+   * nothing, which is the popup's honest degradation everywhere else too.
+   */
+  onOpenAllNotes(event: Event): void {
+    event.preventDefault();
+    try {
+      void chrome.tabs.create({ url: chrome.runtime.getURL('notes.html') });
+    } catch {
+      // No runtime API in this document: nobody to navigate, nothing else changes.
+    }
   }
 
   /**

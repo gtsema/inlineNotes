@@ -11,6 +11,6 @@
     // and no storage key of its own.
     "types": ["chrome"]
   },
-  "files": ["src/popup/main.ts", "src/options/main.ts"],
-  "include": ["src/popup/**/*.ts", "src/options/**/*.ts", "src/core/**/*.ts"]
+  "files": ["src/popup/main.ts", "src/options/main.ts", "src/all-notes/main.ts"],
+  "include": ["src/popup/**/*.ts", "src/options/**/*.ts", "src/all-notes/**/*.ts", "src/core/**/*.ts"]
 }
