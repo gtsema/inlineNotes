@@ -447,3 +447,13 @@ illegal memory access`) with the work already committed.
 - **A spec's own pin sentence is a deliverable path.** The blocking finding of `t26-02`
   was not code: AC 30 named the old test file while the new suite carried the cases. A pin
   that points at the wrong file is as wrong as a missing one.
+
+## Stage 27 — a hung child, and a value the reader names
+
+- **A stuck async child is visible in `status`, and its work is not lost.** Run `77e2dc26`
+  showed "no activity for 20m" and a steer that never left the queue. Interrupting kept
+  every file the child had already written, so the PM finished one test and ran the gates
+  instead of re-doing the slice. The check is `status`, not a re-delegation.
+- **A pinned number needs one owner.** `TOOLTIP_GRACE_MS` and the spec sentence carried
+  the same 300 in two places and no test compared them. The change now names the constant
+  in the test advances, so the next value moves in one commit.

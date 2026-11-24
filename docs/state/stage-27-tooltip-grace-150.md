@@ -41,3 +41,15 @@ If a test pinned the literal `300`, replacing it with the constant is the whole 
 Gates in order: `npm run build`, `npm test`, `npm run typecheck`,
 `node scripts/check-agent-config.mjs`. One commit:
 `t27-01: the tooltip grace is 150 ms (A205)`.
+
+## Outcome
+
+- `t27-01` (commit `09558b4`): `TOOLTIP_GRACE_MS` = 150; the `A194` advances read the
+  constant and the "through the grace" case asserts open at `TOOLTIP_GRACE_MS - 1`.
+  The delegated engineer run `77e2dc26` hung (20 min, steer undelivered); interrupted,
+  its on-disk edits kept, the PM finished the test and ran the gates (report:
+  `docs/state/t27-01-engineer.md`). Gates: build 17 files, `npm test` 1427, typecheck,
+  checker 0 errors.
+- `t27-02` (`code-reviewer`, run `f7d890b7`): **accepted**, no blocking finding; spec and
+  constant agree. Report: `docs/state/t27-02-review.md`.
+- Stage 27 closed. `dist/` rebuilt and pushed (`09558b4`).
