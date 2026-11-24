@@ -58,7 +58,7 @@ paragraph) and AC 30; `src/content/overlay/tooltip-controller.tsx` (`hoverAt`,
   order stays, the placement keeps using `placementFragmentBox`, the grace (`A194`) and the
   event wiring are untouched, and no box kept by the paint pass is used.
 
-**Tests.** `tests/content-tooltip.spec.ts` -> the `A204` describe: a fragment whose rects
+**Tests.** `tests/content-tooltip-pixel-guard.spec.ts` -> the `A204` describe (the pinned file; `tests/content-tooltip.spec.ts` keeps the pre-`A204` hover pins, made pixel-coherent): a fragment whose rects
 exclude the point (the empty tail of the line) opens nothing even when the caret test
 accepts it; a point inside the rect opens the tooltip; a point within one pixel of the
 rect's right edge still opens it; a wrapped fragment accepts a point in any of its rects;
