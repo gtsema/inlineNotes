@@ -110,7 +110,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
   });
 
-  it('is exactly the pinned set of twenty-one sites, so a new catch breaks the build', () => {
+  it('is exactly the pinned set of twenty-two sites, so a new catch breaks the build', () => {
     // Stage 17 (`t17-01`) adds the fifteenth: `sync/foreign-notes.ts` answers a
     // transport that throws as the same code a rejected transport produces, which is
     // what makes `A164` ("a failed load never blocks the page") unconditional.
@@ -136,7 +136,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
       'editor/edit-entry.ts': 1,
       'overlay/create-card-controller.tsx': 2,
       'overlay/editor-controller.tsx': 1,
-      'overlay/tooltip-controller.tsx': 1,
+      'overlay/tooltip-controller.tsx': 2,
       'paint/page-painter.ts': 4,
       'paint/paint-plan.ts': 1,
       'paint/paint-style.ts': 2,
@@ -163,7 +163,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(21);
+    expect(total).toBe(22);
   });
 });
 

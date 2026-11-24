@@ -59,9 +59,22 @@ export interface Box {
   readonly height: number;
 }
 
-/** What the measurement needs from a range: its bounding box. */
+/**
+ * What the measurement needs from a range: its bounding box, and — when the page allows
+ * it — the client rects that box is the union of.
+ *
+ * `getClientRects` is **optional**, and that is the whole of why it is a separate member:
+ * the structural seam is what lets every measurement rule be verified without page
+ * layout (a test injects a box-only recorder), so a required member would force every
+ * such recorder to invent rects. The real `Range` always has it, and the hover hit-test
+ * of ruling `A204` is the one caller that needs the exact answer rather than the union:
+ * a wrapped `text fragment` is several rects, and the union of them also covers the
+ * empty band beside the last line. A range that offers none answers with its bounding
+ * box, which is the pre-`A204` shape of the fixture and never the shipped page.
+ */
 export interface MeasuredRange {
   getBoundingClientRect(): { left: number; top: number; width: number; height: number };
+  getClientRects?(): ArrayLike<{ left: number; top: number; width: number; height: number }>;
 }
 
 /** Builds a range over node-local UTF-16 offsets of `node`. */
@@ -143,7 +156,9 @@ export function documentRangeForFragment(
  * One predicate for three jobs: the placement walk above stops at the first box that
  * passes, the paint pass of `t3-02` keeps every fragment regardless (ruling `A36`)
  * and uses this predicate only to pick the tooltip anchor (ruling `A67`), and the
- * hover hit-test of the tooltip ignores a box that fails it. A module that
+ * `A204` pixel guard of the hover hit-test refuses a rect that fails it (a wrapped
+ * fragment contributes the empty rects of its last line, and a point there is not on
+ * painted pixels). A module that
  * re-derived `width > 0 && height > 0` could pick `>=` or a threshold, and then the
  * card and the tooltip would disagree about whether a span has a position at all.
  */

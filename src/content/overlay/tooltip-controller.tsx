@@ -7,8 +7,8 @@
  * "Own entries and foreign entries … only in the tooltip header", the tooltip anchor
  * of ruling `A67`, the paint-path measurement rule of ruling `A66`, and the
  * paint-ownership rule of ruling `A68`; task `t3-02` AC3, AC4, and task `t5-03` AC1,
- * AC2, AC3, AC7, AC9 for the click of ruling `A96`. Rulings `A66`, `A67`, `A68`, `A96`,
- * `A104`.
+ * AC2, AC3, AC7, AC9 for the click of ruling `A96`; the pixel guard of ruling `A204`
+ * (task `t26-01`, AC 30). Rulings `A66`, `A67`, `A68`, `A96`, `A104`, `A204`.
  *
  * What this machine owns, and nothing else:
  * - **the open tooltip**, one at a time, and the host's visible state *for this
@@ -42,12 +42,25 @@
  *   hover. That is the per-entry answer of ruling `A66` applied to the hover: no
  *   tooltip, the entry stays painted-or-not as the last pass decided, stays in the
  *   popup, stays deletable, and no other entry loses anything.
+ * - **the caret only names the candidate; the pixels confirm it** (ruling `A204`). A
+ *   point over no text still gets a caret from the page — the *nearest* one, which for
+ *   the empty tail of a line is the line's last character — so the caret test alone
+ *   opened the tooltip of an entry that ended its line from anywhere on that line's
+ *   tail and line-height band. The point therefore has to fall on a client rect of one
+ *   of the entry's `text fragment`s, measured **now** through the same `rangeFor` seam
+ *   as the placement, with one pixel of tolerance so the right half of the last letter
+ *   stays hoverable. The caret test is unchanged: it still names the entry, interior
+ *   before boundary.
  */
 
 import { render } from 'preact';
-import { documentRangeForFragment, placementFragmentBox } from '../capture/fragment-rect';
+import {
+  documentRangeForFragment,
+  hasArea,
+  placementFragmentBox,
+} from '../capture/fragment-rect';
 import type { Box, RangeForFragment } from '../capture/fragment-rect';
-import type { PaintedEntry } from '../paint/paint-plan';
+import type { PaintedEntry, PaintedFragment } from '../paint/paint-plan';
 import { placeCard } from './card-placement';
 import type { Viewport } from './card-placement';
 import { setOverlayHostHidden } from './host';
@@ -129,6 +142,12 @@ export function createTooltipController(
     const hit = caretAt(x, y);
     const entry = hit === null ? null : entryAtCaret(options.paintedEntries(), hit);
     if (entry === null) {
+      hide();
+      return;
+    }
+    // Ruling `A204`: the caret named the candidate; the painted pixels confirm it. A
+    // measurement that throws is the `A66` no-hover answer, and it changes nothing else.
+    if (pixelGuardOf(entry, { x, y }, rangeFor) !== 'inside') {
       hide();
       return;
     }
@@ -238,6 +257,90 @@ function hoverAnchorOf(entry: PaintedEntry, rangeFor: RangeForFragment): Box | n
   } catch {
     return null;
   }
+}
+
+/**
+ * One pixel of tolerance around a painted rect (ruling `A204`).
+ *
+ * The pointer sits between pixels while a rect edge is a boundary, and the right half of
+ * a letter reports the boundary **after** it: a strict inside test would hide the tooltip
+ * over the closing edge of the very word the reader is pointing at, which is the half
+ * `A204` names out loud. It is also the tolerance the caret boundary test already has, so
+ * the two halves of the hit-test do not disagree at a letter's edge.
+ */
+const PIXEL_TOLERANCE = 1;
+
+/**
+ * `true` when `(x, y)` is on a painted rect, one pixel of tolerance included.
+ *
+ * A rect with no area is not painted pixels, so it is skipped before the containment test
+ * (`hasArea`): a wrapped `text fragment` reports empty rects for the rest of its last
+ * line, and a point in that band beside the text must stay a no-hover even though the
+ * rect lies inside the fragment.
+ */
+function coversPoint(rect: Box, x: number, y: number): boolean {
+  if (!hasArea(rect)) {
+    return false;
+  }
+  return (
+    x >= rect.left - PIXEL_TOLERANCE &&
+    x <= rect.left + rect.width + PIXEL_TOLERANCE &&
+    y >= rect.top - PIXEL_TOLERANCE &&
+    y <= rect.top + rect.height + PIXEL_TOLERANCE
+  );
+}
+
+/**
+ * The rects of one fragment's measurement, exact where the range offers them (ruling
+ * `A204`).
+ *
+ * A wrapped `text fragment` is several client rects, and the union of them — the bounding
+ * box — also covers the empty band beside its last line, where no pixels are painted. So
+ * the exact answer is preferred whenever the range gives one; the bounding box is the
+ * structural seam's fallback (a recorder that answers a box only), never the shipped
+ * page's, because a real `Range` always has `getClientRects`.
+ */
+function rectsOf(fragment: PaintedFragment, rangeFor: RangeForFragment): readonly Box[] {
+  const range = rangeFor(fragment.node, fragment.start, fragment.end);
+  const rects = range.getClientRects?.();
+  if (rects === undefined) {
+    return [range.getBoundingClientRect()];
+  }
+  // `ArrayLike` and not an iterable: the structural seam only promises an indexed
+  // length, and the real `DOMRectList` is read the same way.
+  return Array.from({ length: rects.length }, (_unused, index) => rects[index]);
+}
+
+/**
+ * Whether the hover point is on one of this entry's painted pixels (ruling `A204`).
+ *
+ * `'outside'` is a no-hover: no rect of any fragment covers the point with the one pixel
+ * of tolerance, or no rect has an area at all. `'unmeasurable'` is the `A66` answer —
+ * `rangeFor` threw, the page replaced the text node under the fragment list — and the
+ * caller hides without touching anything else.
+ *
+ * Measured **now** and never from the `box` the paint pass kept: a scroll moves every box
+ * in the document without telling anyone, so only a hover-time measurement describes the
+ * text under the pointer. The scan is scoped to this one entry, the same per-entry
+ * boundary the placement keeps.
+ */
+function pixelGuardOf(
+  entry: PaintedEntry,
+  point: { readonly x: number; readonly y: number },
+  rangeFor: RangeForFragment,
+): 'inside' | 'outside' | 'unmeasurable' {
+  try {
+    for (const fragment of entry.fragments) {
+      for (const rect of rectsOf(fragment, rangeFor)) {
+        if (coversPoint(rect, point.x, point.y)) {
+          return 'inside';
+        }
+      }
+    }
+  } catch {
+    return 'unmeasurable';
+  }
+  return 'outside';
 }
 
 /** The tooltip wrapper inside the shadow root, `null` when nothing was mounted. */

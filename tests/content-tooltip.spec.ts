@@ -98,9 +98,21 @@ const FOREIGN_NAME = 'reader-two';
 const OWN_COMMENT = 'the note I wrote here';
 const FOREIGN_COMMENT = 'a note somebody else wrote';
 
-/** Boxes far from the viewport gutter, so a placement answer is never an accident. */
-const BOX_A: Box = { left: 10, top: 40, width: 120, height: 18 };
+/**
+ * Boxes far from the viewport gutter, so a placement answer is never an accident.
+ *
+ * `P1_LINE` is the row where the fixture's **hover points** live and `BOX_A` is the box
+ * of the own entry's fragment inside it: since ruling `A204` a hover also has to fall on
+ * the painted pixels, so the point and the box have to be coherent — the pre-`A204`
+ * fixture hovered at `(20, 84)`, in the gap between two rows, and relied on the caret
+ * test alone. `BOX_B` stays a **second** row, which is where the foreign entry's box and
+ * the moved-text case live.
+ */
+const P1_LINE: Box = { left: 10, top: 40, width: 300, height: 18 };
+const BOX_A: Box = P1_LINE;
 const BOX_B: Box = { left: 10, top: 80, width: 100, height: 18 };
+/** The hover point of most cases: inside `P1_LINE` on both axes. */
+const P1_POINT = { x: 20, y: 48 } as const;
 const VIEWPORT: Viewport = { width: 800, height: 600 };
 /** A positioned box with no area: a hidden or collapsed fragment (ruling `A65`). */
 const COLLAPSED_BOX: Box = { left: 500, top: 400, width: 0, height: 0 };
@@ -189,24 +201,49 @@ function foreignRecord(): Record<string, unknown> {
   });
 }
 
-/** A box seam whose answers a test can change between the paint and the hover. */
-function mutableSeam(boxes: Box[] = [BOX_A, BOX_B]): {
+/**
+ * A box seam whose answers a test can change between the paint and the hover.
+ *
+ * It answers the `MeasuredRange` shape a **real** page answers: a bounding box and the
+ * client rects it is the union of. By default the two agree (one rect per fragment), so a
+ * fragment answers one row; a test that wants a **wrapped** fragment sets several rects,
+ * which is the shape `A204` has to honour. `getClientRects` is omitted by
+ * `boxOnly()` on purpose: the structural seam's pre-`A204` shape, where the guard must fall
+ * back to the bounding box.
+ */
+function mutableSeam(
+  boxes: Box[] = [BOX_A, BOX_B],
+  rects: Box[][] | null = null,
+): {
   rangeFor: RangeForFragment;
   setBoxes: (next: Box[]) => void;
+  setRects: (next: Box[][]) => void;
   callCount(): number;
 } {
   let current: Box[] = [...boxes];
+  /** `null` means "the bounding box is the only rect", per fragment. */
+  let currentRects: Box[][] | null = rects;
   let calls = 0;
   return {
     callCount: (): number => calls,
     setBoxes: (next: Box[]): void => {
       current = [...next];
+      currentRects = null;
       calls = 0;
     },
-    rangeFor: (): { getBoundingClientRect: () => Box } => {
-      const box = current[calls % current.length] ?? BOX_A;
+    setRects: (next: Box[][]): void => {
+      currentRects = next.map((group) => [...group]);
+      calls = 0;
+    },
+    rangeFor: (): { getBoundingClientRect: () => Box; getClientRects: () => Box[] } => {
+      const index = calls % current.length;
+      const box = current[index] ?? BOX_A;
+      const rects = currentRects === null ? null : (currentRects[index] ?? [box]);
       calls += 1;
-      return { getBoundingClientRect: () => box };
+      return {
+        getBoundingClientRect: (): Box => box,
+        getClientRects: (): Box[] => (rects === null ? [box] : rects),
+      };
     },
   };
 }
@@ -282,6 +319,29 @@ async function boot(options: {
           editor.openFromPaintedEntry(entry, authorName);
         }
       }
+    },
+  });
+}
+
+/**
+ * Re-wires the tooltip over the **same painted entries** with another measurement seam.
+ *
+ * The placement cases measure a box the paint pass never saw — moved text, a collapsed
+ * first fragment, a tight viewport — which is the whole point of `A67`. Since `A204` the
+ * same seam also answers the pixel guard, so those cases hand the hover-time measurement
+ * in here instead of mutating the pass's own seam: rebinding keeps the painted entries
+ * the fixture built while the next hover measures somewhere else.
+ */
+function rebindSeam(rangeFor: RangeForFragment): void {
+  tooltip = createTooltipController(document, overlay, {
+    paintedEntries: painter.paintedEntries,
+    authorName: painter.authorNameOfPass,
+    caretAt,
+    rangeFor,
+    viewport: () => VIEWPORT,
+    isHostBusy: (): boolean => hostBusy || (editor !== null && editor.isOpen()),
+    onEntryClick: (entry): void => {
+      clicks.push(entry);
     },
   });
 }
@@ -364,7 +424,7 @@ describe('the tooltip of painted text (AC3)', () => {
     await boot();
     expect(surface.heldNames()).toHaveLength(2);
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     const card = tooltipElement();
     expect(card).not.toBeNull();
@@ -379,7 +439,7 @@ describe('the tooltip of painted text (AC3)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 20 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.openEntryId()).toBe('b2c3d4e5f6a1');
     expect(tooltipElement()?.textContent).toContain(FOREIGN_COMMENT);
@@ -400,7 +460,7 @@ describe('the tooltip of painted text (AC3)', () => {
     expect(TOOLTIP_CSS).toContain('pointer-events: auto;');
     await boot();
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     const hovered = tooltipElement();
     expect(hovered).not.toBeNull();
@@ -412,7 +472,7 @@ describe('the tooltip of painted text (AC3)', () => {
     await boot();
     const namesBefore = [...surface.heldNames()];
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     const root = overlay.root;
@@ -428,7 +488,7 @@ describe('the tooltip of painted text (AC3)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 40 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     expect(tooltipElement()).toBeNull();
@@ -436,7 +496,7 @@ describe('the tooltip of painted text (AC3)', () => {
 
   it('hides the tooltip when the caret moves off the painted text', async () => {
     await boot();
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     caret = null;
@@ -452,7 +512,7 @@ describe('the tooltip of painted text (AC3)', () => {
       await boot();
       const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-      pointerMove(20, 84);
+      pointerMove(P1_POINT.x, P1_POINT.y);
       expect(tooltip.isOpen()).toBe(true);
 
       // The move off the span starts the grace: the tooltip survives it, because the
@@ -481,7 +541,7 @@ describe('the tooltip of painted text (AC3)', () => {
       await boot();
       const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-      pointerMove(20, 84);
+      pointerMove(P1_POINT.x, P1_POINT.y);
       expect(tooltip.isOpen()).toBe(true);
 
       caret = null;
@@ -501,7 +561,7 @@ describe('the tooltip of painted text (AC3)', () => {
       mountEditor();
       const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-      pointerMove(20, 84);
+      pointerMove(P1_POINT.x, P1_POINT.y);
       // Move away (grace starts), then press the widget: the press cancels the
       // pending hide and the Flow 4 click answers.
       pointerMove(400, 400);
@@ -521,7 +581,7 @@ describe('the tooltip of painted text (AC3)', () => {
       await boot();
       const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-      pointerMove(20, 84);
+      pointerMove(P1_POINT.x, P1_POINT.y);
       expect(tooltip.isOpen()).toBe(true);
       detach();
     } finally {
@@ -533,7 +593,7 @@ describe('the tooltip of painted text (AC3)', () => {
     await boot();
     attachTooltipEvents(tooltip, document, window, overlay.host);
 
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(true);
     expect(overlay.root.querySelector(`.${CARD_ROOT_CLASS}`)).toBeNull();
@@ -601,7 +661,7 @@ describe('the tooltip takes the A125 palette (A152)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 20 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     const header = overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}.${TOOLTIP_FOREIGN_CLASS}`);
     expect(header).not.toBeNull();
@@ -643,7 +703,7 @@ describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
   it('hands the reader\u2019s own painted entry to the Flow 4 hook', async () => {
     await boot();
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     expect(clicks).toHaveLength(1);
@@ -654,7 +714,7 @@ describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
   it('hands over the entry of the paint pass itself, so the editor opens over that range (t5-03 AC2)', async () => {
     await boot();
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     // The very object the last pass produced: same fragments, same node-local offsets
@@ -669,7 +729,7 @@ describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 20 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     expect(clicks).toHaveLength(1);
@@ -699,7 +759,7 @@ describe('the click of the tooltip (task t5-03 AC2, AC3; ruling A96)', () => {
     // a `pointerdown` outside the host — pinned in `the page wiring of the tooltip` below.)
     await boot({ records: [recordFor('a1b2c3d4e5f6', 'quick brown', { visible: false })] });
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     expect(tooltip.isOpen()).toBe(false);
@@ -713,7 +773,7 @@ describe('Flow 4 end to end: the click opens the editor of the entry (t5-03 AC2,
     mountEditor();
     const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.openEntryId()).toBe('a1b2c3d4e5f6');
 
     pressOnWidget();
@@ -741,7 +801,7 @@ describe('Flow 4 end to end: the click opens the editor of the entry (t5-03 AC2,
     caret = { node: textOf('p1'), offset: 20 };
     const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.openEntryId()).toBe('b2c3d4e5f6a1');
 
     pressOnWidget();
@@ -768,7 +828,7 @@ describe('the ownership header (AC4)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 6 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     const header = overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}`);
     expect(header?.textContent).toBe(CONTENT_STRINGS.ownEntry);
@@ -779,7 +839,7 @@ describe('the ownership header (AC4)', () => {
     await boot();
     caret = { node: textOf('p1'), offset: 20 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     const header = overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}`);
@@ -792,7 +852,7 @@ describe('the ownership header (AC4)', () => {
   it('treats every entry as foreign when the settings name no reader', async () => {
     await boot({ name: null });
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(painter.authorNameOfPass()).toBeNull();
     expect(overlay.root.querySelector(`.${TOOLTIP_HEADER_CLASS}`)?.textContent).toBe(OWN_NAME);
@@ -816,7 +876,7 @@ describe('what cannot be hovered (A40, staleness, A67, A66)', () => {
     await boot({ records: [recordFor('a1b2c3d4e5f6', 'quick brown', { visible: false })] });
     expect(surface.heldNames()).toEqual([]);
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     expect(overlay.root.querySelector(`.${CARD_ROOT_CLASS}`)).toBeNull();
@@ -831,7 +891,7 @@ describe('what cannot be hovered (A40, staleness, A67, A66)', () => {
     const outcome = await painter.refresh();
     caret = { node: textOf('p1'), offset: 6 };
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     // Stored, listed in the popup, deletable there — only the paint and the tooltip
@@ -844,7 +904,7 @@ describe('what cannot be hovered (A40, staleness, A67, A66)', () => {
     await boot({ rangeFor: mutableSeam([COLLAPSED_BOX, COLLAPSED_BOX]).rangeFor });
     expect(surface.heldNames()).toEqual(['inlinenotes-a1b2c3d4e5f6', 'inlinenotes-b2c3d4e5f6a1']);
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     expect(tooltipElement()).toBeNull();
@@ -859,7 +919,7 @@ describe('what cannot be hovered (A40, staleness, A67, A66)', () => {
   it('shows no tooltip when the page refuses to measure the entry (A66)', async () => {
     await boot({ rangeFor: refusingSeam() });
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     expect(entryWrites()).toEqual([]);
@@ -872,9 +932,11 @@ describe('where the tooltip is placed (A67, `A30` reuse)', () => {
     await boot({ records: [recordFor('a1b2c3d4e5f6', 'dog. Second', {}, 2)] });
     const first = painter.paintedEntries()[0].fragments[0];
     caret = { node: first.node, offset: first.start + 1 };
-    seam.setBoxes([COLLAPSED_BOX, BOX_B]);
+    // The first fragment is collapsed and the second is the one with a box: since `A204`
+    // the hover point has to be on painted pixels too, so it is over that second box.
+    rebindSeam(mutableSeam([COLLAPSED_BOX, BOX_B]).rangeFor);
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(BOX_B.left + 4, BOX_B.top + 4);
 
     expect(tooltip.isOpen()).toBe(true);
     expect(styleOf()).toEqual({
@@ -887,25 +949,28 @@ describe('where the tooltip is placed (A67, `A30` reuse)', () => {
     await boot();
     expect(seam.callCount()).toBeGreaterThan(0);
 
-    seam.setBoxes([{ left: 300, top: 300, width: 90, height: 18 }]);
-    tooltip.hoverAt(20, 84);
+    // The text moved: the tooltip follows the text it describes (`A67`), and the pixel
+    // guard of `A204` reads the same hover-time measurement, so the point is hovered on
+    // the box the text moved to rather than on the row it left.
+    const moved: Box = { left: 300, top: 300, width: 90, height: 18 };
+    rebindSeam(mutableSeam([moved]).rangeFor);
+    tooltip.hoverAt(moved.left + 10, moved.top + 10);
 
     expect(styleOf()).toEqual({ left: 300, top: 300 + 18 + 8 });
   });
 
   it('flips above its range when the viewport has no room below (Edge Cases)', async () => {
     await boot();
-    seam.setBoxes([BOX_B]);
     const tight: Viewport = { width: 800, height: 100 };
     const inTight = createTooltipController(document, overlay, {
       paintedEntries: painter.paintedEntries,
       authorName: painter.authorNameOfPass,
       caretAt,
-      rangeFor: seam.rangeFor,
+      rangeFor: mutableSeam([BOX_B]).rangeFor,
       viewport: () => tight,
     });
 
-    inTight.hoverAt(20, 84);
+    inTight.hoverAt(BOX_B.left + 4, BOX_B.top + 4);
 
     const placed = styleOf();
     expect(inTight.isOpen()).toBe(true);
@@ -923,7 +988,7 @@ describe('the tooltip and the page (AC2, A41, A68)', () => {
     const before = document.body.innerHTML;
     const pageStyles = document.querySelectorAll('style').length;
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     tooltip.activate();
 
     // The page's own subtree, not the extension's host element, which the overlay
@@ -939,7 +1004,7 @@ describe('the tooltip and the page (AC2, A41, A68)', () => {
 
   it('leaves the host visible when the create card still needs it (A68)', async () => {
     await boot();
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
     expect(overlay.host.hidden).toBe(false);
 
     hostBusy = true;
@@ -953,7 +1018,7 @@ describe('the tooltip and the page (AC2, A41, A68)', () => {
     await boot();
     hostBusy = true;
 
-    tooltip.hoverAt(20, 84);
+    tooltip.hoverAt(P1_POINT.x, P1_POINT.y);
 
     expect(tooltip.isOpen()).toBe(false);
     expect(tooltipElement()).toBeNull();
@@ -965,7 +1030,7 @@ describe('the page wiring of the tooltip', () => {
     await boot();
     const detach = attachTooltipEvents(tooltip, document, window, overlay.host);
 
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     pressOnWidget();
@@ -977,14 +1042,14 @@ describe('the page wiring of the tooltip', () => {
     expect(tooltip.isOpen()).toBe(false);
 
     detach();
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(false);
   });
 
   it('keeps the tooltip when the pointer moves over the widget itself', async () => {
     await boot();
     attachTooltipEvents(tooltip, document, window, overlay.host);
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     const move = new Event('pointermove', { bubbles: true });
@@ -998,14 +1063,14 @@ describe('the page wiring of the tooltip', () => {
   it('hides on scroll and on Escape', async () => {
     await boot();
     attachTooltipEvents(tooltip, document, window, overlay.host);
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     window.dispatchEvent(new Event('scroll'));
     expect(tooltip.isOpen()).toBe(false);
 
     caret = { node: textOf('p1'), offset: 6 };
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -1015,7 +1080,7 @@ describe('the page wiring of the tooltip', () => {
   it('answers a coordinate-less pointer event with nothing', async () => {
     await boot();
     attachTooltipEvents(tooltip, document, window, overlay.host);
-    pointerMove(20, 84);
+    pointerMove(P1_POINT.x, P1_POINT.y);
     expect(tooltip.isOpen()).toBe(true);
 
     document.dispatchEvent(new Event('pointermove'));
