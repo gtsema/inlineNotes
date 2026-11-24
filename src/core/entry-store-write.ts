@@ -598,6 +598,16 @@ export async function adoptOwnNotes(
  * and `updatedAt` are kept, `visible` is the stored flag (the reader's own display
  * state) or `true` for a new row, and `title` is dropped because the wire has no such
  * field (`A190`).
+ *
+ * The comment is stored **normalized**, exactly as the create path stores it
+ * (review finding 1 of `t20-03`): `validateComment` measures a trimmed value, so
+ * writing the raw row comment could store a record that differs from the value the
+ * rules accepted and could exceed `MAX_COMMENT_CODE_POINTS` as stored, breaking
+ * "Decode on write" (`inline-comment-model.md`) and the sentence just added to
+ * `sync-integration.md` ("A row that passes is stored with the normalized comment").
+ * `text` and `anchor` are never normalized: the stored text must keep matching the
+ * stored anchor. Every row reaching this function already passed
+ * `validateComment(row.comment).ok`, so the normalization here only trims.
  */
 function adoptionDraft(row: Entry, visible: boolean): EntryDraft {
   return {
@@ -605,7 +615,7 @@ function adoptionDraft(row: Entry, visible: boolean): EntryDraft {
     pageKey: row.pageKey,
     authorName: row.authorName,
     text: row.text,
-    comment: row.comment,
+    comment: validateComment(row.comment).normalized,
     anchor: row.anchor,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

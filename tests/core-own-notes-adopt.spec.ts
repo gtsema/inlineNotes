@@ -144,6 +144,48 @@ describe('adoptOwnNotes (A197-A199)', () => {
     expect(port.calls.filter((call) => call.op === 'set' || call.op === 'remove')).toEqual([]);
   });
 
+  it('stores an adopted padded comment trimmed, never with its padding', async () => {
+    // Review finding 1 of `t20-03`: `validateComment` measures the trimmed value, so
+    // the stored record must carry that same normalized value (`A197`).
+    const port = indexedPort();
+    const padded = row({ id: 'aaaaaaaaaaaa', comment: '  spaced  ' });
+
+    const result = await adoptOwnNotes(port, input([padded]));
+
+    expect(result).toEqual({ ok: true, adopted: 1, skipped: 0 });
+    expect(recordAt(port, SLOT_A, 0).comment).toBe('spaced');
+    // The rest of the row is stored as the wire gave it; only the comment is trimmed.
+    expect(recordAt(port, SLOT_A, 0).text).toBe('selected text');
+    expect(recordAt(port, SLOT_A, 0).anchor).toEqual(ANCHOR);
+  });
+
+  it('stores an adopted replace with the trimmed comment too', async () => {
+    // The same normalization on the replace path (`A198`), not only on a new row.
+    const port = indexedPort([PAGE_A]);
+    seedSlot(port, PAGE_A, [storedEntry({ createdAt: EARLY, updatedAt: EARLY })]);
+
+    const result = await adoptOwnNotes(
+      port,
+      input([row({ comment: '  spaced  ', createdAt: EARLY, updatedAt: LATER })]),
+    );
+
+    expect(result).toEqual({ ok: true, adopted: 1, skipped: 0 });
+    expect(recordAt(port, SLOT_A, 0).comment).toBe('spaced');
+  });
+
+  it('skips a padded comment whose trimmed value is over 256 code points, writing nothing', async () => {
+    const port = indexedPort();
+    // 257 code points once trimmed: the raw string is even longer, so a check that
+    // measured the raw length or stored the raw value would wrongly accept it.
+    const overLong = row({ id: 'aaaaaaaaaaaa', comment: `  ${'x'.repeat(257)}  ` });
+
+    const result = await adoptOwnNotes(port, input([overLong]));
+
+    expect(result).toEqual({ ok: true, adopted: 0, skipped: 1 });
+    expect(port.calls.filter((call) => call.op === 'set' || call.op === 'remove')).toEqual([]);
+    expect(storedRecords(port, SLOT_A)).toBeUndefined();
+  });
+
   it('writes nothing at all when the only row has equal content (port call log)', async () => {
     const port = indexedPort([PAGE_A]);
     const stored = storedEntry({ createdAt: EARLY, updatedAt: EARLY });
