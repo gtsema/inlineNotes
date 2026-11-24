@@ -457,3 +457,13 @@ illegal memory access`) with the work already committed.
 - **A pinned number needs one owner.** `TOOLTIP_GRACE_MS` and the spec sentence carried
   the same 300 in two places and no test compared them. The change now names the constant
   in the test advances, so the next value moves in one commit.
+
+## Stage 28 — the address a title hides
+
+- **A readability fallback can hide data.** A row labelled with the stored article title
+  reads better and tells the reader less: the URL was nowhere on the «Мои заметки» page.
+  The fix is one attribute, and the rule now says what the label is and what the `title`
+  carries, so the next surface does not rediscover it.
+- **A negative pin must name a form, not a word.** The engineer's first assertion banned
+  the token `pageKey` from `text.ts`, which the shipped function legitimately uses as a
+  parameter name; the shipped pin asserts the stronger property instead.

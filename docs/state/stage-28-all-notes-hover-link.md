@@ -42,3 +42,13 @@ full key. Existing row/shape pins stay green.
 Gates in order: `npm run build`, `npm test`, `npm run typecheck`,
 `node scripts/check-agent-config.mjs`. One commit:
 `t28-01: the all-notes row link shows its full address on hover (A206)`.
+
+## Outcome
+
+- `t28-01` (commit `c47104b`): the row's `<a class="link">` carries
+  `[attr.title]="row.pageKey"`; label, href, target/rel and the delete control untouched;
+  `src/all-notes/text.ts` unchanged. Gates: build 17 files, `npm test` 1431, typecheck,
+  checker 0 errors. Report: `docs/state/t28-01-engineer.md`.
+- `t28-02` (`code-reviewer`, run `7ce8a105`): **accepted**, no blocking finding; the
+  binding and the spec sentence agree. Report: `docs/state/t28-02-review.md`.
+- Stage 28 closed. `dist/` rebuilt and pushed (`d7e0d60`).
