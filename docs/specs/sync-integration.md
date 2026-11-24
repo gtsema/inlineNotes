@@ -31,6 +31,7 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `background broker` | — | the MV3 service worker that performs the content script's sync calls, because an `http://` fetch from an `https://` article is mixed content and the browser blocks it (`A200`); the page sends it a message and the broker runs the one `fetch` (`A201`, `A202`) |
 | `hidden author flag` | — | a stored `{ pageKey, authorName }` pair saying the popup checkbox of that foreign author was last pressed to hidden on that page; keyed and applied by `A184` |
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
+| `own row delete` | «Удалить» | removing **every** note of the reader's own author on one page: core `deleteEntriesOfAuthor` first, then — when synchronization is on — one `DELETE /notes/page/{page_id}/author/{author_id}` (`A203`) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
 | `no request rule` | — | switch off **or** empty address means zero network calls and no sync button (`A166`) |
 | `rename sweep` | — | the local deletion of the previous name's notes on every page when the settings name changes (`A173`); it calls no server |
@@ -137,6 +138,18 @@ Before `A197` the extension assumed the reader's own note is always in the local
 
 - The popup's checkbox of a foreign author hides that author's highlights on this page: the flag lives in the same memory, because a foreign note has no stored `visible` field. A switched-off foreign note is still painted — with its underline and without its fill — so switching it back on is one more pass and no request.
 - `Удалить` on a foreign row removes that author's notes from this page's **view**: the memory drops them, the page repaints, and the server is not called.
+
+### The popup's own row deletes on the server too (ruling `A203`)
+
+Before `A203` the popup's row `Удалить` was the one delete of the reader's **own** notes that stopped at `chrome.storage.local`: the row left the popup, the page dropped its highlight, and the server kept the row — so the next load **re-adopted** it (`A197`) and the note came back. The editor's one-note delete (`A182`) and the «Мои заметки» row delete (`A192`) always had their server half; the popup's row did not.
+
+- One press of an **own** stored row's `Удалить` is two halves in this order, exactly as `A192`: core `deleteEntriesOfAuthor` first, then — only when `syncTargetOf` answers a target — one `DELETE /notes/page/{pageKey}/author/{currentName}`.
+- The `pageKey` is the one the popup's own read of that page resolved, taken **before** the local write: a page deleted down to nothing still sends the key its notes lived under, and a page found through the `origin + pathname` fallback is not sent under another key.
+- `{"deleted": N}` with `N = 0` is a **success** (the server held no copy — the `A181` posture).
+- A failed server call never undoes the local deletion: the row leaves the list and the popup shows the non-blocking line «Не удалось удалить заметки на сервере» above the list that still renders (`A164` posture, wording in `src/popup/text.ts`).
+- With synchronization off or no usable address: no request and no notice (`A166`).
+- A **foreign** row is unchanged: its `Удалить` stays the `A168` local dismissal, and the server is never called for another author's notes.
+- A stored row of a **previous** author name is deleted locally only: the server delete names the current author, and the rename rule (`A173`) deliberately leaves the old name's server rows alone.
 
 ### The hidden author flag survives a reload (ruling `A184`, task `t18-01`)
 
@@ -261,6 +274,7 @@ The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` 
 18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
 25. (`A200`) The content script names no network API: its sync transport sends `chrome.runtime.sendMessage` to the background broker, so the automatic load and the one-note delete work on an `https://` article with an `http://` server address; the popup's press and the «Мои заметки» delete are unchanged.
 26. (`A202`) A message that cannot be delivered answers the same `network` code a rejected `fetch` produced; the broker answers `{ ok, status, body }`, builds no URL and keeps no state; no timer is added anywhere.
+27. (`A203`) The popup's own row `Удалить` removes every note of the current author locally through exactly one `deleteEntriesOfAuthor`, then — with synchronization on and a usable address — sends exactly one `DELETE /notes/page/{page_id}/author/{author_id}` with the page key read before the local write; with synchronization off no request is made; a foreign row keeps its local-only delete; a failed server call leaves the local deletion in place and shows the popup notice.
 
 ### Test mapping
 
@@ -279,4 +293,5 @@ The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` 
 | 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
 | 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
 | 25, 26 | `tests/background-sync-broker.spec.ts` (the listener: one `fetch` with the given request, `{ ok, status, body }`, a transport failure answered rather than thrown); `tests/content-broker-transport.spec.ts` (a message answers the request, a non-delivered message throws); `tests/toolchain-contract.spec.ts` -> the fetch-module set and `background.service_worker` |
+| 27 | `tests/popup-own-row-delete.spec.ts` (local write then one server call, the page key read before the write, sync-off no request, a foreign row calls no server, failure notice); `tests/core-sync-client.spec.ts` -> the author-delete URL |
 | 18 | the gate commands, quoted in the task's engineer report under `docs/state/` |
