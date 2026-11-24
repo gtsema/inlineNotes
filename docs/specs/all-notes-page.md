@@ -16,6 +16,7 @@ Out of scope: any search, filter or "notes by author other than mine" view; edit
 |---|---|---|
 | `all-notes page` | «Мои заметки» | the `notes.html` extension page opened in a tab (`A189`) |
 | `page row` | a line of the list | one page that holds at least one note of the current author: link + count + date + one `Удалить` control |
+| `row link` | — | the row's `<a href=pageKey target="_blank">`: its text is the `row label` (the stored `document.title`, else the page key without its scheme) and its `title` is the **full page key**, the same value the `href` carries (`A206`) |
 | `stored title` | — | the optional `title` field of an `Entry`: the page's `document.title`, trimmed, at most 100 code points, captured at the create moment (`A190`); old entries and server rows decode without it and the row falls back to the page key |
 | `author pages list` | — | the core read (`authorPagesOf`) that walks the `pages:v1` index and returns one row per page holding at least one own entry (`A191`) |
 | `row delete` | «Удалить» (`aria-label` and `title`, icon-only like the popup's) | removes every note of the current author on that page — locally through core `deleteEntriesOfAuthor`, and on the server through `DELETE /notes/page/{page_id}/author/{author_id}` when synchronization is on (`A192`) |
@@ -24,7 +25,7 @@ Out of scope: any search, filter or "notes by author other than mine" view; edit
 
 1. The reader opens the popup or the settings page and presses the entry point (the «Все заметки» button in the popup, the link under the settings list). A tab opens `notes.html` (`A189`).
 2. The page reads the settings name and the `author pages list`; every page with at least one note of the reader is one `page row`, sorted by the latest `updatedAt` of the page, fresh first.
-3. A row is a link (`<a href=pageKey target="_blank">`) the reader follows to the article, the count «N» with Russian plural wording, the date of the latest note, and the icon-only delete control at the end of the row — the popup trash glyph, `aria-label` and `title` «Удалить».
+3. A row is a link (`<a href=pageKey target="_blank">`) the reader follows to the article, the count «N» with Russian plural wording, the date of the latest note, and the icon-only delete control at the end of the row — the popup trash glyph, `aria-label` and `title` «Удалить». The link also carries the **full page key** as its `title`, so hovering it shows the whole address even when the row reads as an article title (`A206`).
 4. A delete press runs the local write first and the server call second, exactly as the editor's one-note delete does (`A182`'s order, generalized to the author set): core `deleteEntriesOfAuthor` for that page and author, then — only when `syncTargetOf` answers a target — one `DELETE /notes/page/{pageKey}/author/{authorName}`. The server answer reports the removed rows; a failure answers a non-blocking notice and the local deletion stands.
 5. The page re-reads the list after every delete; the last row of the author drops the slot, and a list that becomes empty shows the empty state «Нет заметок».
 
@@ -41,6 +42,10 @@ Out of scope: any search, filter or "notes by author other than mine" view; edit
 - `decodeEntry` keeps the field when it is a non-empty string and drops it otherwise: an old record, a damaged one and a server row (the wire shape has no title) decode without it, and nothing is guessed.
 - The field is display metadata only: it changes no identity, no caps, no anchor, no edit right, and it is never sent to the server (`sync-client`'s outgoing shape is unchanged).
 - Renaming the author, editing the comment, showing and hiding leave the title untouched; a page the reader never creates on again simply shows its URL.
+
+### The row link shows its address on hover (ruling `A206`, task `t28-01`)
+
+A row's label is the stored `document.title` when the page has one, so the address a reader would copy is nowhere on the screen. `A206` puts it back without changing the label: the row's `<a>` carries `title` = the **full `pageKey`**, the same value as its `href`. The label stays what `A190` decided — the stored title, or the page key without its scheme — and a row that reads as an article title hands the reader the whole URL in one hover. The value is page data, not a UI string, so no constants module gains a word.
 
 ### The author pages list (ruling `A191`)
 
@@ -69,7 +74,7 @@ Out of scope: any search, filter or "notes by author other than mine" view; edit
 ## Acceptance Criteria
 
 1. (`A189`) The popup renders the entry point «Все заметки», and pressing it opens `notes.html` in a new tab; the settings page carries the second entry point; the manifest is unchanged.
-2. (`A191`) The page lists one `page row` per page holding at least one note of the current author, sorted by the latest `updatedAt`, fresh first; each row shows the page (stored title, falling back to the page key), the count with Russian plural wording, and the latest date.
+2. (`A191`) The page lists one `page row` per page holding at least one note of the current author, sorted by the latest `updatedAt`, fresh first; each row shows the page (stored title, falling back to the page key), the count with Russian plural wording, and the latest date; the row's link carries the full `pageKey` as its `title` (`A206`).
 3. (`A190`) A create on a page with a title stores it (trimmed, ≤100 code points); an entry created by an older build or by the server decodes without it and the row falls back to the page key; no outgoing payload gains a field.
 4. (`A192`) The row's icon-only `Удалить` removes every note of the current author on that page locally through exactly one core call, then — with synchronization on and a usable address — sends exactly one `DELETE /notes/page/{page_id}/author/{author_id}`; with synchronization off no request is made.
 5. (`A192`) A failed server delete leaves the local deletion in place, re-reads the list, and shows the non-blocking notice; a successful one re-reads the list with the page gone.
