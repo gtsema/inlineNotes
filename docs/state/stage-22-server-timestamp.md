@@ -78,3 +78,18 @@ server always emits UTC `Z` from `t.UTC().Format(RFC3339Nano)`):
 three digits and zero-padded; a non-`Z` offset or an unreadable shape skips the row.
 Spec text updated to match; the engineer keeps the change in core and never edits the
 spec.
+
+## Outcome
+
+- `t22-01` (commit `f377270`): pure-string stamp normalization in `entryFromRemoteNote`;
+  7 new boundary cases + an end-to-end regression (pre-fix 62/7 failed, post-fix 69
+  passed). Gates: build 16 files, `npm test` 1383, typecheck, checker 0 errors.
+  Report: `docs/state/t22-01-engineer.md`.
+- `t22-02` (`code-reviewer`, run `def233d6`): **accepted**, no blocking finding; the
+  reviewer re-ran the gates and re-ran the regression against `f377270~1` to confirm the
+  defect is falsifiable. Non-blocking: a missing trailing newline in one test file; a
+  calendar-invalid stamp still maps (server builds from `time.Time`); a numeric-offset
+  stamp is skipped by the ruled narrowing, matching the spec.
+  Report: `docs/state/t22-02-review.md`.
+- Stage 22 closed. The defect that made a correct server row invisible on a second
+  machine is fixed; `dist/` rebuilt and pushed.
