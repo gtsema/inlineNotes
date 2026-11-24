@@ -54,3 +54,16 @@ regression case whose injected fetch throws when a body is present (mirroring th
 **Acceptance.** `npm run build`, `npm test`, `npm run typecheck`,
 `node scripts/check-agent-config.mjs` green; one commit
 `t24-01: the broker sends no body on GET/HEAD (A201)`.
+
+## Outcome
+
+- `t24-01` (commit `0f2951f`): the broker omits `body` on `GET`/`HEAD`; the extra
+  `src/background/service-worker.ts` line keeps the key absent under
+  `exactOptionalPropertyTypes`; 4 new cases including a strict injected fetch. Gates:
+  build 17 files, `npm test` 1407, typecheck (4 programs), checker 0 errors.
+  Report: `docs/state/t24-01-engineer.md`.
+- `t24-02` (`code-reviewer`, run `ad0ffd91`): **accepted**, no blocking finding; the
+  message contract and the three-module network pin are untouched.
+  Report: `docs/state/t24-02-review.md`.
+- Stage 24 closed. `dist/` rebuilt and pushed (`8d1dcfe`); the automatic load reaches the
+  server from an https article through the worker again.
