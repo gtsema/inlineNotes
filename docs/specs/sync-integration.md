@@ -105,7 +105,7 @@ Before `A197` the extension assumed the reader's own note is always in the local
 
 - `A197` **Adoption.** A row the automatic load returns whose `authorName` is the reader's (core `isSameAuthor` against the settings name) is **written into `chrome.storage.local`** as a stored entry of this page, through one core write. After that it is an ordinary own note: it is painted, it appears in the popup's `Вы` row and in the «Мои заметки» list, it is editable, and the next press sends it back.
 - Adoption is the extension's **one** new writer of own notes from the network. A foreign row is still never written (`A163`).
-- The adopted row keeps the server's `id`, `createdAt` and `updatedAt`, and stores no `title` (the wire has none, `A190`); `visible` is `true`, the store's own default (`A1`).
+- The adopted row keeps the server's `id`, `createdAt` and `updatedAt` (the two stamps normalized to the stored shape at the wire boundary, see "Wire shape"), and stores no `title` (the wire has none, `A190`); `visible` is `true`, the store's own default (`A1`).
 - A row whose `page_id` is not the asked page key, or that cannot be read as a local entry (an unreadable anchor, an empty comment, a comment over 256 code points), is **skipped**, never guessed at. A row that passes is stored with the **normalized** comment — the same `validateComment` value the create path stores (`inline-comment-model.md` -> "Decode on write"), so adoption can never put an untrimmed or over-cap comment into the store.
 
 - `A198` **The merge rule**, per row, by the server's `(authorName, id)`:
@@ -189,6 +189,8 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 
 **Receiving** — a row of `{"notes": [...]}` carries all eight server fields (`id`, `page_id`, `author_id`, `text`, `comment`, `anchor`, `created_at`, `updated_at`), and the boundary builds an `Entry` from them. A row with a missing or mistyped field is skipped. A note that arrives is visible, because `visible` is the store's own flag and `A1`'s default is "shown".
 
+The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` (up to nine fractional digits, and none at all when they are zero — `2026-11-24T16:15:56.015417Z`), while a stored stamp is `A9`'s `toISOString` shape (`ISO_UTC_TIMESTAMP_PATTERN`, `\.\d{1,3}Z`). The boundary therefore **normalizes** both stamps to that shape with a **pure string transform** — no `Date` and no zone arithmetic, because `src/core/` is the clock-free layer (`A58`) and the server's stamps are always UTC: the fraction keeps its first three digits, a shorter one is padded with zeros, an absent one becomes `000`, and a stamp whose offset is not `Z` or whose shape the transform cannot read makes the row unreadable and it is skipped. Without that mapping an adopted note reaches `decodeEntry`, fails `isTimestamp`, and the whole write refuses with `entry_invalid` — silently, because adoption is best effort (`A199`), which is exactly the defect that made a correct server row invisible on a second machine.
+
 ## Edge Cases
 
 - **Server unreachable at page open.** The stored notes are painted, no notice appears on the article, the popup shows the failure line, and the sync button's press is the reader's retry.
@@ -240,6 +242,7 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 | 19, 20, 21 | `tests/core-foreign-hidden-store.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A184` describes |
 | 22, 23, 24 | `tests/core-own-notes-adopt.spec.ts`; `tests/content-adopt-own-notes.spec.ts` (the content adopter: the mapping, the write, the best-effort contract); `tests/content-sync-notes.spec.ts` -> the `A197`/`A199` describes (both load paths, one call before memory) |
 | 24 | `tests/content-create-card-boundaries.spec.ts` -> the write-importer pin and the one-loader pin; `tests/content-throw-boundaries.spec.ts` -> the `sync/adopt-own-notes.ts` catch |
+| 22, 23 | `tests/core-sync-client.spec.ts` -> the server-stamp normalization describes (`RFC3339Nano` with 6, 4, 1 and 0 fractional digits maps to the stored shape; a non-`Z` offset or an unparsable stamp skips the row) |
 | 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
 | 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
