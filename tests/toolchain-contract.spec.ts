@@ -973,6 +973,10 @@ describe('the contract scans read every shipped text file through one comment-st
    */
   const LEGACY_CODE_ONLY_COPIES = [
     'tests/content-anchor-boundaries.spec.ts',
+    // `t23-02`: the broker transport's suite scans that one shipped module (no network
+    // API, no URL, no timer, no state) and keeps its own stripper, because the two
+    // contract suites are the only files that may import `tests/support` for this job.
+    'tests/content-broker-transport.spec.ts',
     'tests/content-create-card-boundaries.spec.ts',
     'tests/content-overlay-host.spec.ts',
     'tests/content-spa-refresh.spec.ts',
@@ -1619,34 +1623,33 @@ describe('the capture module crosses the offset domain only through core helpers
 
 /**
  * The shapes of a network call, in the spelling this repository has to keep out of
- * every shipped file but one (Stage 17: `src/content/sync/fetch-transport.ts`).
+ * every shipped file but the three named by the pin below (Stage 17's two extension-page
+ * adapters, and Stage 23's background broker).
  */
 const NETWORK_SHAPE = /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bnavigator\s*\.\s*sendBeacon\b/;
 
 describe('no network in shipped source', () => {
   /**
-   * The one file allowed to name a network API (Stage 17, ruling `A165`, `t17-01`).
-   *
-   * The sync feature has to call the server the reader configured, so this suite's long
-   * negative became "exactly one module makes a request" instead of "nothing does".
-   * Naming the file is what keeps that honest: the extension's whole network surface is
-   * one `fetch` call in `src/content/sync/fetch-transport.ts`, and a second module that
-   * reaches a socket is still a failing test.
+   * The one module of the page's own layer that may carry a request, added by Stage 23
+   * (`A200`): the content script's transport no longer names a network API at all, and
+   * the URL check below is aimed at it so the address still has one owner.
    */
-  const NETWORK_TRANSPORT = 'src/content/sync/fetch-transport.ts';
+  const CONTENT_TRANSPORT = 'src/content/sync/broker-transport.ts';
   /** The popup bundle's own five-line adapter (a second bundle cannot import the first). */
   const POPUP_TRANSPORT = 'src/popup/sync-transport.ts';
 
-  it('src names a network API in exactly three modules: one transport per bundle (A189)', () => {
+  it('src names a network API in exactly three modules: the broker and two extension-page adapters (A189, A200)', () => {
     // The content script, the popup and the all-notes page are **separate bundles** of
-    // an MV3 extension, so they cannot share a module: each half ships its own five-line
-    // `fetch` adapter and the shared wire logic sits in core, where all of them can
-    // import it. Three files, one call each.
+    // an MV3 extension, so they cannot share a module: the two **extension pages** each
+    // ship their own five-line `fetch` adapter and the shared wire logic sits in core,
+    // where all of them can import it.
     //
-    // Stage 23 (`A200`) moves the page's call into the background broker: the worker
-    // runs the `fetch`, so the module that names it is `src/background/service-worker.ts`.
-    // The content script's own transport still names `fetch` until `t23-02` swaps it for
-    // the message, which is why both files are listed here for now.
+    // Stage 23 (`A200`) took the page's call out of the content bundle: the worker runs
+    // the `fetch`, so the module that names it is `src/background/service-worker.ts` and
+    // the content script's transport sends a `chrome.runtime` message instead (`A202`).
+    // The list is the whole network surface of the extension, held to exactly three
+    // entries: a fourth module that reaches a socket, or a content-script module that
+    // goes back to `fetch`, is a failing test here.
     const pattern = NETWORK_SHAPE;
     const offenders = sourceFiles('src')
       .filter((file) => pattern.test(codeOnly(file.text)))
@@ -1654,24 +1657,50 @@ describe('no network in shipped source', () => {
     expect(offenders).toEqual([
       'src/all-notes/fetch-transport.ts',
       'src/background/service-worker.ts',
-      'src/content/sync/fetch-transport.ts',
       'src/popup/sync-transport.ts',
     ]);
-    // Neither half reaches the other half's adapter: the popup bundle must not import a
+    // No extension page reaches the other's adapter, and the page layer names the broker
+    // through nothing but its own message module: the popup bundle must not import a
     // content-script module (the layer boundary below pins the same thing for Angular).
     for (const file of sourceFiles('src/popup')) {
-      expect(codeOnly(file.text), file.path).not.toContain('src/content/sync/fetch-transport');
+      expect(codeOnly(file.text), file.path).not.toContain('src/content/sync/broker-transport');
+    }
+
+    // The broker's own half of `A202`, pinned on the **shipped text**: the transport
+    // names the core message module rather than a second spelling of the message name.
+    // Read through `codeOnly` like every other scan here, because a comment may say the
+    // message name without shipping it (the module's own doc block does).
+    expect(codeOnly(readFileSync(join(projectRoot, CONTENT_TRANSPORT), 'utf8'))).toContain(
+      'SYNC_FETCH_MESSAGE',
+    );
+
+    // And the spec agrees with the pin: the file the reader is told to look at is the
+    // file this suite reads. The list above is the mechanical half, and a spec that still
+    // named the retired `fetch-transport.ts` of the content bundle would point a reviewer
+    // at a file that no longer exists, so the one sentence is read here rather than
+    // trusted.
+    const spec = readFileSync(join(projectRoot, 'docs', 'specs', 'sync-integration.md'), 'utf8');
+    for (const path of [CONTENT_TRANSPORT, 'src/background/service-worker.ts', POPUP_TRANSPORT]) {
+      expect(spec, `sync-integration.md does not name ${path}`).toContain(path);
     }
   });
 
-  it('the one request goes to the address core built from settings, and the transport holds no URL of its own', () => {
-    // The transport takes its url as an argument and builds none: no scheme literal, no
+  it('the one request goes to the address core built from settings, and no transport holds a URL of its own', () => {
+    // A transport takes its url as an argument and builds none: no scheme literal, no
     // host, no route. So "the extension never sends a request to a URL it did not read
-    // from settings" (`A165`) is a property of the file list, not of a review.
-    const transport = codeOnly(readFileSync(join(projectRoot, NETWORK_TRANSPORT), 'utf8'));
-    expect(transport).not.toMatch(/https?:\/\//);
-    expect(transport).not.toMatch(/notes\/page/);
-    expect(transport).not.toMatch(/localhost|127\.0\.0\.1/);
+    // from settings" (`A165`) is a property of the file list, not of a review. Stage 23
+    // moves the check, it does not drop it: the content script's transport carries the
+    // request core built across the message channel and still builds no address, and the
+    // background broker it hands the message to builds none either (`A201`).
+    const contentTransport = codeOnly(readFileSync(join(projectRoot, CONTENT_TRANSPORT), 'utf8'));
+    expect(contentTransport).not.toMatch(/https?:\/\//);
+    expect(contentTransport).not.toMatch(/notes\/page/);
+    expect(contentTransport).not.toMatch(/localhost|127\.0\.0\.1/);
+    // The broker's own half of the same rule (`A201`), read from the shipped source.
+    const broker = codeOnly(readFileSync(join(projectRoot, 'src/background/sync-broker.ts'), 'utf8'));
+    expect(broker).not.toMatch(/https?:\/\//);
+    expect(broker).not.toMatch(/notes\/page/);
+    expect(broker).not.toMatch(/localhost|127\.0\.0\.1/);
 
     // The popup's adapter is held to the same rule, for the same reason (`A165`: no
     // address but the one in settings).
@@ -1685,7 +1714,7 @@ describe('no network in shipped source', () => {
     for (const file of sourceFiles('src/core')) {
       expect(NETWORK_SHAPE.test(codeOnly(file.text)), file.path).toBe(false);
     }
-    expect(sourceFiles('src/core').filter((file) => file.text.includes(NETWORK_TRANSPORT))).toEqual(
+    expect(sourceFiles('src/core').filter((file) => file.text.includes(CONTENT_TRANSPORT))).toEqual(
       [],
     );
   });

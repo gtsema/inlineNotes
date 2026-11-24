@@ -55,7 +55,7 @@ import { attachPageNotesChannel } from './sync/page-notes-channel';
 import type { ForeignLoadOutcome } from './sync/foreign-notes';
 import { loadIntoMemory } from './sync/foreign-notes';
 import { createOwnNotesAdopter } from './sync/adopt-own-notes';
-import { createSyncTransport } from './sync/fetch-transport';
+import { createSyncTransport } from './sync/broker-transport';
 import {
   loadHiddenAuthorsOfPage,
   setForeignAuthorHidden,
