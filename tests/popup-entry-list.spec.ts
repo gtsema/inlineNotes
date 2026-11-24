@@ -138,6 +138,12 @@ function fixture(options: {
     // so the fake answer is the empty one, which is also the observable state of ruling
     // `A166`. The foreign half has its own cases in `tests/popup-foreign-rows.spec.ts`.
     page: pageChannelOf(options.page),
+    // Stage 25 (`A203`): the server half of the own row delete. This fixture seeds no
+    // sync settings, so `syncTargetOf` answers `null` and the transport is never called;
+    // the server half has its own cases in `tests/popup-own-row-delete.spec.ts`.
+    transport: async (): Promise<never> => {
+      throw new Error('the popup list suite seeds no sync target: no request is expected');
+    },
   };
 
   return { port, service: new PageEntriesService(source), openOptions, calls: port.calls };
@@ -628,6 +634,11 @@ describe('AC3 a foreign row is marked foreign and keeps its group delete', () =>
       pageUrl: async (): Promise<string | null> => PAGE_URL,
       openOptions: vi.fn(),
       page: pageChannelOf(),
+      // Stage 25 (`A203`): no sync target is seeded in this case, so the row delete's
+      // server half is never reached; a transport that throws keeps that honest.
+      transport: async (): Promise<never> => {
+        throw new Error('no sync target is seeded in this case');
+      },
     });
     const own = new PageEntriesService({
       port: (() => {
@@ -640,6 +651,11 @@ describe('AC3 a foreign row is marked foreign and keeps its group delete', () =>
       pageUrl: async (): Promise<string | null> => PAGE_URL,
       openOptions: vi.fn(),
       page: pageChannelOf(),
+      // Stage 25 (`A203`): no sync target is seeded in this case, so the row delete's
+      // server half is never reached; a transport that throws keeps that honest.
+      transport: async (): Promise<never> => {
+        throw new Error('no sync target is seeded in this case');
+      },
     });
 
     expect((await foreign.open()).rows[0]?.isOwn).toBe(false);
@@ -756,9 +772,12 @@ describe('AC4 the states that are not a list', () => {
   it('the notice map is total over the notice codes', async () => {
     // Stage 17 adds the ruling `A164` line, which the automatic load's failure is stated
     // with. It is one sentence, non-blocking, and it never replaces a row.
+    // Stage 25 (`A203`) adds the fourth: the server half of the reader's own row delete
+    // failed while the local deletion stood. It is non-blocking too.
     expect(Object.keys(POPUP_NOTICE_TEXT).sort()).toEqual([
       'name_required',
       'page_not_injectable',
+      'server_delete_failed',
       'sync_failed',
     ]);
   });

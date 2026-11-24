@@ -109,6 +109,12 @@ function fixture(options: {
     pageUrl: async (): Promise<string | null> => url,
     openOptions: vi.fn(),
     page: page.channel,
+    // Stage 25 (`A203`): the server half of the own row delete. This suite is about the
+    // **page's** rows, so no case may reach the server; the server half has its own cases
+    // in `tests/popup-own-row-delete.spec.ts`.
+    transport: async (): Promise<never> => {
+      throw new Error('the foreign rows suite calls no server');
+    },
   };
   return { port, service: new PageEntriesService(source), sent: page.sent };
 }
@@ -234,6 +240,11 @@ describe('AC2 the popup asks the page and renders one row per foreign author (A1
         pageUrl: async (): Promise<string | null> => PAGE_URL,
         openOptions: vi.fn(),
         page: page.channel,
+        // Stage 25 (`A203`): this suite never reaches the server; the row delete's server
+        // half has its own cases in `tests/popup-own-row-delete.spec.ts`.
+        transport: async (): Promise<never> => {
+          throw new Error('the foreign rows suite calls no server');
+        },
       });
 
       const view = await service.open();
@@ -385,6 +396,9 @@ describe('AC4 a foreign row\'s delete removes the notes from this page\'s view (
       pageUrl: async (): Promise<string | null> => PAGE_URL,
       openOptions: vi.fn(),
       page: channel,
+      transport: async (): Promise<never> => {
+        throw new Error('the foreign rows suite calls no server');
+      },
     });
 
     expect((await service.open()).rows.map((row) => row.authorName)).toEqual(['Вася']);
@@ -420,6 +434,9 @@ describe('AC5 the failure notice is the page\'s answer (A169)', () => {
       pageUrl: async (): Promise<string | null> => 'file:///home/user/a.html',
       openOptions: vi.fn(),
       page: page.channel,
+      transport: async (): Promise<never> => {
+        throw new Error('the foreign rows suite calls no server');
+      },
     });
 
     const view = await service.open();

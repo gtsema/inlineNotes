@@ -73,6 +73,16 @@ export const POPUP_STRINGS = {
    * reader, which is the defect the review of `t17-01` named.
    */
   syncFailed: 'Не удалось связаться с сервером синхронизации',
+  /**
+   * The non-blocking line a failed server half of the own row delete leaves (ruling
+   * `A203` of `sync-integration.md`). The local deletion stands, so this sentence says
+   * only what did not happen — the server still holds the reader's copy.
+   *
+   * A second layer keeps its own copy of the wording (`A82`/`A33` posture):
+   * `src/all-notes/text.ts` owns the same sentence for the «Мои заметки» row delete, and
+   * the two are separate constants modules on purpose.
+   */
+  serverDeleteFailed: 'Не удалось удалить заметки на сервере',
 } as const;
 
 /**
@@ -91,6 +101,8 @@ export const POPUP_NOTICE_TEXT: Readonly<Record<PopupNoticeCode, string>> = {
   // `A164`: one sentence for every sync failure, and it is the same string the sync
   // button's error state owns — one state, one wording.
   sync_failed: POPUP_STRINGS.syncFailed,
+  // `A203`: the server half of the own row delete failed, the local deletion stands.
+  server_delete_failed: POPUP_STRINGS.serverDeleteFailed,
 };
 
 /** The Russian wording of one notice code, from the single map. */

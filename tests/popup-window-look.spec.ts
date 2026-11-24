@@ -696,21 +696,24 @@ describe('the popup is the settings card at its own width (t14-01 AC2; ruling A1
     expect(template).not.toMatch(/mascot/i);
     expect(template).not.toMatch(/cat-mascot/);
     // The strings the template carries are the shipped ones plus Stage 17's two
-    // (`A162`'s accessible name and `A164`'s one failure sentence); both are `aria-label`
-    // / `title` material and a notice, so the surface still draws no new visible word of
-    // its own and no new sentence per state.
+    // (`A162`'s accessible name and `A164`'s one failure sentence) and Stage 25's one
+    // (`A203`'s failed server delete); they are `aria-label` / `title` material and
+    // notices, so the surface still draws no new visible word of its own and no new
+    // sentence per state.
     expect(Object.keys(POPUP_STRINGS).sort()).toEqual([
       'delete',
       'emptyState',
       'nameRequired',
       'notInjectable',
       'ownEntry',
+      'serverDeleteFailed',
       'sync',
       'syncFailed',
       'title',
     ]);
     expect(POPUP_STRINGS.delete).toBe('Удалить');
     expect(POPUP_STRINGS.sync).toBe('Синхронизировать');
+    expect(POPUP_STRINGS.serverDeleteFailed).toBe('Не удалось удалить заметки на сервере');
     // No URL, no data URI and no `@import` on this surface either.
     for (const text of [template, styles, componentTemplate()]) {
       expect(text).not.toMatch(/https?:\/\//i);

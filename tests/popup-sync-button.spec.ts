@@ -106,6 +106,12 @@ function entriesSourceOf(port: MemoryStoragePort): PageEntriesSource {
     page: {
       sendMessage: async (): Promise<unknown> => ({ rows: [], syncFailed: false }),
     },
+    // Stage 25 (`A203`): the row delete's server half. This suite drives the sync
+    // **button**, so its own-row deletes are not exercised here; the delete's server half
+    // lives in `tests/popup-own-row-delete.spec.ts`.
+    transport: async (): Promise<never> => {
+      throw new Error('the sync button suite exercises no row delete');
+    },
   };
 }
 

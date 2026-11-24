@@ -67,7 +67,10 @@ import { deleteEntriesOfAuthor, setVisibleForAuthor } from '../core/entry-store-
 import { pageKeyFromUrl } from '../core/page-key';
 import { loadSettings } from '../core/settings-store';
 import type { StoragePort } from '../core/storage-port';
+import type { SyncTarget } from '../core/sync-settings';
 import { syncTargetOf } from '../core/sync-settings';
+import type { SyncTransport } from '../core/sync-client';
+import { deleteRemoteAuthorNotes } from '../core/sync-client';
 import type { PageNotesChannelSource } from './page-notes-channel';
 import {
   askPage,
@@ -97,7 +100,18 @@ export const INJECTABLE_SCHEMES: readonly string[] = ['http:', 'https:'];
  * exactly as they are — and it never replaces a row or hides the list, which is what
  * `A83` already requires of every notice on this surface.
  */
-export type PopupNoticeCode = 'name_required' | 'page_not_injectable' | 'sync_failed';
+export type PopupNoticeCode =
+  | 'name_required'
+  | 'page_not_injectable'
+  | 'sync_failed'
+  /**
+   * The server half of the reader's own row delete failed (ruling `A203`).
+   *
+   * Non-blocking, like every line of `A83`: the local deletion stands, the rows the view
+   * re-read are what the store holds, and the sentence says only that the server still
+   * holds its copy. The wording is in `src/popup/text.ts`.
+   */
+  | 'server_delete_failed';
 
 /**
  * One popup row: one author of this page (`author row`, rulings `A95`, `A108`).
@@ -202,7 +216,17 @@ export interface PageEntriesSource {
    * highlights for this tab. **No storage of this layer is touched by any of them** —
    * which is the whole reason the channel exists (`A163`).
    */
-  page: PageNotesChannelSource;}
+  page: PageNotesChannelSource;
+  /**
+   * The popup's own `fetch` (`src/popup/sync-transport.ts`), used by the server half of
+   * the own row delete (ruling `A203`).
+   *
+   * It is the popup document's adapter and not the page's: an extension page is not the
+   * article's page, so the mixed-content refusal of `A200` does not apply here and the
+   * request needs no broker. A test injects a recorder.
+   */
+  transport: SyncTransport;
+}
 
 /**
  * Row classes of the ownership marker (ruling `A82`): a foreign row is marked by
@@ -430,28 +454,89 @@ export class PageEntriesService {
   }
 
   /**
-   * `Удалить` of one row (rulings `A25`, `A108`, `A168`).
+   * `Удалить` of one row (rulings `A25`, `A108`, `A168`, `A203`).
    *
    * A **stored** row: **one** core `deleteEntriesOfAuthor`, which removes every entry of
    * that author on this page and asks no author question, so a foreign or stale group is
    * never undeletable. Taking the last row of a page drops the slot, which is what makes
    * the empty-state line appear.
    *
+   * When the row is the reader's **own** (`A203`), the press has the server half the
+   * editor's one-note delete (`A182`) and the «Мои заметки» row delete (`A192`) already
+   * have: the page key is resolved **before** the local write — the same core read this
+   * popup builds its view from — so the author-scoped `DELETE` names the key the notes
+   * lived under even after the slot is gone. A failed server call never undoes the local
+   * deletion: the row leaves the list and the view states `server_delete_failed`.
+   *
    * A **foreign** row (`A168`): one message that drops that author's notes from this
    * page's view for this tab — locally only, the server is never called — and the page
    * answers with the state it has left. The rows come back on the next page load, which
    * is what `A163`'s "memory only" means in the spec's own words.
+   *
+   * A stored row of a **previous** author name is deleted locally only: the server call
+   * names the current author (`A173` leaves the old name's server rows alone).
    */
   async removeAllOfAuthor(authorName: string): Promise<PageEntriesView> {
-    return await this.press(async (url: string | null) => {
+    let serverFailed = false;
+    const view = await this.press(async (url: string | null) => {
       if (await this.routesToPage(authorName, url)) {
         await dismissPageAuthor(this.source.page, authorName);
         return;
       }
-      if (url !== null) {
-        await deleteEntriesOfAuthor(this.port, { url, authorName });
+      if (url === null) {
+        return;
       }
+      // The order of `A203`: the settings and the page key first, the local write second,
+      // the server call third. The key is read **before** the write, because the write may
+      // drop the page's slot and its index entry.
+      const settings = await loadSettings(this.port);
+      const currentName = validateAuthorName(settings.name).normalized;
+      const pageKey = (await loadEntries(this.port, url)).pageKey;
+      await deleteEntriesOfAuthor(this.port, { url, authorName });
+      serverFailed = await this.deleteRemoteOwnNotes(settings, pageKey, authorName, currentName);
     });
+    if (!serverFailed) {
+      return view;
+    }
+    // The line is added **after** the re-read (`A192` posture): the fresh view is what the
+    // store answered, and the failed server call is stated above the list that still
+    // renders (`A83`). The local deletion stands — nothing here retries or undoes it.
+    return { ...view, notices: [...view.notices, 'server_delete_failed'] };
+  }
+
+  /**
+   * The server half of the own row delete, or `false` when there is nothing to call.
+   *
+   * Three questions, in the order the ruling asks them: is the row the reader's own
+   * (`isSameAuthor` with the settings name — a previous name's row is not); is there a
+   * target (`A166`: the switch on and the address usable); and is there a page key to
+   * name. Any "no" is a silent answer with no request and no notice — the feature is
+   * absent, not broken.
+   *
+   * The answer is `true` only when the request was made and failed, so the caller has one
+   * bit to render. `{ deleted: 0 }` is a success (`A181` posture): the server held no
+   * copy, so the reader's goal is already true.
+   */
+  private async deleteRemoteOwnNotes(
+    settings: { readonly name: string; readonly serverUrl: string; readonly syncEnabled: boolean },
+    pageKey: string | null,
+    authorName: string,
+    currentName: string,
+  ): Promise<boolean> {
+    if (pageKey === null || !isSameAuthor(authorName, currentName)) {
+      return false;
+    }
+    const target: SyncTarget | null = syncTargetOf(settings);
+    if (target === null) {
+      return false;
+    }
+    const answer = await deleteRemoteAuthorNotes(
+      this.source.transport,
+      target,
+      pageKey,
+      currentName,
+    );
+    return !answer.ok;
   }
 
   /**
@@ -535,7 +620,6 @@ export class PageEntriesService {
     const asked: PageNotesQueryResult =
       enabled && isInjectableUrl(url) ? await this.pageState() : EMPTY_PAGE_NOTES_QUERY_RESULT;
     const rows = mergeAuthorRows(stored, foreignGroupsOf(asked.rows));
-
 
     const notices: PopupNoticeCode[] = [];
     if (!author.ok) {

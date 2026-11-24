@@ -35,6 +35,10 @@ export const PAGE_ENTRIES_SOURCE = new InjectionToken<PageEntriesSource>(
       // Stage 17 (`A167`, `A168`): the two controls a foreign row owns are messages to
       // the page, never storage writes of this layer.
       page: createPageNotesChannelSource(activeTabId),
+      // Stage 25 (`A203`): the popup's own `fetch`, the same adapter the sync press uses.
+      // The popup document is an extension page, not the article's page, so the request
+      // needs no broker (`A200` applies to the content script only).
+      transport: createPopupSyncTransport(),
     }),
   },
 );
@@ -228,7 +232,7 @@ const POPUP_DELETE_ICON_VIEW_BOX = '0 0 24 24';
           <button class="notice notice--name" type="button" (click)="openSettings()">
             {{ noticeText(notice) }}
           </button>
-        } @else if (notice === 'sync_failed') {
+        } @else if (notice === 'sync_failed' || notice === 'server_delete_failed') {
           <p class="notice">{{ noticeText(notice) }}</p>
         } @else {
           <p class="notice notice--not-injectable">{{ noticeText(notice) }}</p>
