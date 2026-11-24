@@ -19,6 +19,12 @@
  * "Index write guard", "Decode on write", "Normalized text", "Timestamps",
  * "Page lookup", "Quota").
  *
+ * Rulings `A197`-`A199` of `sync-integration.md` (task `t20-01`) added the one writer
+ * that is not a user action: `adoptOwnNotes`, which merges the server's copy of the
+ * reader's own notes into this page's stored list. It is built from the same
+ * primitives as every other write, so one call is still one whole-list commit, and it
+ * writes nothing at all when no record changes.
+ *
  * Data discipline (PM ruling `A16`):
  * - a stored record the read guard cannot decode is carried through every write
  *   verbatim; only `clearPage` drops it;
@@ -46,6 +52,7 @@ import { createEntry } from './entry';
 import type { CreateAttempt, CreateBlockCode, RandomSource } from './entry-rules';
 import {
   MAX_COMMENT_CODE_POINTS,
+  MAX_ENTRIES_PER_PAGE,
   assertCreatable,
   canEdit,
   isSameAuthor,
@@ -177,6 +184,34 @@ export interface DeleteEntriesOfAuthorInput {
   /** Author of the group; the records it covers are chosen by `isSameAuthor` (`A99`). */
   authorName: string;
 }
+
+/**
+ * Input of `adoptOwnNotes` — the adoption half of the automatic load
+ * (rulings `A197`-`A199` of `sync-integration.md`, task `t20-01`).
+ *
+ * `remote` is the server's answer already mapped by `entryFromRemoteNote`, so every
+ * row is an `Entry` with `visible: true` and no `title`. The core re-checks the two
+ * facts adoption owns: the row is the reader's own (`isSameAuthor`) and it names the
+ * page this pass asked about (`row.pageKey === context.pageKey`).
+ */
+export interface AdoptOwnNotesInput {
+  /** Page address the load used; the page key is resolved through the index. */
+  url: string;
+  /** Author name from options; a row of another author is skipped. */
+  currentName: string;
+  /** Server rows of this page, already mapped to the stored entry shape. */
+  remote: readonly Entry[];
+}
+
+/**
+ * Result of `adoptOwnNotes`: how many rows became stored records (`adopted`) and how
+ * many were dropped (`skipped`: another author, another page, a refused comment, or
+ * over the per-page cap). `adopted: 0` is a successful answer for a call that had
+ * nothing to write, including the idempotent second call (`A199`).
+ */
+export type AdoptOwnNotesResult =
+  | { ok: true; adopted: number; skipped: number }
+  | { ok: false; code: EntryWriteCode };
 
 /**
  * Result of an aggregate author write. `entries` is what the call published
@@ -448,6 +483,192 @@ export async function deleteEntriesOfAuthor(
     return { ok: false, code: write.code };
   }
   return { ok: true, entries: removed };
+}
+
+/**
+ * Adopts the server's copy of the reader's own notes into the page's stored list
+ * (rulings `A197`-`A199` of `sync-integration.md`, task `t20-01`).
+ *
+ * This is the extension's one extra writer of own notes, and it is deliberately a
+ * whole-list write on the shipped `pages:v1` policy: the slot lands before the index,
+ * an empty page drops the slot first, and a record the read guard cannot decode is
+ * carried through verbatim (`A16`). The page context is resolved exactly like every
+ * other write (`loadPageContext`), so a caller never resolves a page key of its own.
+ *
+ * Rows are filtered first: only a row of the current author (`isSameAuthor`) on the
+ * asked page key is a candidate; every other row counts as `skipped`. A candidate
+ * whose comment the local rules refuse (`validateComment` not `ok`) is skipped too,
+ * never guessed at.
+ *
+ * The merge is per `(authorName, id)` — the server's upsert triple minus the page,
+ * which is the asked one already (`sync-server.md` -> `A155`):
+ * - no stored entry with that identity: the row is adopted (a new record);
+ * - the stored entry's `text`/`comment`/`anchor` equal the row's: nothing is written
+ *   for that row, so a press that only moved the server's `updated_at` does not
+ *   rewrite the reader's note or its date;
+ * - the content differs: the newer `updatedAt` wins, the remote copy replaces the
+ *   stored record, and the stored `visible` flag is kept (the wire has no column for
+ *   it); a stored `updatedAt` that is newer or equal keeps the stored record.
+ *
+ * New rows are adopted in `createdAt` order up to `MAX_ENTRIES_PER_PAGE`; the rest are
+ * `skipped`. A merge never deletes a stored entry to make room. When no record changes,
+ * no port write of any kind happens and the answer is `adopted: 0`.
+ *
+ * Purity: no DOM, no `chrome.*`, no clock, no randomness of its own, no network. The
+ * only impure collaborator is the injected `StoragePort`.
+ */
+export async function adoptOwnNotes(
+  port: StoragePort,
+  input: AdoptOwnNotesInput,
+): Promise<AdoptOwnNotesResult> {
+  const loaded = await loadPageContext(port, input.url);
+  if (!loaded.ok) {
+    return loaded;
+  }
+  const context = loaded.context;
+
+  let skipped = 0;
+  const candidates: Entry[] = [];
+  for (const row of input.remote) {
+    if (!isSameAuthor(row.authorName, input.currentName) || row.pageKey !== context.pageKey) {
+      skipped += 1;
+      continue;
+    }
+    if (!validateComment(row.comment).ok) {
+      skipped += 1;
+      continue;
+    }
+    candidates.push(row);
+  }
+
+  const records = [...context.records];
+  let adopted = 0;
+
+  // Replace pass: an existing stored record of this `(authorName, id)` either keeps
+  // its bytes (equal content, or a stored stamp that is newer or equal) or is
+  // replaced by the newer remote copy with the stored `visible` flag kept.
+  for (const row of candidates) {
+    const found = findStoredEntryOfAuthor(context, row.id, row.authorName);
+    if (found === null || sameContent(found.entry, row) || found.entry.updatedAt >= row.updatedAt) {
+      continue;
+    }
+    const record = canonicalRecord(adoptionDraft(row, found.entry.visible));
+    if (record === null) {
+      return { ok: false, code: 'entry_invalid' };
+    }
+    records[found.index] = record;
+    adopted += 1;
+  }
+
+  // Adopt pass: rows the page does not hold yet, oldest `createdAt` first, up to the
+  // cap. The cap counts every decodable stored record plus the rows already adopted
+  // here; a replace pass never changes the page size. A row that does not fit is
+  // skipped, never swapped in for a stored entry.
+  const fresh = candidates.filter(
+    (row: Entry) => findStoredEntryOfAuthor(context, row.id, row.authorName) === null,
+  );
+  let storedCount = decodableEntries(context).length;
+  for (const row of orderByCreatedAt(fresh)) {
+    if (storedCount >= MAX_ENTRIES_PER_PAGE) {
+      skipped += 1;
+      continue;
+    }
+    const record = canonicalRecord(adoptionDraft(row, true));
+    if (record === null) {
+      return { ok: false, code: 'entry_invalid' };
+    }
+    records.push(record);
+    adopted += 1;
+    storedCount += 1;
+  }
+
+  if (adopted === 0) {
+    return { ok: true, adopted: 0, skipped };
+  }
+
+  const write = await commitRecords(port, context, records);
+  if (!write.ok) {
+    return { ok: false, code: write.code };
+  }
+  return { ok: true, adopted, skipped };
+}
+
+/**
+ * The draft one adopted row is written from (`A197`): the server's `id`, `createdAt`
+ * and `updatedAt` are kept, `visible` is the stored flag (the reader's own display
+ * state) or `true` for a new row, and `title` is dropped because the wire has no such
+ * field (`A190`).
+ */
+function adoptionDraft(row: Entry, visible: boolean): EntryDraft {
+  return {
+    id: row.id,
+    pageKey: row.pageKey,
+    authorName: row.authorName,
+    text: row.text,
+    comment: row.comment,
+    anchor: row.anchor,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    visible,
+  };
+}
+
+/**
+ * Position of the entry with this `id` **and** this author among the decodable
+ * records — the merge key `(authorName, id)` of `A198`, which is the server's upsert
+ * triple without the page (`sync-server.md` -> `A155`). Two authors may legitimately
+ * use one `id`, so an id match of another author is not this row's stored record.
+ */
+function findStoredEntryOfAuthor(
+  context: PageWriteContext,
+  id: string,
+  authorName: string,
+): StoredEntryPosition | null {
+  for (let index = 0; index < context.decoded.length; index += 1) {
+    const entry = context.decoded[index];
+    if (entry !== null && entry.id === id && isSameAuthor(entry.authorName, authorName)) {
+      return { index, entry };
+    }
+  }
+  return null;
+}
+
+/**
+ * The content comparison of `A198`: `text`, `comment` and `anchor` all equal. An
+ * anchor is compared field by field, because two anchors with the same `text` but a
+ * different context window are not the same anchor.
+ */
+function sameContent(stored: Entry, row: Entry): boolean {
+  return (
+    stored.text === row.text && stored.comment === row.comment && sameAnchor(stored.anchor, row.anchor)
+  );
+}
+
+/** Field-by-field equality of two anchors (`A198`). */
+function sameAnchor(a: EntryAnchor, b: EntryAnchor): boolean {
+  return (
+    a.text === b.text &&
+    a.prefix === b.prefix &&
+    a.suffix === b.suffix &&
+    a.fragmentCount === b.fragmentCount
+  );
+}
+
+/**
+ * The rows of the cap queue in `createdAt` order (`A198`): oldest first, so the note
+ * the reader wrote first is the one that survives a full page. The sort is stable, so
+ * equal stamps keep the server's answer order.
+ */
+function orderByCreatedAt(rows: readonly Entry[]): Entry[] {
+  return [...rows].sort((a: Entry, b: Entry) => {
+    if (a.createdAt < b.createdAt) {
+      return -1;
+    }
+    if (a.createdAt > b.createdAt) {
+      return 1;
+    }
+    return 0;
+  });
 }
 
 /**
