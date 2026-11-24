@@ -90,3 +90,22 @@ one-note delete behave exactly as their existing tests say (no test rewrite beyo
 transport seam). The network-shape pin lists `src/background/service-worker.ts`,
 `src/popup/sync-transport.ts`, `src/all-notes/fetch-transport.ts`; the "transport holds no
 URL" pin moves to the new content module. Gates green; one commit.
+
+## Outcome
+
+- `t23-01` (commit `42520a3`): `src/core/sync-broker-message.ts`, `src/background/sync-broker.ts`,
+  `src/background/service-worker.ts`, manifest `background.service_worker`, build step
+  `dist/service-worker.js`, `tsconfig.background.json` + the `typecheck` program, broker
+  tests and the moved toolchain pins. Gates: build 17 files, `npm test` 1392, typecheck,
+  checker 0 errors. Report: `docs/state/t23-01-engineer.md`.
+- `t23-02` (commit `46a18b4`): `src/content/sync/broker-transport.ts` replaces
+  `fetch-transport.ts`; the content script sends `SYNC_FETCH_MESSAGE` and names no network
+  API; an undelivered message rejects, so `A164`'s `network` code is unchanged. Gates:
+  build 17 files, `npm test` 1403, typecheck, checker 0 errors.
+  Report: `docs/state/t23-02-engineer.md`.
+- `t23-03` (`code-reviewer`, run `2b07d2ab`): **accepted**, AC 17/25/26 pass, no blocking
+  finding; gates re-run (1403 tests). Non-blocking: the broker module is typechecked only
+  by the `background` program; an ESM worker would need `"type": "module"` in the manifest.
+  Report: `docs/state/t23-03-review.md`.
+- Stage 23 closed. The mixed-content defect is fixed: the page's sync calls run in the
+  service worker, so an `http://` server works on an `https://` article.
