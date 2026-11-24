@@ -4,6 +4,8 @@ import type { Entry, EntryAnchor } from '../src/core/entry';
 import { MAX_ENTRIES_PER_PAGE } from '../src/core/entry-rules';
 import type { AdoptOwnNotesInput } from '../src/core/entry-store-write';
 import { adoptOwnNotes } from '../src/core/entry-store-write';
+import type { RemoteNote } from '../src/core/sync-client';
+import { entryFromRemoteNote } from '../src/core/sync-client';
 import { PAGE_INDEX_KEY, entryStorageKey } from '../src/core/storage-keys';
 import {
   MemoryStoragePort,
@@ -498,5 +500,45 @@ describe('adoptOwnNotes (A197-A199)', () => {
       row({ id: 'aaaaaaaaaaaa', pageKey: variant }),
     ]);
     expect(storedRecords(port, SLOT_A)).toBeUndefined();
+  });
+
+  it('adopts a server row whose stamps kept the server’s RFC3339Nano shape (the t22-01 defect)', async () => {
+    // The reader's report: a note created on the first PC is correct on the server
+    // (`2026-11-24T16:15:56.015417Z`, six fractional digits), the second PC loads it,
+    // and it is invisible everywhere — no highlight, no popup row, no «Мои заметки»
+    // entry — because the wire string reached the guard, the guard refused it, and
+    // adoption is best effort (`A197`, `A199`). Both halves are exercised here:
+    // `entryFromRemoteNote` maps the stamps, `adoptOwnNotes` writes the record.
+    const port = indexedPort();
+    const wire: RemoteNote = {
+      id: 'a1b2c3d4e5f6',
+      page_id: PAGE_A,
+      author_id: NAME,
+      text: 'selected text',
+      comment: 'my note',
+      anchor: ANCHOR,
+      created_at: '2026-11-24T16:15:56.015417Z',
+      updated_at: '2026-11-24T16:15:56.015417Z',
+    };
+    const mapped = entryFromRemoteNote(wire);
+    expect(mapped).not.toBeNull();
+
+    const result = await adoptOwnNotes(port, input(mapped === null ? [] : [mapped]));
+
+    expect(result).toEqual({ ok: true, adopted: 1, skipped: 0 });
+    const stored = recordAt(port, SLOT_A, 0);
+    expect(stored).toEqual({
+      id: 'a1b2c3d4e5f6',
+      pageKey: PAGE_A,
+      authorName: NAME,
+      text: 'selected text',
+      comment: 'my note',
+      anchor: ANCHOR,
+      visible: true,
+      createdAt: '2026-11-24T16:15:56.015Z',
+      updatedAt: '2026-11-24T16:15:56.015Z',
+    });
+    // The page is reachable from the popup and «Мои заметки» again.
+    expect(storedIndexOf(port)?.pageKeys).toEqual([PAGE_A]);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createEntry } from '../src/core/entry';
 import type { Entry } from '../src/core/entry';
+import { ISO_UTC_TIMESTAMP_PATTERN } from '../src/core/entry-store-read';
 import {
   authorDeleteUrl,
   deleteRemoteAuthorNotes,
@@ -420,5 +421,140 @@ describe('a remote note becomes a stored entry, or is skipped (A163)', () => {
   it('keeps the page key the server returned, so a row cannot be filed under another page by this module', () => {
     const decoded = entryFromRemoteNote({ ...good, page_id: 'https://other.example/x' });
     expect(decoded?.pageKey).toBe('https://other.example/x');
+  });
+});
+
+describe('the server’s RFC3339Nano stamps are normalized at the wire boundary (stage 22, t22-01)', () => {
+  // The defect of the second-PC report: Go writes `2026-11-24T16:15:56.015417Z`, the
+  // stored shape of `A9` keeps at most three fractional digits, and a row that kept
+  // the wire string was refused by the store guard on the way in — silently, because
+  // adoption is best effort (`A199`).
+  const goodRow: RemoteNote = {
+    id: 'a1b2c3d4e5f6',
+    page_id: 'https://example.com/a',
+    author_id: 'Анна',
+    text: 'selected text',
+    comment: 'my note',
+    anchor: { text: 'selected text', prefix: '', suffix: '', fragmentCount: 1 },
+    created_at: '2026-11-24T16:15:56.015417Z',
+    updated_at: '2026-11-24T16:15:56.015417Z',
+  };
+
+  it('maps a six-digit RFC3339Nano stamp to the stored shape, truncating the fraction', () => {
+    const decoded = entryFromRemoteNote(goodRow);
+
+    expect(decoded?.createdAt).toBe('2026-11-24T16:15:56.015Z');
+    expect(decoded?.updatedAt).toBe('2026-11-24T16:15:56.015Z');
+    // The mapped stamp is the shape the store guard accepts, which is the whole point.
+    expect(ISO_UTC_TIMESTAMP_PATTERN.test(decoded?.createdAt ?? '')).toBe(true);
+    expect(ISO_UTC_TIMESTAMP_PATTERN.test(decoded?.updatedAt ?? '')).toBe(true);
+    // Nothing else about the row moves: only the two stamps are rewritten.
+    expect(decoded).toEqual({
+      id: 'a1b2c3d4e5f6',
+      pageKey: 'https://example.com/a',
+      authorName: 'Анна',
+      text: 'selected text',
+      comment: 'my note',
+      anchor: { text: 'selected text', prefix: '', suffix: '', fragmentCount: 1 },
+      visible: true,
+      createdAt: '2026-11-24T16:15:56.015Z',
+      updatedAt: '2026-11-24T16:15:56.015Z',
+    });
+  });
+
+  it('truncates a four-digit fraction and pads an absent one to three digits', () => {
+    const four = entryFromRemoteNote({
+      ...goodRow,
+      created_at: '2026-11-24T16:15:56.0154Z',
+      updated_at: '2026-11-24T16:15:56.0154Z',
+    });
+    expect(four?.createdAt).toBe('2026-11-24T16:15:56.015Z');
+    expect(four?.updatedAt).toBe('2026-11-24T16:15:56.015Z');
+
+    const none = entryFromRemoteNote({
+      ...goodRow,
+      created_at: '2026-11-24T16:15:56Z',
+      updated_at: '2026-11-24T16:15:56Z',
+    });
+    expect(none?.createdAt).toBe('2026-11-24T16:15:56.000Z');
+    expect(none?.updatedAt).toBe('2026-11-24T16:15:56.000Z');
+  });
+
+  it('canonicalizes a one- and a two-digit fraction to the stored three-digit shape', () => {
+    // `RFC3339Nano` drops trailing zeros, so `.5Z` and `.05Z` are wire-legal and both
+    // are canonicalized rather than left short: the stored shape is fixed at three.
+    const one = entryFromRemoteNote({
+      ...goodRow,
+      created_at: '2026-11-24T16:15:56.5Z',
+      updated_at: '2026-11-24T16:15:56.5Z',
+    });
+    expect(one?.createdAt).toBe('2026-11-24T16:15:56.500Z');
+    expect(ISO_UTC_TIMESTAMP_PATTERN.test(one?.updatedAt ?? '')).toBe(true);
+
+    const two = entryFromRemoteNote({
+      ...goodRow,
+      created_at: '2026-11-24T16:15:56.05Z',
+      updated_at: '2026-11-24T16:15:56.05Z',
+    });
+    expect(two?.createdAt).toBe('2026-11-24T16:15:56.050Z');
+  });
+
+  it('keeps the two stamps distinct when the server moved only one of them', () => {
+    const decoded = entryFromRemoteNote({
+      ...goodRow,
+      created_at: '2026-11-24T16:15:56.000001Z',
+      updated_at: '2026-11-25T09:00:00.000002Z',
+    });
+
+    expect(decoded?.createdAt).toBe('2026-11-24T16:15:56.000Z');
+    expect(decoded?.updatedAt).toBe('2026-11-25T09:00:00.000Z');
+    expect(ISO_UTC_TIMESTAMP_PATTERN.test(decoded?.updatedAt ?? '')).toBe(true);
+  });
+
+  it('leaves a stamp already in the stored shape unchanged (idempotent)', () => {
+    const stored = '2026-01-02T03:04:05.006Z';
+    const decoded = entryFromRemoteNote({ ...goodRow, created_at: stored, updated_at: stored });
+
+    expect(decoded?.createdAt).toBe(stored);
+    expect(decoded?.updatedAt).toBe(stored);
+    // Mapping the mapped value again changes nothing: the boundary can be crossed twice.
+    const again = entryFromRemoteNote({
+      ...goodRow,
+      created_at: decoded?.createdAt ?? '',
+      updated_at: decoded?.updatedAt ?? '',
+    });
+    expect(again?.createdAt).toBe(stored);
+    expect(again?.updatedAt).toBe(stored);
+  });
+
+  it('skips a row whose stamp is not a UTC RFC3339 stamp, instead of handing the store a bad stamp', () => {
+    // Shape cases only. The mapping is a string transform, so it checks the shape and
+    // not the calendar: a well-formed stamp of month 13 is out of scope for a value the
+    // server builds from a `time.Time`.
+    for (const bad of [
+      '',
+      '  ',
+      'not a date',
+      '1700000000',
+      '2026-11-24',
+      '2026-11-24T16:15:56',
+      '2026-11-24T16:15:56.015417',
+      '2026-11-24t16:15:56z',
+      '2026-11-24 16:15:56Z',
+      '2026-11-24T16:15:56.Z',
+    ]) {
+      for (const field of ['created_at', 'updated_at'] as const) {
+        const decoded = entryFromRemoteNote({ ...goodRow, [field]: bad });
+        expect(decoded, `${field}=${JSON.stringify(bad)}`).toBeNull();
+      }
+    }
+  });
+
+  it('skips a stamp with a numeric offset, because only a literal Z is the stored shape', () => {
+    // The server always sends UTC `Z`; folding an offset would need zone arithmetic
+    // this module does not do, so the row is unreadable rather than guessed at.
+    for (const offset of ['2026-11-24T16:15:56.015417+00:00', '2026-11-24T16:15:56.015417+02:00']) {
+      expect(entryFromRemoteNote({ ...goodRow, created_at: offset }), offset).toBeNull();
+    }
   });
 });

@@ -148,6 +148,16 @@ export function remoteNoteOf(entry: Entry): OutgoingNote {
  * that arrives half-readable is a note the page cannot anchor, and inventing its text
  * would put somebody else's words on the wrong span.
  *
+ * The two stamps cross a **shape** boundary here, not only a type one (spec ->
+ * "Wire shape" -> Receiving). The server writes them with Go `RFC3339Nano`, which
+ * keeps up to nine fractional digits and none at all when they are zero
+ * (`2026-11-24T16:15:56.015417Z`), while a stored stamp is `A9`'s `toISOString`
+ * shape pinned by `ISO_UTC_TIMESTAMP_PATTERN` (at most three digits). Reading the
+ * wire string as an `Entry` without that mapping let a correct row reach a store
+ * write whose guard then refused it, and the refusal was swallowed as best effort.
+ * A stamp that is not that shape is the row being unreadable: `null`, never a string
+ * the store guard would reject later.
+ *
  * `visible` is `true`: a foreign note has no local display flag yet, and `A1`'s
  * default is "shown".
  */
@@ -168,6 +178,11 @@ export function entryFromRemoteNote(note: RemoteNote): Entry | null {
   if (anchor === null) {
     return null;
   }
+  const createdAt = storedStampOf(note.created_at);
+  const updatedAt = storedStampOf(note.updated_at);
+  if (createdAt === null || updatedAt === null) {
+    return null;
+  }
   return createEntry({
     id: note.id,
     pageKey: note.page_id,
@@ -175,11 +190,43 @@ export function entryFromRemoteNote(note: RemoteNote): Entry | null {
     text: note.text,
     comment: note.comment,
     anchor,
-    createdAt: note.created_at,
-    updatedAt: note.updated_at,
+    createdAt,
+    updatedAt,
     visible: true,
   });
 }
+
+/**
+ * One wire stamp as the stored shape of ruling `A9`, or `null` when it is no stamp.
+ *
+ * A pure string transform, not a date round-trip: the server's stamp is always UTC
+ * (`t.UTC().Format(time.RFC3339Nano)`), so the seconds it names are already the
+ * seconds a stored stamp names and only the fractional part has to be folded to the
+ * three digits `A9` keeps. Character arithmetic also keeps this module free of the
+ * clock and of the host time zone — a `Date`-based mapping would read a stamp without
+ * an offset in the **local** zone, giving the same row two different stored stamps on
+ * two machines, which the lexical `A198` merge compare would then decide wrongly.
+ *
+ * The fraction is truncated to its first three digits and a shorter one is padded, so
+ * `015417` -> `015`, `0154` -> `015`, `5` -> `500` and an absent fraction -> `000`; a
+ * stamp already in the stored shape maps to itself. Only a literal `Z` is accepted: a
+ * numeric offset can never be in the stored shape without zone arithmetic, so such a
+ * row is answered as unreadable rather than guessed at.
+ */
+function storedStampOf(value: string): string | null {
+  const match = WIRE_STAMP.exec(value);
+  if (match === null) {
+    return null;
+  }
+  const fraction = (match[2] ?? '').padEnd(3, '0').slice(0, 3);
+  return `${match[1]}.${fraction}Z`;
+}
+
+/**
+ * The two shapes one wire stamp can have: seconds with an optional fraction, then a
+ * literal `Z`. Declared once because the mapping above is the only reader.
+ */
+const WIRE_STAMP = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z$/;
 
 /** The stored anchor of an unknown `anchor` value, `null` when it is not one. */
 function anchorFromUnknown(value: unknown): EntryAnchor | null {
