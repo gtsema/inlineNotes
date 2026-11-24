@@ -192,6 +192,8 @@ describe('manifest contract', () => {
     // without a line here, which is exactly how a permission set widens unnoticed.
     expect(Object.keys(manifest as unknown as Record<string, unknown>).sort()).toEqual([
       'action',
+      // `t23-01`: the background broker the page's sync calls go through (`A200`).
+      'background',
       'content_scripts',
       'description',
       'host_permissions',
@@ -656,6 +658,7 @@ describe('the extraction runs live code, never a comment copy (t10-01 review blo
     // so a **nested** duplicate of `fail` or `main` is counted here as well.
     expect(liveFunctionNames(code).sort()).toEqual(
       [
+        'buildBackgroundBundle',
         'buildContentBundle',
         'cleanDist',
         // `t11-01`: the icon copy is the build's second asset step, and both of its
@@ -1639,12 +1642,18 @@ describe('no network in shipped source', () => {
     // an MV3 extension, so they cannot share a module: each half ships its own five-line
     // `fetch` adapter and the shared wire logic sits in core, where all of them can
     // import it. Three files, one call each.
+    //
+    // Stage 23 (`A200`) moves the page's call into the background broker: the worker
+    // runs the `fetch`, so the module that names it is `src/background/service-worker.ts`.
+    // The content script's own transport still names `fetch` until `t23-02` swaps it for
+    // the message, which is why both files are listed here for now.
     const pattern = NETWORK_SHAPE;
     const offenders = sourceFiles('src')
       .filter((file) => pattern.test(codeOnly(file.text)))
       .map((file) => file.path);
     expect(offenders).toEqual([
       'src/all-notes/fetch-transport.ts',
+      'src/background/service-worker.ts',
       'src/content/sync/fetch-transport.ts',
       'src/popup/sync-transport.ts',
     ]);

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable"],
+    // The worker is an extension context: `chrome.runtime` is in scope, and so is `fetch`
+    // (ruling `A200` names it in this program's one entry file).
+    "types": ["chrome"],
+    "noEmit": true
+  },
+  "files": ["src/background/service-worker.ts"],
+  "include": ["src/background/**/*.ts", "src/core/**/*.ts"]
+}

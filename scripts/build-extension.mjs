@@ -99,6 +99,29 @@ async function buildContentBundle() {
   });
 }
 
+/**
+ * The background broker's bundle (Stage 23, ruling `A200`). The manifest declares it as
+ * `background.service_worker`, so `verifyManifestReferences` fails the build when this
+ * step is missing — but the step is what makes the reference resolve. The bundle is an
+ * IIFE like the content script's, because the manifest carries no `"type": "module"`,
+ * and it takes no JSX: the worker renders nothing.
+ */
+async function buildBackgroundBundle() {
+  await build({
+    absWorkingDir: projectRoot,
+    entryPoints: ['src/background/service-worker.ts'],
+    outfile: 'dist/service-worker.js',
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: ['chrome110'],
+    minify: false,
+    sourcemap: false,
+    legalComments: 'none',
+    logLevel: 'info',
+  });
+}
+
 function copyManifest() {
   copyFileSync(join(projectRoot, 'src', 'manifest.json'), join(distDir, 'manifest.json'));
   logStep('copied src/manifest.json -> dist/manifest.json');
@@ -224,6 +247,8 @@ async function main() {
   }
   await buildContentBundle();
   logStep('built dist/content.js with esbuild');
+  await buildBackgroundBundle();
+  logStep('built dist/service-worker.js with esbuild');
   copyManifest();
   copyIcons();
   const manifest = readDistManifest();
