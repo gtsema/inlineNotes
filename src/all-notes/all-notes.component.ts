@@ -56,6 +56,10 @@ export interface AllNotesView {
  * least one note of the current author, fresh first, each row a link to the page
  * and the icon-only delete control at its end.
  *
+ * The row's link carries `title` = the full `pageKey`, the same value as its
+ * `href` (`A206`): the label is the stored `document.title` when the page has one
+ * (`A190`), so the address comes back on hover and the label stays untouched.
+ *
  * The row delete is the `A192` order: one local core write first, one server call
  * second, and a server failure is a non-blocking notice the local deletion stands
  * behind. The list re-reads after every delete.
@@ -83,7 +87,13 @@ export interface AllNotesView {
         <ul class="list">
           @for (row of rows(); track row.pageKey) {
             <li class="row">
-              <a class="link" [href]="row.pageKey" target="_blank" rel="noreferrer">{{ row.label }}</a>
+              <a
+                class="link"
+                [href]="row.pageKey"
+                [attr.title]="row.pageKey"
+                target="_blank"
+                rel="noreferrer"
+              >{{ row.label }}</a>
               <span class="meta">{{ row.count }} · {{ row.date }}</span>
               <button
                 class="delete"

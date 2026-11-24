@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { AllNotesComponent } from '../src/all-notes/all-notes.component';
@@ -25,8 +28,21 @@ import { MemoryStoragePort, indexValue, slotValue, storedEntry } from './support
  * signals — never on a retelling.
  */
 
+const projectRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
+
 const PAGE_A = 'https://example.com/a';
 const PAGE_B = 'https://example.com/b';
+
+/** The page component's inline template, the only place its row markup lives (`A206`). */
+function rowTemplate(): string {
+  const template = /template:\s*`([\s\S]*?)`/.exec(
+    readFileSync(join(projectRoot, 'src', 'all-notes', 'all-notes.component.ts'), 'utf8'),
+  )?.[1];
+  if (template === undefined) {
+    throw new Error('the all-notes component has no inline template to scan');
+  }
+  return template;
+}
 
 function transportOf(answer: { ok?: boolean; status?: number; body?: unknown } = {}): {
   transport: SyncTransport;
@@ -242,5 +258,90 @@ describe('loadSettings imports', () => {
     expect(settings.name).toBe('reader-one');
     expect(typeof saveSettings).toBe('function');
     expect(typeof deleteEntriesOfAuthor).toBe('function');
+  });
+});
+
+describe('the row link shows its full address on hover (A206, task t28-01)', () => {
+  it('carries the full page key as its title, the same value as its href', () => {
+    // The label is the stored `document.title` when the page has one (`A190`), so the
+    // address is off screen; `A206` puts the whole key in the link's `title`, which is
+    // a template fact of this component and is pinned where the markup lives.
+    const template = rowTemplate();
+    expect(template).toContain('[href]="row.pageKey"');
+    expect(template).toContain('[attr.title]="row.pageKey"');
+    // One binding, one value: the `title` reads exactly the field the `href` does.
+    const link = /<a[\s\S]*?class="link"[\s\S]*?>/.exec(template)?.[0];
+    expect(link).toBeDefined();
+    expect(link).toContain('[attr.title]="row.pageKey"');
+    expect(link).toContain('[href]="row.pageKey"');
+    // The label, the target and the rel are untouched by `A206`.
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('rel="noreferrer"');
+    expect(template).toContain('{{ row.label }}');
+  });
+
+  it('a row with a stored title keeps the title as its label, and the key as its title', async () => {
+    const titled = createEntry({
+      id: 'titled00001',
+      pageKey: PAGE_A,
+      authorName: 'reader-one',
+      text: 'text',
+      comment: 'note',
+      anchor: { text: 'text', prefix: '', suffix: '', fragmentCount: 1 },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      title: 'Статья',
+    });
+    const port = portOf([titled as unknown as Record<string, unknown>]);
+    const answer = await authorPagesOf(port, 'reader-one');
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    // The row the template is handed: the `A190` label rule against this answer.
+    const row = {
+      pageKey: answer.rows[0]?.pageKey ?? '',
+      label: answer.rows[0]?.title ?? pageLabelText(answer.rows[0]?.pageKey ?? ''),
+    };
+    expect(row.label).toBe('Статья');
+    expect(row.pageKey).toBe(PAGE_A);
+    // Hover value and `href` are the same full key, which the title label does not show.
+    expect(row.pageKey).not.toBe(row.label);
+  });
+
+  it('a row without a stored title labels with the key minus its scheme, and keeps the full key', async () => {
+    const port = portOf([storedEntry({ pageKey: PAGE_A })]);
+    const answer = await authorPagesOf(port, 'reader-one');
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    expect(answer.rows[0]?.title).toBeNull();
+    const row = {
+      pageKey: answer.rows[0]?.pageKey ?? '',
+      label: answer.rows[0]?.title ?? pageLabelText(answer.rows[0]?.pageKey ?? ''),
+    };
+    // The label drops only the scheme (`A190`); the `href`/`title` keep it whole.
+    expect(row.label).toBe('example.com/a');
+    expect(row.pageKey).toBe('https://example.com/a');
+    expect(pageLabelText(row.pageKey)).not.toContain('://');
+  });
+
+  it('adds no word to the wording module: the title is page data, not a UI string', () => {
+    // `A206` adds no string anywhere: the title is the row's own key. The one module
+    // this layer keeps its wording in still holds exactly its own seven sentences and
+    // no address literal.
+    const text = readFileSync(join(projectRoot, 'src', 'all-notes', 'text.ts'), 'utf8');
+    expect(Object.keys(ALL_NOTES_STRINGS).sort()).toEqual([
+      'delete',
+      'empty',
+      'listUnavailable',
+      'nameRequired',
+      'open',
+      'serverDeleteFailed',
+      'title',
+    ]);
+    for (const sentence of Object.values(ALL_NOTES_STRINGS)) {
+      expect(sentence).not.toMatch(/https?:|\/\//);
+    }
+    expect(text).not.toMatch(/https?:\/\/example/);
+    // The label helper drops the scheme, which is why the `title` has to carry the key.
+    expect(pageLabelText('https://example.com/a')).toBe('example.com/a');
   });
 });
