@@ -6,7 +6,7 @@ Connect the extension to the sync server of `docs/specs/sync-server.md`: a reade
 
 ## Scope
 
-In scope: the two settings fields that carry the feature, the server address rule, the popup's sync button and its three states, the automatic load on page open, the foreign notes as memory-only data, the local-only delete of a foreign row, and the failure behaviour of every network call.
+In scope: the two settings fields that carry the feature, the server address rule, the popup's sync button and its three states, the automatic load on page open, the adoption of the reader's own notes the load returns (`A197`), the foreign notes as memory-only data, the local-only delete of a foreign row, and the failure behaviour of every network call.
 
 Out of scope: any change under `server/` (the server is frozen for this stage); editing or deleting a foreign note on the server; conflict resolution beyond the server's own upsert; a "my notes across pages" view (the server's `all-pages` endpoint is called by nothing yet); authentication of any kind; a periodic or background synchronization (there is none: a request happens on page open and on a press).
 
@@ -26,7 +26,8 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `automatic load` | — | one `GET /notes/page/{page_id}` per page key per document, at page open (`A163`) |
 | `foreign note` | — | a note the server returned whose `authorName` is not the reader's; it lives in the document's memory only |
 | `own note` | «Вы» | a note whose author is the reader, by core `isSameAuthor` (`A99`) |
-| `memory only` | — | never written to `chrome.storage.local`, never sent in a payload (the note itself: `A163`; the hidden flag: `A184`) |
+| `memory only` | — | never written to `chrome.storage.local`, never sent in a payload (a **foreign** note and the hidden flag: `A163`, `A184`) |
+| `adoption` | — | writing the server's copy of the reader's own note into `chrome.storage.local` at load, so a note created on another machine becomes a stored note here (`A197`); merge rule `A198`, write rule `A199` |
 | `hidden author flag` | — | a stored `{ pageKey, authorName }` pair saying the popup checkbox of that foreign author was last pressed to hidden on that page; keyed and applied by `A184` |
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
@@ -38,7 +39,7 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 
 1. **Configure.** The reader opens the options window, types `http://192.168.0.10:8080` in the `server address` field, leaves it, and ticks `synchronization switch`. The address is validated first (`A165`); the record is written once per control, beside the name.
 2. **Open a page.** The content script paints the stored notes of the page exactly as before, and then, once, asks the server for the page's notes by the `page key` the paint pass resolved. With the switch off or no address, no request is made at all.
-3. **Show the answer.** The rows that come back are decoded into entries, the reader's own are dropped (the store already has them), and the rest are held in memory and painted by one more pass over the same page stream.
+3. **Show the answer.** The rows that come back are decoded into entries. The reader's own rows are **adopted** into `chrome.storage.local` first (the store of a second machine is empty, so "already there" is not true; `A197`-`A199`), the rest are held in memory, and the page repaints so both reach the screen.
 4. **Press sync.** In the popup, the reader's own row carries the sync button beside the delete button. A press turns the arrows green-spinning, sends one `POST` with that author's notes of this page, and answers with green-static (success) or red (failure).
 5. **Read a foreign note.** Hovering a foreign note's highlight shows the usual tooltip, whose header prints the author's stored name **in that author's palette colour**, and whose body is the stored comment. Clicking it opens no editor: a foreign note is read-only.
 6. **Hide or remove a foreign row.** The popup's checkbox hides the foreign author's highlights on this page (in memory, and the hidden state of that author is persisted by `A184`); `Удалить` removes the author's rows from this page's view and clears that author's persisted hidden state. Neither calls the server.
@@ -95,13 +96,33 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 - The key asked for is the key the paint pass resolved — the same one the stored notes live under, `origin + pathname` fallback included.
 - A same-document navigation (`A59`) or a storage write (the settings key included) re-runs the pass and then the question; a key already asked about starts no second request.
 - The response is `{ "notes": [...] }`. Each row is mapped at this boundary (`src/core/sync-client.ts`) into the stored entry shape; a row whose fields are not all readable as an entry is **skipped**, never guessed at.
-- The reader's own notes in the answer are dropped before memory: they are already in the store, and painting them twice would register two highlight names over one span.
+- The reader's own notes in the answer are **adopted** into the store before memory (`A197`) and then dropped from memory: the store paints them, and a second copy in memory would register two highlight names over one span.
 - An unreadable body, a non-2xx status, a refused connection, a missing transport or no target are all `{ ok: false, code }` — the loader never rejects.
+
+### Adopting the reader's own notes (rulings `A197`-`A199`)
+
+Before `A197` the extension assumed the reader's own note is always in the local store, so the automatic load dropped the server's copy of it. That is false on a second machine: the store there is empty, and a note written on the first machine stayed invisible. `A197` closes that gap.
+
+- `A197` **Adoption.** A row the automatic load returns whose `authorName` is the reader's (core `isSameAuthor` against the settings name) is **written into `chrome.storage.local`** as a stored entry of this page, through one core write. After that it is an ordinary own note: it is painted, it appears in the popup's `Вы` row and in the «Мои заметки» list, it is editable, and the next press sends it back.
+- Adoption is the extension's **one** new writer of own notes from the network. A foreign row is still never written (`A163`).
+- The adopted row keeps the server's `id`, `createdAt` and `updatedAt`, and stores no `title` (the wire has none, `A190`); `visible` is `true`, the store's own default (`A1`).
+- A row whose `page_id` is not the asked page key, or that cannot be read as a local entry (an unreadable anchor, an empty comment, a comment over 256 code points), is **skipped**, never guessed at.
+
+- `A198` **The merge rule**, per row, by the server's `(authorName, id)`:
+  - the page holds no entry with that id: the row is adopted;
+  - the page holds one and its content (`text`, `comment`, `anchor`) equals the row's: nothing is written — a press that only moved the server's `updated_at` must not rewrite the reader's note and its date;
+  - the content differs: the newer `updatedAt` wins, the remote copy replaces the local one, and the local `visible` flag is kept, because visibility is the reader's own display flag and the wire has no column for it;
+  - a local `updatedAt` that is newer or equal keeps the local copy;
+  - the cap is `MAX_ENTRIES_PER_PAGE`. A merge never deletes a stored entry to make room: new rows are adopted in `createdAt` order, up to the cap, and the rest are skipped (they stay on the server and can be adopted after other notes are deleted).
+
+- `A199` **One commit, best effort.** Adoption is one whole-list write under the existing `pages:v1` policy (`inline-comment-model.md` -> "Index write policy"): the slot lands before the index, and a page left with no entry drops the slot first. A refusal (an unreadable index or slot, an unusable page key, a port that throws) writes nothing, is not retried by this load, and is not reported on the article; the row is simply not in the store this load, and the next load tries again. A refused adoption never blocks the paint, exactly like a failed load (`A164`).
+
+`Assumption:` "content first, then stamps" for an existing entry, the oldest-first cap rule, and "skip a row the local rules refuse" are the PM's least-risky defaults; the reader accepted the newer-`updatedAt` rule without naming any of the three.
 
 ### Where the notes live (ruling `A163`)
 
 - The foreign notes are held in a closure inside the content script, for the lifetime of the document. They disappear on reload.
-- They are **never** written to `chrome.storage.local`, never appear in a payload, and never reach the page index: the content layer's settings import list grows by one module and its write imports by none (`tests/content-create-card-boundaries.spec.ts` pins both).
+- A **foreign** note is **never** written to `chrome.storage.local`, never appears in a payload, and never reaches the page index. The reader's own notes the server returns are the opposite: they are adopted into the store (`A197`), so the content layer's write imports grow by exactly one module — the adoption caller — while its settings import list keeps its two modules (`tests/content-create-card-boundaries.spec.ts` pins both).
 - They are painted by the existing paint pass, in the same pass as the stored notes and against the same page stream (`A29`), with the same anchor resolution, the same `paint name` scheme and the same palette slot per `authorName`.
 - A foreign note is therefore **not editable**: the editor opens only from `onEntryClick` of a paint-pass entry whose author is the reader's (`A96`), and a foreign entry is refused there by the existing rule, not by a new one.
 
@@ -178,7 +199,7 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 - **The reader's name changes while the page stands.** The settings write repaints the page and re-asks the question; a note that just became the reader's own stops being foreign, and a note that stopped being theirs arrives as foreign on the next load.
 - **The switch is turned off while the page stands.** The settings write is the trigger: the page drops its foreign notes and repaints, and the popup's next open renders no sync button.
 - **The address is cleared while the popup stands.** A press answers `sync_off` and returns to `idle`; nothing was called.
-- **A note the reader deleted locally but the server still holds.** The next load returns it as foreign if its author differs from the reader's; the reader's own deleted note comes back in the server's answer only as an own note, which memory drops.
+- **A note the reader deleted locally but the server still holds.** With synchronization on the delete also removes it from the server (`A181`, `A192`), so this state means the delete happened while the server was unreachable or the switch was off. The next load then **re-adopts** it as an own note and it reappears, editable — the accepted price of `A197`: with synchronization on, the server is the source of truth for the reader's own notes. A foreign deleted note stays gone from view only until the next load, exactly as before.
 - **A page with no store.** No `pageKey`, so no request: the automatic load is skipped rather than sent with an empty key.
 - **A foreign note whose text the page has moved.** It is resolved like any entry: unpainted this pass, still in memory, still listed, gone on reload.
 
@@ -202,6 +223,9 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 19. (`A184`) A foreign author unchecked in the popup is still hidden after a full page reload; the notes come back visible after the row's `Удалить` or after a checkbox press to visible; a first-ever load with an empty or malformed `foreign-hidden:v1` shows every author visible.
 20. (`A184`) A malformed or unreadable `foreign-hidden:v1` record answers `[]` on read, is overwritten by the next write, and never breaks a load or a paint; a failed flag write leaves the in-memory behaviour intact.
 21. (`A184`) Own rows and the stored `visible` field are untouched by the flag: a stored row's checkbox still runs `setVisibleForAuthor` and never writes `foreign-hidden:v1`.
+22. (`A197`) On a page whose store is empty, an automatic load adopts the server's notes of the settings name into `chrome.storage.local`, so they are painted, listed in the popup's `Вы` row and in «Мои заметки», and sent back by the next press.
+23. (`A198`) A merge keeps the newer `updatedAt` when the content differs, keeps the local `visible` flag, writes nothing when the content is equal, never exceeds `MAX_ENTRIES_PER_PAGE`, and skips a row it cannot read or that names another page.
+24. (`A199`) Adoption is one core write: a refused write (unreadable index/slot, unusable key, port failure) changes nothing, does not block the paint and is retried by the next load; the content layer gains exactly one write importer.
 16. A failed automatic load leaves the page working and states the failure with the non-blocking popup notice.
 17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]`, and `fetch` appears in exactly the two transport adapters.
 18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
@@ -214,6 +238,8 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 | 5, 6 | `tests/core-sync-client.spec.ts` -> "server address", "synchronization needs a switch" |
 | 7, 8 | `tests/options-sync-settings.spec.ts`; `tests/options-window-look.spec.ts` |
 | 19, 20, 21 | `tests/core-foreign-hidden-store.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A184` describes |
+| 22, 23, 24 | `tests/core-own-notes-adopt.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A197` describes |
+| 24 | `tests/content-create-card-boundaries.spec.ts` -> the write-importer pin |
 | 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
 | 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |

@@ -9,7 +9,7 @@ Owner = the role that must keep the spec current. Covered paths are the real dir
 | `docs/specs/content-overlay-ui.md` | `extension-engineer` | `src/content/`, `src/content/capture`, `src/content/create`, `src/content/overlay`, `src/popup/`, `src/options/`, `src/manifest.json`, `tests/` |
 | `docs/specs/code-review-flow.md` | `project-manager` | `docs/state/`, `.pi/agents/code-reviewer.md`, `.pi/skills/code-review-checklist/SKILL.md`, `scripts/check-agent-config.mjs` |
 | `docs/specs/sync-server.md` | `extension-engineer` | `server/` |
-| `docs/specs/sync-integration.md` | `extension-engineer` | `src/core/sync-client.ts`, `src/core/sync-settings.ts`, `src/content/sync/`, `src/popup/sync-button-service.ts`, `src/popup/sync-transport.ts`, `src/manifest.json` (`host_permissions`), `tests/` (the sync suites) |
+| `docs/specs/sync-integration.md` | `extension-engineer` | `src/core/sync-client.ts`, `src/core/sync-settings.ts`, `src/core/entry-store-write.ts` (the adoption half, `A197`-`A199`), `src/content/sync/`, `src/popup/sync-button-service.ts`, `src/popup/sync-transport.ts`, `src/manifest.json` (`host_permissions`), `tests/` (the sync suites) |
 | `docs/specs/all-notes-page.md` | `extension-engineer` | `src/all-notes/`, `src/core/author-pages.ts`, the `title` field of `src/core/entry.ts`, the entry points in `src/popup/` and `src/options/`, `angular.json` (the third surface), `tests/` |
 
 Rules:
