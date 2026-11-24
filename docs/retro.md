@@ -394,3 +394,32 @@ illegal memory access`) with the work already committed.
   reports landed under `…/subagent-artifacts/…`; the PM must copy
   `docs/state/<task>-engineer.md` into the repo, because that store is retention-managed
   and not a durable artifact.
+
+## Stage 22 — the server's stamps are not the stored stamps
+
+- **Two layers can each be right and still not fit.** The server wrote `RFC3339Nano`, the
+  store's guard pinned `toISOString`; neither was wrong, and the mismatch surfaced only as
+  a *silent* best-effort refusal. A boundary that maps a shape must be tested with the
+  other side's real output, not with the local one.
+- **The best-effort posture hid the defect.** `A199` swallowed `entry_invalid` exactly as
+  designed. Best effort is right for a degraded server, but it makes every refusal a
+  potential invisible failure: the diagnostic value is in the code, not in the reader's
+  screen — which is why the reader's data dump (empty storage + correct server row) was
+  the evidence that found it.
+- **Purity gates find real design questions.** The obvious `new Date(x).toISOString()` fix
+  collided with the core `A58` scan; the ruling was a pure string transform, which is also
+  the only zone-independent answer.
+
+## Stages 23-24 — the broker, and a rule that did not move with the code
+
+- **Mixed content is a property of the page, not of the extension.** The whole page-side
+  sync was dead on an https article with an http server; the popup and «Мои заметки»
+  never noticed, because their documents are not the article's. One feature, three
+  contexts, one of them restricted.
+- **A rule carried by the adapter must move with the adapter.** The old content transport
+  omitted the body on `GET`; the broker rewrite copied the fields and dropped that clause,
+  so every automatic load failed with a `TypeError` that the code mapped to "server
+  unreachable". The engineer's own longer comment made the omission look complete.
+- **The worker console is the first debugging surface after a move.** The reader's
+  `fetch('/health')` answered `OK` while the page failed, which located the fault in the
+  transport rather than in the network in one step.
