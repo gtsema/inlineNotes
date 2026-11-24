@@ -174,3 +174,16 @@ over-256 row is skipped.
 `t21-01: store the adopted comment normalized (A197)`.
 
 Delegation counter: t20-01 = 1 attempt, t20-02 = 1 attempt, t21-01 = 0.
+
+## Stage 21 — outcome
+
+- `t21-01` (commit `cd3e6c3`): `adoptionDraft` stores `validateComment(row.comment).normalized`;
+  3 new cases. Gates: build 16 files, `npm test` 1375 (+3), typecheck, checker 0 errors.
+  Report: `docs/state/t21-01-engineer.md`.
+- `t21-02` (`code-reviewer`, run `fbd8b9ae`): **accepted**; remark 1 of `t20-03` closed on
+  both the adopt and the replace path, `text`/`anchor` verbatim, no other export changed,
+  checker re-run `0 errors`. Report: `docs/state/t21-02-review.md`.
+- Stage 20+21 closed. All AC 22–24 pass; no blocking finding open. The user-visible
+  result: a note created on one machine appears on a second machine with the same author
+  name after the page's automatic load (highlight, popup `Вы` row, «Мои заметки», edit),
+  and is pushed back by the next sync press.
