@@ -36,6 +36,7 @@ import type { StoragePort } from '../../core/storage-port';
 import type { SyncTransport } from '../../core/sync-client';
 import { syncTargetOf } from '../../core/sync-settings';
 import type { ExtraEntry } from '../paint/paint-plan';
+import type { OwnNotesAdoptionRequest } from './adopt-own-notes';
 import type { ForeignLoadOutcome, ForeignNotes } from './foreign-notes';
 import { loadIntoMemory } from './foreign-notes';
 
@@ -48,6 +49,16 @@ export interface SyncNotesWiring {
     /** One more pass; it cannot reject (`page-painter.ts` -> `refresh`). */
     refresh(): Promise<unknown>;
   };
+  /**
+   * The address of the page the document is showing, read per use.
+   *
+   * It is the address, not the key (`N5`): the adoption write of `A197` is resolved
+   * through the stored index exactly like every other write, so this module asks the
+   * page for its address and core for the key. Read per use for the same reason the
+   * paint pass reads it per pass: a same-document navigation (`A59`) moves the reader to
+   * another page under the same document.
+   */
+  readonly pageUrl: () => string;
   /** The notes held in this document's memory (ruling `A163`). */
   readonly foreign: ForeignNotes;
   /** The settings and the author name are read through it; nothing is written. */
@@ -56,6 +67,20 @@ export interface SyncNotesWiring {
   readonly transport?: SyncTransport;
   /** The settings read; the shipped value is core `loadSettings` over the port. */
   readonly settings?: (port: StoragePort) => Promise<SettingsReadResult>;
+  /**
+   * The adoption seam of ruling `A197` (task `t20-02`), used by every automatic load.
+   *
+   * It is the **same** seam the popup's reload is given: `loadIntoMemory` owns the rule
+   * ("the reader's own rows are written into the store before memory"), and both load
+   * paths hand it the same implementation, so a note cannot be adopted by one path and
+   * dropped by the other. The shipped value is built by `createOwnNotesAdopter` of
+   * `adopt-own-notes.ts` — the one content module that imports the core write — and a
+   * test may replace it to observe "one call, with these rows" without a store.
+   *
+   * It cannot reject (the shipped one swallows its own refusal, `A199`), so nothing here
+   * guards it: a refused adoption still leaves the paint below unchanged.
+   */
+  readonly adoptOwnNotes?: (pass: OwnNotesAdoptionRequest) => Promise<unknown>;
   /**
    * Called after every automatic load this wiring runs, with its outcome (Stage 17,
    * task `t17-02`, ruling `A169`).
@@ -109,6 +134,7 @@ export interface SyncNotes {
  */
 export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
   const readSettings = wiring.settings ?? loadSettings;
+  const adopt = wiring.adoptOwnNotes;
   let askedKey: string | null = null;
 
   async function afterPaint(): Promise<void> {
@@ -168,6 +194,15 @@ export function attachSyncNotes(wiring: SyncNotesWiring): SyncNotes {
       transport: wiring.transport ?? missingTransport,
       target,
       pageKey,
+      // `A197`/`A199` (task `t20-02`): the loader both adopts the reader's own rows into
+      // the store and drops them from memory, in that order. The address is the one the
+      // pass is on, so the adoption write is addressed by the page the reader is looking
+      // at and the key is resolved by core through the stored index (`N5`) — never one
+      // invented here. A refusal is swallowed by the seam and changes nothing below.
+      pageUrl: wiring.pageUrl(),
+      // A wiring without the seam is a page with nowhere to file: no adoption, which is
+      // the honest state rather than an error.
+      ...(adopt === undefined ? {} : { adoptOwnNotes: adopt }),
       // The foreign list holds only other readers' notes (`A161`): the reader's own
       // notes come from the store, and a second copy of them would register two paint
       // names over one span.

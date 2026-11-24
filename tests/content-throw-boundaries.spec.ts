@@ -110,7 +110,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
   });
 
-  it('is exactly the pinned set of eighteen sites, so a new catch breaks the build', () => {
+  it('is exactly the pinned set of nineteen sites, so a new catch breaks the build', () => {
     // Stage 17 (`t17-01`) adds the fifteenth: `sync/foreign-notes.ts` answers a
     // transport that throws as the same code a rejected transport produces, which is
     // what makes `A164` ("a failed load never blocks the page") unconditional.
@@ -143,6 +143,10 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
       'store/chrome-storage-port.ts': 1,
       'sync/foreign-notes.ts': 1,
       'sync/sync-notes.ts': 1,
+      // `t20-02` (`A199`) adds the twentieth: the one adoption write swallows a port
+      // that throws instead of rejecting, so a refused adoption cannot become a throw
+      // out of a boot step whose other obligation is to paint the stored notes.
+      'sync/adopt-own-notes.ts': 1,
     };
     const sites = shippedCatchSites();
     const actual: Record<string, number> = {};
@@ -151,7 +155,7 @@ describe('every shipped catch under src/content is in the enumeration (t3-05 AC3
     }
     expect(actual).toEqual(pinned);
     const total = [...sites.values()].reduce((sum: number, hits: number[]) => sum + hits.length, 0);
-    expect(total).toBe(19);
+    expect(total).toBe(20);
   });
 });
 

@@ -135,13 +135,47 @@ describe('the content layer owns no persistence of its own (AC4)', () => {
     // nothing about, so neither widget names `entry-store-write.ts` any more. The list is
     // still exactly one module per write flow, and the call-level pin below is the one
     // with teeth: no other module of `src/content/` calls a core write.
+    //
+    // `t20-02` (rulings `A197`-`A199`) widens the pin by exactly one module, and the
+    // spec names the count: adoption is a third write flow — the server's copy of the
+    // reader's own notes — and it is one module, `src/content/sync/adopt-own-notes.ts`.
+    // Both load paths reach it through the seam of `loadIntoMemory`, so a second adopter
+    // is a failing test rather than a second opinion about when adoption happens.
+    // `src/content/sync/foreign-notes.ts` shares the directory and must stay off this
+    // list: it declares no port at all (`A163`), which is what makes a foreign write
+    // impossible by construction.
     expect(contentFilesImporting('src/core/entry-store-write.ts')).toEqual([
       'src/content/create/create-note.ts',
       'src/content/editor/edit-entry.ts',
+      'src/content/sync/adopt-own-notes.ts',
     ]);
     expect(
       contentFilesMatching(/\b(createEntryOnPage|updateEntryComment|deleteEntry|setVisible|clearPage)\s*\(/),
     ).toEqual(['src/content/create/create-note.ts', 'src/content/editor/edit-entry.ts']);
+    // The adoption caller is its own regex, because the call it makes is a third entry
+    // point of the core write (`A197`): `adoptOwnNotes` in exactly the one adopter.
+    expect(contentFilesMatching(/\badoptOwnNotes\s*\(/)).toEqual([
+      'src/content/sync/adopt-own-notes.ts',
+    ]);
+  });
+
+  it('reaches adoption through the one loader, from both load paths (A197, t20-02)', () => {
+    // The other half of the brief's `A199` pin: the automatic load of `sync/sync-notes.ts`
+    // and the popup's reload in `main.ts` are the **only** two load paths there are, and
+    // both go through `loadIntoMemory` — the one function that runs adoption before
+    // memory. A third caller of the loader, or a load path that skipped it, would be a
+    // second opinion about when the reader's own notes are adopted.
+    // The lookbehind excludes the declaration itself (`export async function
+    // loadIntoMemory(`), which is the loader's own module and not a caller of it.
+    expect(contentFilesMatching(/(?<!function\s)\bloadIntoMemory\s*\(/)).toEqual([
+      'src/content/main.ts',
+      'src/content/sync/sync-notes.ts',
+    ]);
+    // And the shipped adopter is built once per document (`main.ts`) and injected into the
+    // automatic load's wiring; no load path imports the core write itself.
+    expect(contentFilesMatching(/(?<!function\s)\bcreateOwnNotesAdopter\s*\(/)).toEqual([
+      'src/content/main.ts',
+    ]);
   });
 
   it('asks core for a page read in one module per flow that needs the page', () => {

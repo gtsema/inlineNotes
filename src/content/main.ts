@@ -54,6 +54,7 @@ import { attachSyncNotes } from './sync/sync-notes';
 import { attachPageNotesChannel } from './sync/page-notes-channel';
 import type { ForeignLoadOutcome } from './sync/foreign-notes';
 import { loadIntoMemory } from './sync/foreign-notes';
+import { createOwnNotesAdopter } from './sync/adopt-own-notes';
 import { createSyncTransport } from './sync/fetch-transport';
 import {
   loadHiddenAuthorsOfPage,
@@ -116,11 +117,21 @@ function boot(): void {
   // so a delete and a load can never disagree about what "synchronization is on" means.
   const foreign = createForeignNotes();
   const transport = createSyncTransport();
+  // `A197` (task `t20-02`): one adopter, handed to both load paths. The automatic one
+  // takes it through the wiring below; the popup's reload hands the same function to
+  // `loadIntoMemory` further down, so a note created on another machine is adopted by
+  // whichever path asked first and by neither twice.
+  //
+  // The port is bound here and nowhere else: neither load path is given a storage seam,
+  // and the one module that can write is `sync/adopt-own-notes.ts`.
+  const adoptOwnNotes = createOwnNotesAdopter(port);
   const sync = attachSyncNotes({
     painter,
     foreign,
     port,
     transport,
+    pageUrl,
+    adoptOwnNotes,
   });
 
   // Flow 4 and 5 of the overlay spec, task `t3-03` and the opening half of `t5-03`: the
@@ -231,6 +242,12 @@ function boot(): void {
       transport,
       target,
       pageKey: key,
+      // The `A197` adoption of the same load, through the same seam and the same one
+      // module as the automatic path above (`A199`): the reader's own rows are written
+      // into the store first, then dropped from memory below, so a press of the popup's
+      // reload adopts exactly what the automatic load would.
+      pageUrl: pageUrl(),
+      adoptOwnNotes,
       currentName,
       hiddenAuthors,
     });

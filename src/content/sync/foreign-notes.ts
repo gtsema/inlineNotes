@@ -23,6 +23,13 @@
  * popup's row controls belong to the reader, and the answer to "I do not want to see
  * this note" must not be "I deleted somebody else's note from a shared server". That
  * is answer 5 of the brief, and the only place it is implemented is `dismiss`.
+ *
+ * Stage 20 (`t20-02`, ruling `A197`) adds the adoption seam to the one loader below.
+ * The mapping of every returned row happens here (`entryFromRemoteNote`), so the one
+ * pass over the answer is also the pass that hands the reader's own rows to the adopter
+ * — and the adopter is a **seam**, because this module still declares no port of its
+ * own. Whatever writes the store is injected by the caller and lives in
+ * `adopt-own-notes.ts`; this file cannot write even by mistake.
  */
 
 import type { Entry } from '../../core/entry';
@@ -233,8 +240,41 @@ export interface ForeignLoadRequest {
   readonly target: SyncTarget | null;
   /** The page key the notes are asked for. */
   readonly pageKey: string;
+  /**
+   * The page address the pass is on, when the caller knows it (`A197`).
+   *
+   * It is the address the adoption write is addressed by, never the key: core's
+   * `entry-store-write.ts` resolves the key through the stored index (`N5`), so a note
+   * can never be filed under a key the store does not list. Absent falls back to
+   * `pageKey`, which is the honest answer for a caller that has only the key — the
+   * address *is* the key for every page the core key rule accepts.
+   */
+  readonly pageUrl?: string;
   /** The settings name, used to keep the reader's own notes out of memory. */
   readonly currentName: string | null;
+  /**
+   * The adoption seam of ruling `A197` (task `t20-02`), handed the **raw** rows the
+   * server returned.
+   *
+   * The rows arrive unmapped and the seam maps them itself, through core
+   * `entryFromRemoteNote` (`adopt-own-notes.ts`). That is one mapping pass rather than
+   * two: the memory below maps a row to decide whether it is foreign, and a second map
+   * at the call site would be a second reading of the same wire row.
+   *
+   * Absent means no adoption at all, which is the honest state of a caller with no
+   * page to file into — a test that is about the memory, a popup-driven load in a
+   * document whose pass resolved no key.
+   *
+   * **The outcome is the whole contract.** The seam cannot change what this function
+   * answers, cannot stop it and cannot reach the page: a refusal is swallowed by the
+   * seam itself (`A199` best effort, `adopt-own-notes.ts`), so nothing here is wrapped
+   * in a `try` and no failure of it is ever reported to the reader.
+   */
+  readonly adoptOwnNotes?: (pass: {
+    readonly url: string;
+    readonly currentName: string;
+    readonly notes: readonly RemoteNote[];
+  }) => Promise<unknown>;
 }
 
 /**
@@ -261,6 +301,7 @@ export async function loadIntoMemory(
       return { ok: false, code: answer.code };
     }
     const summary: SyncLoadSummary = answer.value;
+    await adopt(request, summary);
     memory.replace(summary.notes, request.currentName, request.hiddenAuthors);
     return { ok: true, added: memory.all().length };
   } catch {
@@ -268,4 +309,36 @@ export async function loadIntoMemory(
     // the reader, and never a broken page.
     return { ok: false, code: 'network' };
   }
+}
+
+/**
+ * The adoption half of one successful load (rulings `A197`, `A199`).
+ *
+ * It runs **before** `memory.replace` and on the same rows that call will read, so the
+ * order the spec names holds: the store learns the reader's own notes first, and the
+ * memory then drops exactly those rows, because they are painted from the store.
+ *
+ * Nothing here has a `try` of its own: the seam owns its own swallowing
+ * (`adopt-own-notes.ts`, `A199`), and this function's obligation is only that a refused
+ * adoption cannot change the answer and cannot block the paint. The `await` is there
+ * because adoption is a storage write and the repaint that follows this load must see the
+ * page the write published.
+ *
+ * The enclosing `try` is the load's own (`A164`) and it is a backstop, not the rule: the
+ * shipped seam resolves for every state, so the `await` cannot reach it. A seam that
+ * broke that contract would answer `network` like any other throw out of a load — a
+ * failure to adopt is never allowed to become a failure of the page.
+ */
+async function adopt(request: ForeignLoadRequest, summary: SyncLoadSummary): Promise<void> {
+  const seam = request.adoptOwnNotes;
+  if (seam === undefined || request.currentName === null) {
+    // `A197` needs a name: with none set, no row can be the reader's own, and the
+    // memory below is already the whole answer.
+    return;
+  }
+  await seam({
+    url: request.pageUrl ?? request.pageKey,
+    currentName: request.currentName,
+    notes: summary.notes,
+  });
 }

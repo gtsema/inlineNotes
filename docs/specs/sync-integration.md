@@ -238,8 +238,8 @@ A stored entry is mapped at the boundary, not in the domain — and the two dire
 | 5, 6 | `tests/core-sync-client.spec.ts` -> "server address", "synchronization needs a switch" |
 | 7, 8 | `tests/options-sync-settings.spec.ts`; `tests/options-window-look.spec.ts` |
 | 19, 20, 21 | `tests/core-foreign-hidden-store.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A184` describes |
-| 22, 23, 24 | `tests/core-own-notes-adopt.spec.ts`; `tests/content-sync-notes.spec.ts` -> the `A197` describes |
-| 24 | `tests/content-create-card-boundaries.spec.ts` -> the write-importer pin |
+| 22, 23, 24 | `tests/core-own-notes-adopt.spec.ts`; `tests/content-adopt-own-notes.spec.ts` (the content adopter: the mapping, the write, the best-effort contract); `tests/content-sync-notes.spec.ts` -> the `A197`/`A199` describes (both load paths, one call before memory) |
+| 24 | `tests/content-create-card-boundaries.spec.ts` -> the write-importer pin and the one-loader pin; `tests/content-throw-boundaries.spec.ts` -> the `sync/adopt-own-notes.ts` catch |
 | 9, 10, 11 | `tests/popup-sync-button.spec.ts` |
 | 12, 13 | `tests/content-sync-notes.spec.ts`, `tests/content-foreign-notes.spec.ts` |
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
