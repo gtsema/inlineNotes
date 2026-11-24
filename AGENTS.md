@@ -39,6 +39,7 @@ A Chrome MV3 extension in which the user sets a personal name in options, select
 src/manifest.json      MV3 manifest (no host_permissions beyond activeTab-free needs)
 src/core/              framework-free domain: url key, entry store, caps, anchors, overlap rules
 src/content/           content script: selection capture, Preact overlay, CSS Highlight painting
+src/background/        MV3 service worker: the page's sync calls, because an http:// fetch from an https article is blocked as mixed content
 src/popup/             Angular popup: page entry list, per-entry checkbox, filters
 src/options/           Angular options: author name (mandatory), defaults
 tests/                 Vitest unit tests over src/core (100% green mandatory)

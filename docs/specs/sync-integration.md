@@ -6,7 +6,7 @@ Connect the extension to the sync server of `docs/specs/sync-server.md`: a reade
 
 ## Scope
 
-In scope: the two settings fields that carry the feature, the server address rule, the popup's sync button and its three states, the automatic load on page open, the adoption of the reader's own notes the load returns (`A197`), the foreign notes as memory-only data, the local-only delete of a foreign row, and the failure behaviour of every network call.
+In scope: the two settings fields that carry the feature, the server address rule, the popup's sync button and its three states, the automatic load on page open, the background broker that carries the page's sync calls (`A200`), the adoption of the reader's own notes the load returns (`A197`), the foreign notes as memory-only data, the local-only delete of a foreign row, and the failure behaviour of every network call.
 
 Out of scope: any change under `server/` (the server is frozen for this stage); editing or deleting a foreign note on the server; conflict resolution beyond the server's own upsert; a "my notes across pages" view (the server's `all-pages` endpoint is called by nothing yet); authentication of any kind; a periodic or background synchronization (there is none: a request happens on page open and on a press).
 
@@ -28,6 +28,7 @@ Out of scope: any change under `server/` (the server is frozen for this stage); 
 | `own note` | «Вы» | a note whose author is the reader, by core `isSameAuthor` (`A99`) |
 | `memory only` | — | never written to `chrome.storage.local`, never sent in a payload (a **foreign** note and the hidden flag: `A163`, `A184`) |
 | `adoption` | — | writing the server's copy of the reader's own note into `chrome.storage.local` at load, so a note created on another machine becomes a stored note here (`A197`); merge rule `A198`, write rule `A199` |
+| `background broker` | — | the MV3 service worker that performs the content script's sync calls, because an `http://` fetch from an `https://` article is mixed content and the browser blocks it (`A200`); the page sends it a message and the broker runs the one `fetch` (`A201`, `A202`) |
 | `hidden author flag` | — | a stored `{ pageKey, authorName }` pair saying the popup checkbox of that foreign author was last pressed to hidden on that page; keyed and applied by `A184` |
 | `local-only delete` | «Удалить» | removing a foreign author's row from view on this page without calling the server (answer 5) |
 | `non-blocking failure notice` | «Не удалось связаться с сервером синхронизации» | the ruling `A164` line: the rows stay, nothing is retried, no modal appears |
@@ -164,10 +165,37 @@ When the settings name changes, the previous name's notes are deleted from `chro
 
 A transport that records calls sees **zero** calls during a rename: the sweep in `src/core/author-notes.ts` imports no transport and no sync module, and the options page calls neither.
 
+### Where the page's network lives (rulings `A200`-`A202`)
+
+A reader on an `https://` article with an `http://` server address saw
+`Mixed Content: … requested an insecure resource …/notes/page/…`: a fetch started by the
+content script is a subresource request **of the article's page**, and Chrome refuses an
+insecure one there whatever `host_permissions` says. Extension pages are not article
+pages, so the popup's press and the «Мои заметки» delete were never affected.
+
+- `A200` **The page's calls go through a background broker.** An MV3 service worker
+  (`src/background/service-worker.ts`, declared as `background.service_worker`) performs
+  the `fetch`. The content script's transport (`src/content/sync/broker-transport.ts`,
+  replacing `fetch-transport.ts`) sends one `chrome.runtime.sendMessage` instead of a
+  `fetch`, so neither the automatic load nor the editor's one-note delete depends on the
+  article's scheme. The broker is started on demand by the message and keeps no state: it
+  reads nothing and remembers nothing, so its termination between calls changes nothing.
+- `A201` **The broker builds no URL.** The page still builds the URL in core from
+  `settings:v1` (`syncTargetOf` plus `notesPageUrl` / `noteDeleteUrl`); the message carries
+  the request (`url`, `method`, headers, body) and the broker runs `fetch` with exactly it.
+  The channel is extension-internal — `externally_connectable` is not declared, so no web
+  page can send it — and the shipped code still cannot construct a request to an address
+  other than the one in settings.
+- `A202` **Failure and absence are unchanged.** The broker answers `{ ok, status, body }`;
+  a message that cannot be delivered (`chrome.runtime.lastError`, a closed port) becomes
+  the same thrown error `fetch` used to raise, so `A164`'s `network` code, the
+  non-blocking load and the button's three states behave exactly as before. No timer is
+  added anywhere: the message callback is the only wait, exactly as the popped promise was.
+
 ### One address, and no other network
 
-- The only network API in the shipped source is `fetch`, in exactly three five-line adapters — `src/content/sync/fetch-transport.ts` for the page, `src/popup/sync-transport.ts` for the popup and `src/all-notes/fetch-transport.ts` for the «Мои заметки» page (`A189` of `all-notes-page.md`) — because an MV3 popup, a content script and an extension page are separate bundles. `tests/toolchain-contract.spec.ts` pins that file set.
-- Neither adapter builds a URL. The address comes from `settings:v1` through core `syncTargetOf`, and the route from core `NOTES_PAGE_PATH`; a request to any other address is not constructible from the shipped code.
+- The only network API in the shipped source is `fetch`, in exactly three modules — `src/background/service-worker.ts` for the page's calls (ruling `A200`), `src/popup/sync-transport.ts` for the popup and `src/all-notes/fetch-transport.ts` for the «Мои заметки» page (`A189` of `all-notes-page.md`), the last two because an extension page's document is not the article's, so the mixed-content rule does not reach it. `tests/toolchain-contract.spec.ts` pins that file set.
+- No module builds a URL for a caller. The address comes from `settings:v1` through core `syncTargetOf`, and the routes from core `NOTES_PAGE_PATH` and `noteDeleteUrl` / `authorDeleteUrl`; the broker of `A200` executes the request it is handed and builds none, so a request to any other address is not constructible from the shipped code.
 - `host_permissions` is the two exact strings `http://*/*` and `https://*/*`, in that order (the brief's answer 8): the server is an arbitrary `host:port` from the reader's settings, so no narrower pattern can name it.
 
 ### Wire shape
@@ -229,8 +257,10 @@ The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` 
 23. (`A198`) A merge keeps the newer `updatedAt` when the content differs, keeps the local `visible` flag, writes nothing when the content is equal, never exceeds `MAX_ENTRIES_PER_PAGE`, and skips a row it cannot read or that names another page.
 24. (`A199`) Adoption is one core write: a refused write (unreadable index/slot, unusable key, port failure) changes nothing, does not block the paint and is retried by the next load; the content layer gains exactly one write importer.
 16. A failed automatic load leaves the page working and states the failure with the non-blocking popup notice.
-17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]`, and `fetch` appears in exactly the two transport adapters.
+17. `manifest.json` declares `host_permissions: ["http://*/*", "https://*/*"]` and `background.service_worker`; `fetch` appears in exactly three modules — the broker, the popup transport and the «Мои заметки» transport.
 18. Every gate stays green: `npm run build`, `npm test`, `npm run typecheck`, `node scripts/check-agent-config.mjs`; the test count only grows.
+25. (`A200`) The content script names no network API: its sync transport sends `chrome.runtime.sendMessage` to the background broker, so the automatic load and the one-note delete work on an `https://` article with an `http://` server address; the popup's press and the «Мои заметки» delete are unchanged.
+26. (`A202`) A message that cannot be delivered answers the same `network` code a rejected `fetch` produced; the broker answers `{ ok, status, body }`, builds no URL and keeps no state; no timer is added anywhere.
 
 ### Test mapping
 
@@ -248,4 +278,5 @@ The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` 
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
 | 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
 | 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
+| 25, 26 | `tests/background-service-worker.spec.ts` (the listener: one `fetch` with the given request, `{ ok, status, body }`, a transport failure answered rather than thrown); `tests/content-broker-transport.spec.ts` (a message answers the request, a non-delivered message throws); `tests/toolchain-contract.spec.ts` -> the fetch-module set and `background.service_worker` |
 | 18 | the gate commands, quoted in the task's engineer report under `docs/state/` |
