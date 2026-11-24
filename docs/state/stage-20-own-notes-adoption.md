@@ -140,3 +140,37 @@ two test files.
 key and the settings name; assert a failed adopt does not block the load/outcome; update
 the `contentFilesImporting('src/core/entry-store-write.ts')` and call-level pins in
 `tests/content-create-card-boundaries.spec.ts`.
+
+## Reviews and outcome
+
+- `t20-03` (`code-reviewer`, run `6bb9523b`): **accepted**, AC 22/23/24 = pass, gates
+  re-run green (build 16 files, `npm test` 1372, typecheck, checker 0 errors). Report
+  persisted at `docs/state/t20-03-review.md`.
+- Remark 1 (real): `adoptionDraft` stored the raw `row.comment`; a padded comment passed
+  `validateComment(...).ok` and was stored untrimmed — a violation of
+  `inline-comment-model.md` -> "Decode on write". Fixed by `t21-01`.
+- Remark 2 (spec wording, not code): the cap counts decodable records, exactly like the
+  create gate (`inline-comment-model.md` -> "Unreadable records"). The `A198` sentence was
+  tightened, no code change.
+- Remark 3 (reviewer error): `loadIntoMemory` does **not** call `pairOf` /
+  `loadHiddenAuthorsOfPage`; the hidden authors are passed in, and the adoption adds one
+  write path, not new reads. Verified by reading `src/content/sync/foreign-notes.ts`.
+- Remark 4 (intended, recorded in `docs/retro.md`): a locally hidden own note is not
+  re-shown by adoption — `visible` is the reader's own flag.
+- Whether the rather long comment blocks are worth it: non-blocking, not acted on.
+- Stale spec line found by the review ("exactly two five-line adapters") fixed by the PM:
+  `A189` added `src/all-notes/fetch-transport.ts`.
+
+## Stage 21 — the adopted comment is normalized (t21-01)
+
+**Task.** In `adoptionDraft` (`src/core/entry-store-write.ts`), store
+`validateComment(row.comment).normalized` instead of the raw `row.comment`. The skip check
+stays `validateComment(row.comment).ok`. Add cases to
+`tests/core-own-notes-adopt.spec.ts`: a padded own row is stored trimmed; a padded
+over-256 row is skipped.
+
+**Acceptance.** `npm run build`, `npm test`, `npm run typecheck`,
+`node scripts/check-agent-config.mjs` green; one commit
+`t21-01: store the adopted comment normalized (A197)`.
+
+Delegation counter: t20-01 = 1 attempt, t20-02 = 1 attempt, t21-01 = 0.

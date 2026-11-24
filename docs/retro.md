@@ -377,3 +377,20 @@ illegal memory access`) with the work already committed.
   truncated without a verdict; the finding it did produce (the over-claiming comment) the PM then measured in three
   minutes. When a review run exceeds its budget without a verdict, the PM measures the open question directly instead of
   relaunching — the measurement is cheaper than the second review.
+
+## Stage 20 — the reader's own notes are adopted from the server
+
+- **The defect was a design assumption, not a regression.** The pull side dropped every
+  row whose `authorName` is the reader's, justified in the spec as "they are already in
+  the store". That is true on one machine and false on a second one, and no test on a
+  single machine could fail. An assumption about *where data lives* has to name its
+  scope in the spec sentence itself.
+- **A review remark is a claim to measure before acting.** Remark 3 pointed at a
+  `pairOf`/`loadHiddenAuthorsOfPage` call inside `loadIntoMemory` that does not exist in
+  the diff; remark 2 was a spec-wording conflict (the product cap counts decodable
+  records, the adoption cap does the same), not a code defect. Measuring both left one
+  real bug to fix (remark 1: the adopted comment was stored untrimmed) instead of three.
+- **The role's `output` went to the session artifact store, not the repo.** Both engineer
+  reports landed under `…/subagent-artifacts/…`; the PM must copy
+  `docs/state/<task>-engineer.md` into the repo, because that store is retention-managed
+  and not a durable artifact.

@@ -106,14 +106,14 @@ Before `A197` the extension assumed the reader's own note is always in the local
 - `A197` **Adoption.** A row the automatic load returns whose `authorName` is the reader's (core `isSameAuthor` against the settings name) is **written into `chrome.storage.local`** as a stored entry of this page, through one core write. After that it is an ordinary own note: it is painted, it appears in the popup's `Вы` row and in the «Мои заметки» list, it is editable, and the next press sends it back.
 - Adoption is the extension's **one** new writer of own notes from the network. A foreign row is still never written (`A163`).
 - The adopted row keeps the server's `id`, `createdAt` and `updatedAt`, and stores no `title` (the wire has none, `A190`); `visible` is `true`, the store's own default (`A1`).
-- A row whose `page_id` is not the asked page key, or that cannot be read as a local entry (an unreadable anchor, an empty comment, a comment over 256 code points), is **skipped**, never guessed at.
+- A row whose `page_id` is not the asked page key, or that cannot be read as a local entry (an unreadable anchor, an empty comment, a comment over 256 code points), is **skipped**, never guessed at. A row that passes is stored with the **normalized** comment — the same `validateComment` value the create path stores (`inline-comment-model.md` -> "Decode on write"), so adoption can never put an untrimmed or over-cap comment into the store.
 
 - `A198` **The merge rule**, per row, by the server's `(authorName, id)`:
   - the page holds no entry with that id: the row is adopted;
   - the page holds one and its content (`text`, `comment`, `anchor`) equals the row's: nothing is written — a press that only moved the server's `updated_at` must not rewrite the reader's note and its date;
   - the content differs: the newer `updatedAt` wins, the remote copy replaces the local one, and the local `visible` flag is kept, because visibility is the reader's own display flag and the wire has no column for it;
   - a local `updatedAt` that is newer or equal keeps the local copy;
-  - the cap is `MAX_ENTRIES_PER_PAGE`. A merge never deletes a stored entry to make room: new rows are adopted in `createdAt` order, up to the cap, and the rest are skipped (they stay on the server and can be adopted after other notes are deleted).
+  - the cap is `MAX_ENTRIES_PER_PAGE`, counted the way every other cap counts it (`inline-comment-model.md` -> "Unreadable records": the page's **decodable** stored records, so an undecodable record is ignored here exactly as the create gate ignores it). A merge never deletes a stored entry to make room: new rows are adopted in `createdAt` order, up to the cap, and the rest are skipped (they stay on the server and can be adopted after other notes are deleted).
 
 - `A199` **One commit, best effort.** Adoption is one whole-list write under the existing `pages:v1` policy (`inline-comment-model.md` -> "Index write policy"): the slot lands before the index, and a page left with no entry drops the slot first. A refusal (an unreadable index or slot, an unusable page key, a port that throws) writes nothing, is not retried by this load, and is not reported on the article; the row is simply not in the store this load, and the next load tries again. A refused adoption never blocks the paint, exactly like a failed load (`A164`).
 
@@ -166,7 +166,7 @@ A transport that records calls sees **zero** calls during a rename: the sweep in
 
 ### One address, and no other network
 
-- The only network API in the shipped source is `fetch`, in exactly two five-line adapters — `src/content/sync/fetch-transport.ts` for the page and `src/popup/sync-transport.ts` for the popup, because an MV3 popup and a content script are separate bundles. `tests/toolchain-contract.spec.ts` pins that file set.
+- The only network API in the shipped source is `fetch`, in exactly three five-line adapters — `src/content/sync/fetch-transport.ts` for the page, `src/popup/sync-transport.ts` for the popup and `src/all-notes/fetch-transport.ts` for the «Мои заметки» page (`A189` of `all-notes-page.md`) — because an MV3 popup, a content script and an extension page are separate bundles. `tests/toolchain-contract.spec.ts` pins that file set.
 - Neither adapter builds a URL. The address comes from `settings:v1` through core `syncTargetOf`, and the route from core `NOTES_PAGE_PATH`; a request to any other address is not constructible from the shipped code.
 - `host_permissions` is the two exact strings `http://*/*` and `https://*/*`, in that order (the brief's answer 8): the server is an arbitrary `host:port` from the reader's settings, so no narrower pattern can name it.
 
