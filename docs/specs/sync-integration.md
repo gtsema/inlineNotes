@@ -182,7 +182,7 @@ pages, so the popup's press and the «Мои заметки» delete were never 
   reads nothing and remembers nothing, so its termination between calls changes nothing.
 - `A201` **The broker builds no URL.** The page still builds the URL in core from
   `settings:v1` (`syncTargetOf` plus `notesPageUrl` / `noteDeleteUrl`); the message carries
-  the request (`url`, `method`, headers, body) and the broker runs `fetch` with exactly it.
+  the request (`url`, `method`, headers, body) and the broker runs `fetch` with exactly it — **except** that it omits `body` on `GET` and `HEAD`, because `fetch` refuses a body on those methods (`TypeError: Request with GET/HEAD method cannot have body`), which is the same rule the page's own adapter always carried. A broker that forwarded the empty body of a `GET` answered every automatic load with its failure shape, and the popup rendered it as the `A164` line — the defect that made the worker-console fetch test pass while the page said it could not reach the server.
   The channel is extension-internal — `externally_connectable` is not declared, so no web
   page can send it — and the shipped code still cannot construct a request to an address
   other than the one in settings.
