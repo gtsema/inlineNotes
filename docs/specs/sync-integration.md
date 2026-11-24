@@ -175,8 +175,8 @@ pages, so the popup's press and the «Мои заметки» delete were never 
 
 - `A200` **The page's calls go through a background broker.** An MV3 service worker
   (`src/background/service-worker.ts`, declared as `background.service_worker`) performs
-  the `fetch`. The content script's transport (`src/content/sync/broker-transport.ts`,
-  replacing `fetch-transport.ts`) sends one `chrome.runtime.sendMessage` instead of a
+  the `fetch`. The content script's transport (`src/content/sync/broker-transport.ts`)
+  sends one `chrome.runtime.sendMessage` instead of a
   `fetch`, so neither the automatic load nor the editor's one-note delete depends on the
   article's scheme. The broker is started on demand by the message and keeps no state: it
   reads nothing and remembers nothing, so its termination between calls changes nothing.
@@ -278,5 +278,5 @@ The two stamps need one mapping: the server writes them with Go's `RFC3339Nano` 
 | 14, 15 | `tests/content-foreign-notes.spec.ts`, `tests/content-paint-plan.spec.ts`, `tests/content-paint-style.spec.ts` |
 | 16 | `tests/content-sync-notes.spec.ts`, `tests/popup-entry-list.spec.ts` |
 | 17 | `tests/toolchain-contract.spec.ts` -> "no network in shipped source", "manifest contract" |
-| 25, 26 | `tests/background-service-worker.spec.ts` (the listener: one `fetch` with the given request, `{ ok, status, body }`, a transport failure answered rather than thrown); `tests/content-broker-transport.spec.ts` (a message answers the request, a non-delivered message throws); `tests/toolchain-contract.spec.ts` -> the fetch-module set and `background.service_worker` |
+| 25, 26 | `tests/background-sync-broker.spec.ts` (the listener: one `fetch` with the given request, `{ ok, status, body }`, a transport failure answered rather than thrown); `tests/content-broker-transport.spec.ts` (a message answers the request, a non-delivered message throws); `tests/toolchain-contract.spec.ts` -> the fetch-module set and `background.service_worker` |
 | 18 | the gate commands, quoted in the task's engineer report under `docs/state/` |
