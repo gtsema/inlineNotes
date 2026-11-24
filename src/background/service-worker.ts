@@ -28,7 +28,10 @@ chrome.runtime.onMessage.addListener(
       await fetch(url, {
         method: init.method,
         headers: init.headers,
-        body: init.body,
+        // The broker already dropped the body for a `GET`/`HEAD` (`A201`), so the key
+        // must stay absent here too: `exactOptionalPropertyTypes` forbids an explicit
+        // `undefined` reaching `RequestInit`, and `fetch` refuses one on those methods.
+        ...(init.body === undefined ? {} : { body: init.body }),
       }),
   ),
 );

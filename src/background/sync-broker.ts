@@ -15,10 +15,13 @@
  * Three properties, each one a ruling:
  *
  * - **it builds no URL** (`A201`). The request arrives complete — `url`, `method`,
- *   headers, body — and is handed to `fetch` as it is. The address still comes from
- *   `settings:v1` through core `syncTargetOf`, the routes from core `notesPageUrl` /
- *   `noteDeleteUrl`, so "the extension sends a request to no address but the one in
- *   settings" stays a property of the shipped file list.
+ *   headers, body — and is handed to `fetch` as it is, **except** that the body key is
+ *   omitted on `GET` and `HEAD`, because `fetch` refuses one there (`TypeError: Request
+ *   with GET/HEAD method cannot have body`) and the page's own adapter always carried
+ *   that rule. The address still comes from `settings:v1` through core `syncTargetOf`,
+ *   the routes from core `notesPageUrl` / `noteDeleteUrl`, so "the extension sends a
+ *   request to no address but the one in settings" stays a property of the shipped file
+ *   list.
  * - **it keeps no state** (`A201`). Nothing is read, nothing is remembered, so the
  *   worker's termination between two calls changes nothing: the next message starts a
  *   fresh worker and runs its own request. There is no timer, no retry and no log.
@@ -52,10 +55,16 @@ export type SyncFetchListener = (
   respond: (answer: unknown) => void,
 ) => boolean | undefined;
 
-/** The `fetch` this broker runs. Injected, so a test drives it without a network. */
+/**
+ * The `fetch` this broker runs. Injected, so a test drives it without a network.
+ *
+ * `body` is optional because the broker omits it on `GET` and `HEAD` (`A201`): `fetch`
+ * refuses a body on those methods (`TypeError: Request with GET/HEAD method cannot have
+ * body`), so the key must be absent rather than empty.
+ */
 export type SyncFetchImpl = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body: string },
+  init: { method: string; headers: Record<string, string>; body?: string },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
 /**
@@ -84,7 +93,9 @@ async function answerOf(fetchImpl: SyncFetchImpl, request: SyncFetchRequest): Pr
     response = await fetchImpl(request.url, {
       method: request.method,
       headers: request.headers,
-      body: request.body,
+      // `fetch` refuses a body on `GET` and `HEAD`, so the key is left out entirely
+      // there (`A201`) — the same rule the page's own adapter always carried.
+      ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: request.body }),
     });
   } catch {
     return SYNC_FETCH_FAILURE_ANSWER;

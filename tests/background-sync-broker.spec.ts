@@ -20,11 +20,16 @@ import { createSyncFetchListener } from '../src/background/sync-broker';
  * an `http://` one on an `https://` article as Mixed Content. An MV3 service worker is an
  * extension context, so the page sends it a message and the worker runs the call.
  *
- * Three claims, one group each:
+ * Four claims, one group each:
  *
  * - **the answer shape** (`A201`, `A202`): the broker runs `fetch` with exactly the
  *   request it was handed — no URL built, no argument added — and answers
  *   `{ ok, status, body }` with the parsed JSON;
+ * - **no body on `GET`/`HEAD`** (`A201`): `fetch` refuses a body on those two methods
+ *   (`TypeError: Request with GET/HEAD method cannot have body`), so the broker leaves
+ *   the `body` key out there while keeping the message contract's `body: string`; a
+ *   `POST` or `DELETE` still carries its body; the defect that filled the popup's
+ *   `A164` line is a test here, not a memory;
  * - **a thrown fetch is an answer** (`A202`): a refused connection, a blocked request or
  *   an aborted one is answered `{ ok: false, status: 0, body: null }` and never rejects;
  * - **an unknown message is ignored** (`A201`): the listener answers `undefined` and
@@ -51,7 +56,7 @@ function messageOf(request: unknown = REQUEST): unknown {
 /** One `fetch` call the broker made, as the case needs to see it. */
 interface Call {
   url: string;
-  init: { method: string; headers: Record<string, string>; body: string };
+  init: { method: string; headers: Record<string, string>; body?: string };
 }
 
 /** A `fetch` that answers one body and records its calls. */
@@ -151,6 +156,113 @@ describe('the broker answers the request it is handed (A201, A202)', () => {
       'http://localhost:8080/notes/page/other',
     ]);
     expect(calls[1]?.init.method).toBe('GET');
+  });
+});
+
+/**
+ * A `fetch` that mirrors the real one's rule: a body on `GET`/`HEAD` is a `TypeError`.
+ *
+ * This is the shape of the reported defect (`A201`): the broker passed the `GET`'s empty
+ * body on, the real `fetch` threw, the broker answered its failure shape and the popup
+ * rendered «Не удалось связаться с сервером синхронизации».
+ */
+function strictFetchOf(
+  answer: { ok?: boolean; status?: number; json?: () => Promise<unknown> } = {},
+): { fetchImpl: SyncFetchImpl; calls: Call[] } {
+  const calls: Call[] = [];
+  const fetchImpl: SyncFetchImpl = async (url, init) => {
+    if ('body' in init) {
+      const method = init.method.toUpperCase();
+      if (method === 'GET' || method === 'HEAD') {
+        throw new TypeError(`Request with ${method} / HEAD method cannot have body.`);
+      }
+    }
+    calls.push({ url, init });
+    return {
+      ok: answer.ok ?? true,
+      status: answer.status ?? 200,
+      json: answer.json ?? (async () => ({ saved: 1 })),
+    };
+  };
+  return { fetchImpl, calls };
+}
+
+describe('the broker sends no body on GET and HEAD (A201)', () => {
+  it('reaches fetch with no body key at all for a GET message', async () => {
+    const { fetchImpl, calls } = fetchOf();
+    const listener = createSyncFetchListener(fetchImpl);
+
+    const { answer } = await answerFor(
+      listener,
+      messageOf({ ...REQUEST, method: 'GET', body: '' }),
+    );
+
+    expect(answer).toEqual({ ok: true, status: 200, body: { saved: 1 } });
+    expect(calls).toHaveLength(1);
+    // The key is absent, not empty: `fetch` refuses `body: ''` on a `GET` just the same.
+    expect('body' in (calls[0]?.init as object)).toBe(false);
+    expect(calls[0]?.init).toEqual({
+      method: 'GET',
+      headers: REQUEST.headers,
+    });
+  });
+
+  it('carries the body of a POST and of a DELETE message unchanged', async () => {
+    const { fetchImpl, calls } = fetchOf();
+    const listener = createSyncFetchListener(fetchImpl);
+
+    await answerFor(listener, messageOf());
+    await answerFor(
+      listener,
+      messageOf({
+        ...REQUEST,
+        method: 'DELETE',
+        body: '{"author_id":"ann"}',
+      }),
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.init).toEqual({
+      method: 'POST',
+      headers: REQUEST.headers,
+      body: REQUEST.body,
+    });
+    expect(calls[1]?.init).toEqual({
+      method: 'DELETE',
+      headers: REQUEST.headers,
+      body: '{"author_id":"ann"}',
+    });
+  });
+
+  it('still answers ok for a GET against a fetch that refuses a body on GET/HEAD', async () => {
+    // The regression case: the injected fetch mirrors the real rule, so a broker that
+    // forwarded the `GET`'s empty body would answer `SYNC_FETCH_FAILURE_ANSWER` here.
+    const { fetchImpl, calls } = strictFetchOf({ status: 200, json: async () => ({ notes: [] }) });
+    const listener = createSyncFetchListener(fetchImpl);
+
+    const { returned, answer } = await answerFor(
+      listener,
+      messageOf({ ...REQUEST, method: 'GET', body: '' }),
+    );
+
+    expect(returned).toBe(true);
+    expect(answer).toEqual({ ok: true, status: 200, body: { notes: [] } });
+    expect(calls).toHaveLength(1);
+    expect('body' in (calls[0]?.init as object)).toBe(false);
+  });
+
+  it('omits the body on HEAD too, and keeps it a no-body method case', async () => {
+    const { fetchImpl, calls } = strictFetchOf({ status: 200, json: async () => null });
+    const listener = createSyncFetchListener(fetchImpl);
+
+    const { answer } = await answerFor(
+      listener,
+      messageOf({ ...REQUEST, method: 'HEAD', body: '' }),
+    );
+
+    expect(answer).toEqual({ ok: true, status: 200, body: null });
+    expect(calls).toHaveLength(1);
+    expect('body' in (calls[0]?.init as object)).toBe(false);
   });
 });
 
