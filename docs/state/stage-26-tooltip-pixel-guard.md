@@ -69,3 +69,19 @@ pins stay green.
 timer, no Russian string. Gates in order: `npm run build`, `npm test`, `npm run typecheck`,
 `node scripts/check-agent-config.mjs`. One commit:
 `t26-01: the tooltip confirms the pointer is on the painted pixels (A204)`.
+
+## Outcome
+
+- `t26-01` (commit `b7aa8b9`): the `A204` pixel guard in `tooltip-controller.tsx`
+  (`pixelGuardOf`, `PIXEL_TOLERANCE = 1`, hover-time `getClientRects` with a bounding-box
+  fallback), the optional `MeasuredRange.getClientRects`, the new
+  `tests/content-tooltip-pixel-guard.spec.ts`, the pixel-coherent pre-`A204` fixtures and
+  the catch-table row. Gates: build 17 files, `npm test` 1427, typecheck, checker 0 errors.
+  Report: `docs/state/t26-01-engineer.md`.
+- `t26-02` (`code-reviewer`, run `97e19d43`): **changes requested** — one blocking finding,
+  an AC 30 pointer naming the wrong pin file; everything else verified correct.
+  Report: `docs/state/t26-02-review.md`.
+- The PM fixed the pointer in `d3da408` (docs only).
+- `t26-03` (run `6537313e`): **accepted**, finding 1 closed, nothing new introduced.
+  Report: `docs/state/t26-03-review.md`.
+- Stage 26 closed. `dist/` rebuilt and pushed (`4723b56`).

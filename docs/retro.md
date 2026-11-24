@@ -434,3 +434,16 @@ illegal memory access`) with the work already committed.
 - **"Local only" is a claim that needs a named scope.** `A168` says a *foreign* row's
   delete is local; that sentence was easy to read as "the popup's row delete is local",
   which is what the code did. The rule now says *which* row each half applies to.
+
+## Stage 26 — a hover that trusted the caret
+
+- **A "nearest position" API is not an "is the pointer here" API.** `caretRangeFromPoint`
+  clamps to the nearest caret for a point over no text, and the boundary tolerance that
+  exists to make the last letter hoverable then accepted the end of the whole line. The
+  rule was right about which character; nothing asked whether the pointer was on it.
+- **The reader's three observations pinned the mechanism.** "Only when the word is last in
+  the line" is exactly what nearest-caret clamping predicts, and it told the fix where to
+  go without a single measurement in a browser.
+- **A spec's own pin sentence is a deliverable path.** The blocking finding of `t26-02`
+  was not code: AC 30 named the old test file while the new suite carried the cases. A pin
+  that points at the wrong file is as wrong as a missing one.
