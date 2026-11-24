@@ -42,9 +42,10 @@ import type { TooltipController } from './tooltip-controller';
 /**
  * The `tooltip grace` (`A194`), the number the Terms row names: an open tooltip
  * survives this many milliseconds after the pointer has left its entry span, so
- * the reader can cross the placement gap and reach the box.
+ * the reader can cross the placement gap and reach the box. Set to 150 by ruling
+ * `A205`; the pre-`A205` value was 300.
  */
-export const TOOLTIP_GRACE_MS = 300;
+export const TOOLTIP_GRACE_MS = 150;
 
 /** Removes every listener this function added. */
 export type TooltipEventBinding = () => void;

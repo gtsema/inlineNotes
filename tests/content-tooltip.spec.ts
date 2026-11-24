@@ -63,7 +63,7 @@ import type { PaintedEntry, PaintedFragment } from '../src/content/paint/paint-p
 import type { PaintSurface } from '../src/content/paint/paint-surface';
 import { createTooltipController } from '../src/content/overlay/tooltip-controller';
 import type { TooltipController } from '../src/content/overlay/tooltip-controller';
-import { attachTooltipEvents } from '../src/content/overlay/tooltip-events';
+import { attachTooltipEvents, TOOLTIP_GRACE_MS } from '../src/content/overlay/tooltip-events';
 import { entryAtCaret, isOwnEntry, ownershipHeaderOf } from '../src/content/overlay/tooltip-hit-test';
 import type { CaretAtPoint, CaretHit } from '../src/content/overlay/tooltip-hit-test';
 import {
@@ -526,9 +526,11 @@ describe('the tooltip of painted text (AC3)', () => {
       // asserted through the press below, which also cancels the grace.)
       expect(tooltip.isOpen()).toBe(true);
 
-      vi.advanceTimersByTime(300);
-      // The grace fired while the pointer was away... but the widget press below
-      // already re-decided; assert through a fresh away-move instead.
+      // Still inside the grace: the move off the span started the hide timer, and the
+      // tooltip survives until it expires (`A205`: `TOOLTIP_GRACE_MS`, 150 ms).
+      vi.advanceTimersByTime(TOOLTIP_GRACE_MS - 1);
+      expect(tooltip.isOpen()).toBe(true);
+
       detach();
     } finally {
       vi.useRealTimers();
@@ -546,7 +548,7 @@ describe('the tooltip of painted text (AC3)', () => {
 
       caret = null;
       pointerMove(400, 400);
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(TOOLTIP_GRACE_MS);
       expect(tooltip.isOpen()).toBe(false);
       detach();
     } finally {
@@ -566,7 +568,7 @@ describe('the tooltip of painted text (AC3)', () => {
       // pending hide and the Flow 4 click answers.
       pointerMove(400, 400);
       pressOnWidget();
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(TOOLTIP_GRACE_MS);
 
       expect(editor?.isOpen()).toBe(true);
       detach();
