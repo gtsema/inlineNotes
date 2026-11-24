@@ -74,3 +74,15 @@ popup still fetches through its own `src/popup/sync-transport.ts` (extension pag
 content); no timer. Gates in order: `npm run build`, `npm test`, `npm run typecheck`,
 `node scripts/check-agent-config.mjs`. One commit:
 `t25-01: the popup's own row delete reaches the server (A203)`.
+
+## Outcome
+
+- `t25-01` (commit `7c6c87e`): `removeAllOfAuthor` reads the page key before the local
+  write, then sends one author-scoped DELETE for the reader's own stored row; a new
+  `server_delete_failed` notice («Не удалось удалить заметки на сервере»); foreign and
+  previous-name rows stay local. Gates: build 17 files, `npm test` 1419, typecheck
+  (4 programs), checker 0 errors. Report: `docs/state/t25-01-engineer.md`.
+- `t25-02` (`code-reviewer`, run `255d3a38`): **accepted**, no blocking finding; one
+  non-blocking remark (two test cases pin the same branch). Report:
+  `docs/state/t25-02-review.md`.
+- Stage 25 closed. `dist/` rebuilt and pushed (`b4395dc`).

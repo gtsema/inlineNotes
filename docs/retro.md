@@ -423,3 +423,14 @@ illegal memory access`) with the work already committed.
 - **The worker console is the first debugging surface after a move.** The reader's
   `fetch('/health')` answered `OK` while the page failed, which located the fault in the
   transport rather than in the network in one step.
+
+## Stage 25 — the third delete path had no server half
+
+- **A rule added in one delete path must be checked against every delete path.** Stage 17
+  gave the editor's one-note delete a server half and Stage 19 gave the «Мои заметки» row
+  one, but the popup's row — the oldest of the three — was never revisited, so it kept
+  deleting locally and the next load re-adopted the note. The three paths are one rule set
+  with three call sites, and nothing in the repo compared them.
+- **"Local only" is a claim that needs a named scope.** `A168` says a *foreign* row's
+  delete is local; that sentence was easy to read as "the popup's row delete is local",
+  which is what the code did. The rule now says *which* row each half applies to.
